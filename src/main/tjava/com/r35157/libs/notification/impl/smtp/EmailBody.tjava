@@ -1,0 +1,9 @@
+package com.r35157.libs.notification.impl.smtp;
+
+public record EmailBody(String text) {
+    public EmailBody {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Email body cannot be blank!");
+        }
+    }
+}

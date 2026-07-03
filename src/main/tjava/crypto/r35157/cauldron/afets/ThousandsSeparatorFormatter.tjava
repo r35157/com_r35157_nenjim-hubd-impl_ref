@@ -1,0 +1,14 @@
+package crypto.r35157.cauldron.afets;
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+
+public class ThousandsSeparatorFormatter {
+    public static String formatWithJavaThousandsSeparator(int number) {
+        DecimalFormatSymbols symbols = new DecimalFormatSymbols();
+        symbols.setGroupingSeparator('_');
+
+        DecimalFormat formatter = new DecimalFormat("#,###", symbols);
+        return formatter.format(number);
+    }
+}

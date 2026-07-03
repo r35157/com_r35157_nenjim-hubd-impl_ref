@@ -1,0 +1,136 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+public final class PriceAlarm {
+
+    public PriceAlarm(
+            PriceAlarmDefinition definition,
+            AlarmVariableResolver variableResolver,
+            AlarmAction action
+    ) {
+        this.definition = definition;
+        this.variableResolver = variableResolver;
+        this.action = action;
+    }
+
+    public synchronized void accept(OraclePrice price) {
+        if (price.asset() != definition.asset()) {
+            throw new IllegalArgumentException(
+                    "Received " + price.asset() + " price for " + definition.asset() + " alarm"
+            );
+        }
+
+        BigDecimal target;
+        try {
+            target = AlarmTargetParser.parse(
+                    variableResolver.resolve(definition.targetExpression())
+            );
+        } catch (RuntimeException exception) {
+            System.err.printf(
+                    "Could not resolve target for alarm %d: %s%n",
+                    definition.id(),
+                    exception.getMessage()
+            );
+            return;
+        }
+
+        boolean reached = definition.direction().reached(
+                price.priceUsd(),
+                target
+        );
+
+        boolean enteredTriggeredSide = previousReached == null
+                ? reached
+                : reached && !previousReached;
+
+        previousReached = reached;
+
+        if (!reached) {
+            previousReached = false;
+            return;
+        }
+
+        if (definition.trigger() == AlarmTrigger.ONETIME) {
+            if (!enteredTriggeredSide || triggerCount > 0) {
+                return;
+            }
+
+            trigger(price, target);
+            return;
+        }
+
+        if (definition.trigger() == AlarmTrigger.PERSISTENT) {
+            if (lastTriggeredAt == null || persistentGracePeriodHasPassed()) {
+                trigger(price, target);
+            }
+            return;
+        }
+
+        throw new IllegalStateException("Unsupported alarm trigger: " + definition.trigger());
+    }
+
+    public PriceAlarmDefinition definition() {
+        return definition;
+    }
+
+    public synchronized long triggerCount() {
+        return triggerCount;
+    }
+
+    private boolean persistentGracePeriodHasPassed() {
+        if (lastTriggeredAt == null) {
+            return true;
+        }
+
+        ΩsecondsΩ gracePeriod = definition.triggerGracePeriod();
+
+        if (gracePeriod == 0) {
+            return true;
+        }
+
+        return !Instant.now().isBefore(
+                lastTriggeredAt.plusSeconds(gracePeriod)
+        );
+    }
+
+    private void trigger(OraclePrice price, BigDecimal target) {
+        triggerCount++;
+        lastTriggeredAt = Instant.now();
+
+        String note;
+
+        try {
+            note = variableResolver.resolve(definition.note());
+        } catch (RuntimeException exception) {
+            System.err.printf(
+                    "Could not resolve note for alarm %d: %s%n",
+                    definition.id(),
+                    exception.getMessage()
+            );
+            return;
+        }
+
+        ResolvedPriceAlarm resolvedAlarm = new ResolvedPriceAlarm(
+                definition.id(),
+                definition.asset(),
+                definition.direction(),
+                target,
+                definition.trigger(),
+                definition.triggerGracePeriod(),
+                definition.severity(),
+                note
+        );
+
+        action.trigger(price, resolvedAlarm);
+    }
+
+    private final PriceAlarmDefinition definition;
+    private final AlarmVariableResolver variableResolver;
+    private final AlarmAction action;
+
+    private Instant lastTriggeredAt;
+    private Boolean previousReached;
+    private long triggerCount;
+}

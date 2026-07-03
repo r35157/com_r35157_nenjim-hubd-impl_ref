@@ -1,0 +1,12 @@
+package com.fanitas.evelyn.raydium;
+
+import java.math.BigDecimal;
+
+public record RaydiumLiquidityPoolPositionAccounting(
+        ΩRaydiumLiquidityPoolPositionNftIdΩ nftId,
+        ΩAmountΩ addedMintA,
+        ΩAmountΩ addedMintB,
+        ΩAmountΩ borrowedMintA,
+        ΩAmountΩ borrowedMintB
+) {
+}

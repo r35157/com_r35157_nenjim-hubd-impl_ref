@@ -1,0 +1,42 @@
+package crypto.r35157.cauldron.afets.leverage;
+
+import com.google.gson.*;
+import org.jetbrains.annotations.NotNull;
+
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+
+public class MEXCLeverageInfoDeserializer implements JsonDeserializer<MEXCLeverageInfoItem> {
+    @Override
+    public MEXCLeverageInfoItem deserialize(
+            @NotNull JsonElement json,
+            @NotNull Type typeOfT,
+            @NotNull JsonDeserializationContext context
+    ) throws JsonParseException {
+        JsonObject jsonObject = json.getAsJsonObject();
+
+        int level = jsonObject.get("level").getAsInt();
+        int maxVol = jsonObject.get("maxVol").getAsInt();
+        BigDecimal mmr = jsonObject.get("mmr").getAsBigDecimal();
+        BigDecimal imr = jsonObject.get("imr").getAsBigDecimal();
+        int positionType = jsonObject.get("positionType").getAsInt();
+        int openType = jsonObject.get("openType").getAsInt();
+        int leverage = jsonObject.get("leverage").getAsInt();
+        boolean limitBySys = jsonObject.get("limitBySys").getAsBoolean();
+        BigDecimal currentMmr = jsonObject.get("currentMmr").getAsBigDecimal();
+
+        MEXCLeverageInfoItem item = new MEXCLeverageInfoItem(
+            level,
+            maxVol,
+            mmr,
+            imr,
+            positionType,
+            openType,
+            leverage,
+            limitBySys,
+            currentMmr
+        );
+
+        return item;
+    }
+}

@@ -1,0 +1,30 @@
+package com.r35157.nenjim.hubd;
+
+import com.r35157.nenjim.hubd.journal.Journal;
+import crypto.r35157.nenjim.NenjimProcess;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.HashMap;
+
+public interface NenjimHub {
+    /**
+     * Starts a process based on the provided fully qualified interface name.
+     * The actual implementation that is run is binded according to the Context.
+     *
+     * @param fqInterfaceName the fully qualified interface name of the process to start. The interface must extend the {@code NenjimProcess} interface.
+     */
+    void startProcess(String fqInterfaceName);
+
+    /**
+     * Provides a map of all running processes managed by the NenjimHub, keyed by the processId.
+     *
+     * @return a map of {@code NenjimProcess} running processes
+     */
+    HashMap<Integer, NenjimProcess> getRunningProcesses();
+
+    /**
+     * A no-operation (noop). This method is suppoted to do nothing.
+     */
+    void noop();
+}
+

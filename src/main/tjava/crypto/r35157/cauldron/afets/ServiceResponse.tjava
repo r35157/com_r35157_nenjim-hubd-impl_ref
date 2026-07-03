@@ -1,0 +1,6 @@
+package crypto.r35157.cauldron.afets;
+
+public record ServiceResponse(
+    int code,
+    String body
+) {}

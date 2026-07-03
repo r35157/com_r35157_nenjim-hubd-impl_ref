@@ -1,0 +1,29 @@
+package com.r35157.libs.raydium;
+
+import java.math.BigDecimal;
+
+/**
+ * Represents a standard Raydium liquidity pool position.
+ *
+ * <p>A standard liquidity position is represented by ownership of liquidity pool
+ * tokens. The liquidity pool token mint identifies the LP token, while the SPL
+ * token account identifies where the owner holds the LP token balance.</p>
+ *
+ * <p>This record describes both the account holding the LP tokens and the amount
+ * of LP tokens held in that account. It does not represent a concentrated
+ * liquidity NFT position.</p>
+ *
+ * @param positionId the Raydium liquidity pool position id
+ * @param lpMintId the SPL mint address of the Raydium liquidity pool token
+ * @param lpAccount the Raydium liquidity pool account associated with the position
+ * @param lpTokenAccount the SPL token account holding the liquidity pool tokens
+ * @param lpTokenAmount the amount of liquidity pool tokens held in the SPL token account
+ */
+public record RaydiumLiquidityPoolPositionStandard(
+        ΩRaydiumLiquidityPoolPositionIdΩ positionId,
+        ΩRaydiumLiquidityPoolPositionMintIdΩ lpMintId,
+        ΩRaydiumLiquidityPoolAccountΩ lpAccount,
+        ΩSPLTokenAccountΩ lpTokenAccount,
+        ΩAmountΩ lpTokenAmount
+) {
+}

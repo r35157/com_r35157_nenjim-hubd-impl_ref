@@ -1,0 +1,271 @@
+package crypto.r35157.cauldron;
+
+import javafx.application.Platform;
+import javafx.collections.ObservableList;
+import javafx.event.ActionEvent;
+import javafx.fxml.FXML;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
+
+import java.text.NumberFormat;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static crypto.r35157.cauldron.FormatterUtils.formatAmount;
+import static crypto.r35157.cauldron.FormatterUtils.formatPercentage;
+import static crypto.r35157.cauldron.Ticker.getTickerItems;
+import static crypto.r35157.cauldron.TimeUtils.*;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static java.util.concurrent.TimeUnit.MINUTES;
+
+public class PriceChartController {
+
+    private void startChartUpdater() {
+        ScheduledExecutorService executorService = newSingleThreadScheduledExecutor();
+        Runnable task = this::updateUI;
+        executorService.scheduleAtFixedRate(task, 0, POLL_INTERVAL, POLL_TIMEUNIT);
+    }
+
+    /* This synchronized as both the scheduler and manual UI changes can result in the UI gets updated */
+    private synchronized void updateUI() {
+        long currentTimeStamp = System.currentTimeMillis();
+        List<TickerItem> tickerItems;
+
+        try {
+            tickerItems = getTickerItems(
+                    ASSETID__SOLANA,
+                    currentTimeStamp - displayPeriod,
+                    currentTimeStamp
+            );
+        } catch(Exception e) {
+            e.printStackTrace();
+            tickerItems = Collections.emptyList();
+        }
+
+        if (!tickerItems.isEmpty()) {
+            double latestPrice = getLastPrice(tickerItems);
+            final List<TickerItem> finalTickerItems = tickerItems;
+
+            Platform.runLater(() -> {
+                seriesData.clear();
+                // TODO: This update could be done a bit cheaper instead of just clearing everything and recreating it all.
+                // There might be a little issue in identifying the points as in seriesData we have only human readable
+                // timestamp and not the unix epoch.
+                for(TickerItem tickerItem : finalTickerItems) {
+                    timeStampForLastPriceOnChart = tickerItem.timestamp();
+                    Instant instant = Instant.ofEpochMilli(timeStampForLastPriceOnChart);
+                    LocalDateTime ts = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+                    String tsTxt = ts.format(formatter_hhmm);
+                    seriesData.add(new XYChart.Data<>(tsTxt, tickerItem.price()));
+                }
+
+                setChartLineColor(latestPrice);
+
+                boolean addChangeDetailsToTitle = seriesData.size() > 1;
+                final String title = calculateTitle(latestPrice, addChangeDetailsToTitle);
+                chart.setTitle(title);
+
+                updatePriceYAxisBounds();
+            });
+        }
+    }
+
+    private void setChartLineColor(double latestPrice) {
+        final String color;
+        if(seriesData.size() < 2) {
+            color = "black";
+        } else {
+            double initialPrice = getInitialPrice();
+            if(latestPrice == initialPrice) {
+                color = "black";
+            } else {
+                color = (latestPrice > initialPrice) ? "darkgreen" : "darkred";
+            }
+        }
+
+        series.getNode().lookup(".chart-series-line").setStyle("-fx-stroke: " + color + ";");
+    }
+
+    private String calculateTitle(double price, boolean addChangeDetails) {
+        String title = "Solana price: " + formatAmount(price) + " DKK";
+
+        if (addChangeDetails) {
+            double historicPrice = getInitialPrice();
+            double change = price - historicPrice;
+            title += " (";
+            title += (change > 0) ? "+" : "";
+            title += formatAmount(change) + " DKK, ";
+
+            double pct = change / historicPrice;
+            title += (pct > 0) ? "+" : "";
+            title += formatPercentage(pct) + ")";
+        }
+
+        return title;
+    }
+
+    private double getInitialPrice() {
+        return seriesData.getFirst().getYValue().doubleValue();
+    }
+
+    private double getLastPrice(List<TickerItem> tickerItems) {
+        double price = 0;
+        TickerItem item = tickerItems.getLast();
+        if(item != null) {
+            price = item.price();
+        }
+        return price;
+    }
+
+    private void updatePriceYAxisBounds() {
+        double lowerBound = Double.MAX_VALUE;
+        double upperBound = Double.MIN_VALUE;
+
+        for (XYChart.Data<String, Number> data : seriesData) {
+            double value = data.getYValue().doubleValue();
+
+            if (value < lowerBound) {
+                lowerBound = value;
+            }
+
+            if (value > upperBound) {
+                upperBound = value;
+            }
+        }
+
+        if(upperBound == lowerBound) {
+            upperBound += upperBound * 0.05;
+            lowerBound -= lowerBound * 0.05;
+        } else {
+            upperBound = upperBound + (upperBound - lowerBound) * 0.05;
+            lowerBound = lowerBound - (upperBound - lowerBound) * 0.05;
+        }
+
+        double range = upperBound - lowerBound;
+        axisY.setTickUnit(range / 6);
+        axisY.setUpperBound(upperBound);
+        axisY.setLowerBound(lowerBound);
+    }
+
+    private void temporarilyLockSomeUIDueToUnimplementation() {
+        menuButton_baseAssetType.setText("Fiat");
+        menuButton_baseAssetType.setDisable(true);
+
+        menuButton_quoteAssetType.setText("Crypto");
+        menuButton_quoteAssetType.setDisable(true);
+
+        menuButton_quoteDataSource.setText("Coin Gecko");
+        menuButton_quoteDataSource.setDisable(true);
+
+        menuButton_baseAssetId.setText("DKK - Danske Kroner");
+        menuButton_baseAssetId.setDisable(true);
+
+        menuButton_quoteAssetId.setText("SOL - Solana");
+        menuButton_quoteAssetId.setDisable(true);
+    }
+
+    @FXML
+    private void initialize() {
+        chart.setCreateSymbols(false);
+        chart.setLegendVisible(false);
+
+        axisY.setLabel("DKK");
+        axisY.setTickLabelFormatter(new NumberAxis.DefaultFormatter(axisY) {
+            private final NumberFormat formatter;
+
+            {
+                // Create a custom locale for Denmark
+                Locale danishLocale = new Locale("da", "DK");
+                formatter = NumberFormat.getInstance(danishLocale);
+                formatter.setMinimumFractionDigits(2);
+                formatter.setMaximumFractionDigits(2);
+            }
+
+            @Override
+            public String toString(Number object) {
+                return formatter.format(object);
+            }
+        });
+        axisY.setAutoRanging(false);
+
+        series = new XYChart.Series<>();
+        series.setName("Solana");
+
+        seriesData = series.getData();
+
+        ObservableList<XYChart.Series<String, Number>> chartData = chart.getData();
+        chartData.add(series);
+
+        this.displayPeriod = ONE_DAY;
+        this.timeStampForLastPriceOnChart = 0L;
+        this.menuButton_period.setText("24 Hours");
+
+        temporarilyLockSomeUIDueToUnimplementation();
+
+        startChartUpdater();
+    }
+
+    @FXML
+    private void periodChanged(ActionEvent event) {
+        MenuItem selectedItem = (MenuItem) event.getSource();
+        String text = selectedItem.getText();
+
+        menuButton_period.setText(text);
+
+        switch (text) {
+            case "24 Hours" -> this.displayPeriod = ONE_DAY;
+            case "1 Week" -> this.displayPeriod = ONE_WEEK;
+            case "1 Month" -> this.displayPeriod = ONE_MONTH;
+            case "3 Months" -> this.displayPeriod = ONE_QUARTER;
+            case "1 Year" -> this.displayPeriod = ONE_YEAR;
+            case "5 Years" -> this.displayPeriod = FIVE_YEARS;
+            case "10 Years" -> this.displayPeriod = ONE_DECADE;
+            case "All" -> this.displayPeriod = Long.MAX_VALUE;
+        }
+
+        updateUI();
+    }
+
+    @FXML
+    private LineChart<String, Number> chart;
+
+    @FXML
+    private NumberAxis axisY;
+
+    @FXML
+    private MenuButton menuButton_period;
+
+    @FXML
+    private MenuButton menuButton_baseAssetType;
+
+    @FXML
+    private MenuButton menuButton_quoteAssetType;
+
+    @FXML
+    private MenuButton menuButton_quoteDataSource;
+
+    @FXML
+    private MenuButton menuButton_baseAssetId;
+
+    @FXML
+    private MenuButton menuButton_quoteAssetId;
+
+    private static final TimeUnit POLL_TIMEUNIT = MINUTES;
+    private static final int POLL_INTERVAL = 15;
+
+    private XYChart.Series<String, Number> series;
+    private ObservableList<XYChart.Data<String, Number>> seriesData;
+
+    private final String ASSETID__SOLANA = "solana";
+    private long displayPeriod;
+    private long timeStampForLastPriceOnChart;
+}

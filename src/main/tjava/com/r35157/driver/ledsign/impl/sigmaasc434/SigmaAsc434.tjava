@@ -1,0 +1,85 @@
+package com.r35157.driver.ledsign.impl.sigmaasc434;
+
+import com.r35157.driver.ledsign.LedSign;
+import org.jetbrains.annotations.NotNull;
+import com.fazecast.jSerialComm.*;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+
+public class SigmaAsc434 implements LedSign {
+    @Override
+    public void sendCommand(@NotNull byte[] bytes) {
+    }
+
+    static void main() throws Exception {
+        try {
+            new SigmaAsc434();
+        } catch(Exception e) {
+            System.out.println(e);
+        }
+    }
+
+    public SigmaAsc434() throws Exception {
+        SerialPort port = SerialPort.getCommPort("/dev/ttyUSB0");
+        port.setComPortParameters(BAUD, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
+        port.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
+        port.setComPortTimeouts(SerialPort.TIMEOUT_WRITE_BLOCKING, 0, 0);
+        port.setDTR();
+        port.setRTS();
+
+        if (!port.openPort()) throw new RuntimeException("Kunne ikke åbne porten");
+
+        try (OutputStream out = port.getOutputStream()) {
+            long ts = System.currentTimeMillis();
+            //// 1) Sync (parser reset)
+            //for (int i = 0; i < 20; i++) {
+            //    out.write(0xAA);
+            //}
+//
+            //// 2) Start command
+            //out.write(0xBB);
+//
+            //// 3) Program select: A
+            //out.write(0xAF);
+            //out.write('A');   // 0x41
+//
+            //// 4) Text: rød på sort
+            //int RED_ON_BLACK = 0x01;
+//
+            //String text = "A";
+            //for (byte b : text.getBytes(StandardCharsets.US_ASCII)) {
+            //    //out.write(RED_ON_BLACK);
+            //    out.write(b);
+            //}
+//
+            //// 5) End command
+            //out.write(0xBF);
+            //out.write(0xB1);
+
+            for (int i = 0; i < 10; i++) {
+                out.write(0xAA);
+            }
+
+            out.write(0xBB);
+            out.write(0xAF); out.write(0x41);
+            out.write(0x01); out.write(0x54);
+            out.write(0x01); out.write(0x45);
+            out.write(0x01); out.write(0x53);
+            out.write(0x01); out.write(0x54);
+            out.write(0xBF); out.write(0xB1);
+
+            out.flush();
+            System.out.println("@@@ DONE in " + (System.currentTimeMillis() - ts) + "ms @@@");
+        } finally {
+            port.closePort();
+        }
+    }
+
+    //private static final int BAUD = 2400;
+    //private static final int BAUD = 4800;
+    //private static final int BAUD = 9600;
+    //private static final int BAUD = 19200;
+    private static final int BAUD = 115200;
+}

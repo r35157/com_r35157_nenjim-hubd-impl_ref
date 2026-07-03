@@ -1,0 +1,93 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.jupiterperpsalarm.AlarmSeverity;
+
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+
+public final class PushoverAlarmAction implements AlarmAction {
+
+    public PushoverAlarmAction(String applicationToken, String userKey) {
+        this.applicationToken = applicationToken;
+        this.userKey = userKey;
+    }
+
+    @Override
+    public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
+        String title = "Jupiter Perps " + price.asset() + " alarm";
+        String message = createMessage(price, alarm);
+
+        String body = form("token", applicationToken) + "&" +
+                form("user", userKey) + "&" +
+                form("title", title) + "&" +
+                form("message", message) + "&" +
+                createPushoverSeverityParameters(alarm.severity());
+
+        HttpRequest request = HttpRequest.newBuilder(PUSHOVER_URI)
+                .timeout(Duration.ofSeconds(15))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("User-Agent", "jupiter-perps-price-alarm/1.1")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .whenComplete((response, error) -> {
+                    if (error != null) {
+                        System.err.println("Pushover failed: " + error.getMessage());
+                        return;
+                    }
+                    if (response.statusCode() != 200 || !response.body().contains("\"status\":1")) {
+                        System.err.printf(
+                                "Pushover rejected the alarm: HTTP %d: %s%n",
+                                response.statusCode(),
+                                response.body()
+                        );
+                    } else {
+                        System.out.println("Pushover alarm sent: " + alarm.severity());
+                    }
+                });
+    }
+
+    private static String form(String name, String value) {
+        return URLEncoder.encode(name, StandardCharsets.UTF_8) + "=" +
+                URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static String createPushoverSeverityParameters(AlarmSeverity severity) {
+        return switch (severity) {
+            case EMERGENCY -> "priority=2&retry=30&expire=10800&sound=persistent";
+            case CRITICAL -> "priority=1&sound=spacealarm";
+            case WARN -> "priority=0&sound=siren";
+            case INFO -> "priority=0";
+            case SILENT -> "priority=-1";
+            case GHOST -> "priority=-2";
+        };
+    }
+
+    private static String createMessage(OraclePrice price, ResolvedPriceAlarm alarm) {
+        return String.format(
+                "%d - %s: %s%n%n%s is %s USD.%nTarget: %s %s USD.%nOracle time: %s.%nSlot: %d.",
+                alarm.id(),
+                alarm.severity(),
+                alarm.note(),
+                price.asset(),
+                price.priceUsd().toPlainString(),
+                alarm.direction(),
+                alarm.target().toPlainString(),
+                price.oracleTime(),
+                price.slot()
+        );
+    }
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final String applicationToken;
+    private final String userKey;
+
+    private static final URI PUSHOVER_URI =
+            URI.create("https://api.pushover.net/1/messages.json");
+}

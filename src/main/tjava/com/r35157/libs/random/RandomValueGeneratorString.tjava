@@ -1,0 +1,14 @@
+package com.r35157.libs.random;
+
+import org.jetbrains.annotations.NotNull;
+
+public interface RandomValueGeneratorString {
+    /**
+     * Generate a random Alpha Numeric String of exactly the length given as the parameter.
+     *
+     * @param length Length of generated String - cannot be negative
+     * @return A non-null random String of the length given
+     * @throws IllegalArgumentException If length is negative
+     */
+    @NotNull String getSomeStringAlphaNumericOnly(int length) throws IllegalArgumentException;
+}

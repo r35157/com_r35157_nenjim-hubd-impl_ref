@@ -1,0 +1,136 @@
+package com.r35157.libs.jupiter.perps.impl.anchoridl;
+
+import com.r35157.libs.codec.Base58Codec;
+import com.r35157.libs.codec.impl.ref.Base58CodecImpl;
+import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
+import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
+import com.r35157.libs.solana.SolanaAccountInfo;
+
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Base64;
+
+class AnchorIdlJupiterPerpsPositionDecoder {
+
+    JupiterPerpsPosition decode(
+            ΩJupiterPerpsPositionAccountΩ positionAccount,
+            SolanaAccountInfo accountInfo,
+            ΩSPLMintAddressΩ tradedTokenMint
+    ) {
+        byte[] data = Base64.getDecoder().decode(accountInfo.dataBase64());
+
+        if (data.length < PRICE_OFFSET + U64_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Jupiter Perps position account data is too short: " + data.length
+            );
+        }
+
+        JupiterPerpsPositionDirection direction =
+                decodeDirection(data[SIDE_OFFSET]);
+
+        long rawEntryPrice = ByteBuffer
+                .wrap(data, PRICE_OFFSET, U64_LENGTH)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .getLong();
+
+        ΩUSDCPriceΩ entryPrice = BigDecimal
+                .valueOf(rawEntryPrice)
+                .movePointLeft(6);
+
+        long rawCollateralUsd = ByteBuffer
+                .wrap(data, COLLATERAL_USD_OFFSET, U64_LENGTH)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .getLong();
+
+        ΩUSDCAmountΩ collateralUsd = BigDecimal
+                .valueOf(rawCollateralUsd)
+                .movePointLeft(6);
+
+        long rawSizeUsd = ByteBuffer
+                .wrap(data, SIZE_USD_OFFSET, U64_LENGTH)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .getLong();
+
+        ΩUSDCAmountΩ sizeUsd = BigDecimal
+                .valueOf(rawSizeUsd)
+                .movePointLeft(6);
+
+        JupiterPerpsPosition pos = new JupiterPerpsPosition(
+                positionAccount,
+                entryPrice,
+                direction,
+                tradedTokenMint,
+                sizeUsd,
+                collateralUsd
+        );
+
+        return pos;
+    }
+
+    ΩSolanaAddressΩ decodeCustodyAccount(SolanaAccountInfo accountInfo) {
+        byte[] data = Base64.getDecoder().decode(accountInfo.dataBase64());
+
+        if (data.length < CUSTODY_OFFSET + PUBLIC_KEY_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Jupiter Perps position account data is too short: " + data.length
+            );
+        }
+
+        return readPublicKey(
+                data,
+                CUSTODY_OFFSET
+        );
+    }
+
+    private JupiterPerpsPositionDirection decodeDirection(
+            byte rawSide
+    ) {
+        // Jupiter Perps position side values are encoded as 1 = LONG, 2 = SHORT.
+        JupiterPerpsPositionDirection direction = switch (rawSide) {
+            case 1 -> JupiterPerpsPositionDirection.LONG;
+            case 2 -> JupiterPerpsPositionDirection.SHORT;
+            default -> throw new IllegalArgumentException(
+                    "Unknown Jupiter Perps position side: " + rawSide
+            );
+        };
+
+        return direction;
+    }
+
+    private ΩSolanaAddressΩ readPublicKey(
+            byte[] data,
+            int offset
+    ) {
+        byte[] publicKeyBytes = new byte[PUBLIC_KEY_LENGTH];
+
+        System.arraycopy(
+                data,
+                offset,
+                publicKeyBytes,
+                0,
+                PUBLIC_KEY_LENGTH
+        );
+
+        return base58.encode(publicKeyBytes);
+    }
+
+    private static final int ANCHOR_DISCRIMINATOR_LENGTH = 8;
+    private static final int PUBLIC_KEY_LENGTH = 32;
+    private static final int I64_LENGTH = 8;
+    private static final int SIDE_ENUM_LENGTH = 1;
+    private static final int U64_LENGTH = 8;
+
+    private static final int OWNER_OFFSET = ANCHOR_DISCRIMINATOR_LENGTH;
+    private static final int POOL_OFFSET = OWNER_OFFSET + PUBLIC_KEY_LENGTH;
+    private static final int CUSTODY_OFFSET = POOL_OFFSET + PUBLIC_KEY_LENGTH;
+    private static final int COLLATERAL_CUSTODY_OFFSET = CUSTODY_OFFSET + PUBLIC_KEY_LENGTH;
+    private static final int OPEN_TIME_OFFSET = COLLATERAL_CUSTODY_OFFSET + PUBLIC_KEY_LENGTH;
+    private static final int UPDATE_TIME_OFFSET = OPEN_TIME_OFFSET + I64_LENGTH;
+    private static final int SIDE_OFFSET = UPDATE_TIME_OFFSET + I64_LENGTH;
+    private static final int PRICE_OFFSET = SIDE_OFFSET + SIDE_ENUM_LENGTH;
+    private static final int SIZE_USD_OFFSET = PRICE_OFFSET + U64_LENGTH;
+    private static final int COLLATERAL_USD_OFFSET = SIZE_USD_OFFSET + U64_LENGTH;
+
+    private static final Base58Codec base58 = new Base58CodecImpl();
+}

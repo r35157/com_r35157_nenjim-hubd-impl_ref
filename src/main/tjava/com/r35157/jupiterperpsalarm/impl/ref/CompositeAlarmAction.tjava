@@ -1,0 +1,23 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.util.List;
+
+public final class CompositeAlarmAction implements AlarmAction {
+
+    public CompositeAlarmAction(List<AlarmAction> actions) {
+        this.actions = List.copyOf(actions);
+    }
+
+    @Override
+    public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
+        for (AlarmAction action : actions) {
+            try {
+                action.trigger(price, alarm);
+            } catch (RuntimeException exception) {
+                System.err.println("Alarm action failed: " + exception.getMessage());
+            }
+        }
+    }
+
+    private final List<AlarmAction> actions;
+}

@@ -1,0 +1,99 @@
+package com.r35157.libs.jupiter.perps.impl.anchoridl;
+
+import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
+import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+import com.r35157.libs.solana.SolanaAccountInfo;
+import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
+
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+
+public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
+
+    public AnchorIdlJupiterPerpsServiceImpl(
+            SolanaBlockChain solanaBlockChain
+    ) {
+        this.solanaBlockChain = solanaBlockChain;
+        this.positionDecoder = new AnchorIdlJupiterPerpsPositionDecoder();
+        this.custodyDecoder = new AnchorIdlJupiterPerpsCustodyDecoder();
+    }
+
+    @Override
+    public JupiterPerpsPosition getPosition(ΩJupiterPerpsPositionAccountΩ positionAccount)
+            throws IOException, InterruptedException {
+        SolanaAccountInfo accountInfo = solanaBlockChain.getAccountInfo(positionAccount);
+
+        if (accountInfo == null) {
+            throw new IllegalArgumentException("Jupiter Perps position account does not exist: " + positionAccount);
+        }
+
+        if (!JUPITER_PERPS_PROGRAM_ID.equals(accountInfo.owner())) {
+            throw new IllegalArgumentException(
+                    "Account is not owned by Jupiter Perps program: " + positionAccount
+            );
+        }
+
+        ΩSPLMintAddressΩ tradedTokenMint = getTradedTokenMint(accountInfo);
+        JupiterPerpsPosition pos = positionDecoder.decode(positionAccount, accountInfo, tradedTokenMint);
+
+        return pos;
+    }
+
+    @Override
+    public Set<JupiterPerpsPosition> getOpenPositions(ΩSolanaWalletIdΩ owner)
+            throws IOException, InterruptedException {
+        Set<SolanaAccountInfo> accountInfos = solanaBlockChain.getProgramAccounts(
+                JUPITER_PERPS_PROGRAM_ID,
+                Set.of(new SolanaProgramAccountMemcmpFilter(
+                        POSITION_OWNER_OFFSET,
+                        owner
+                ))
+        );
+
+        Set<JupiterPerpsPosition> positions = new HashSet<>();
+
+        for (SolanaAccountInfo accountInfo : accountInfos) {
+            ΩSolanaAddressΩ address = accountInfo.address();
+            ΩSolanaProgramIdΩ programId = accountInfo.owner();
+
+            if (!JUPITER_PERPS_PROGRAM_ID.equals(programId)) {
+                String errorMsg = "Account '" + address + "' is not owned by Jupiter Perps program '" +
+                        programId + "'";
+                throw new IllegalArgumentException(errorMsg);
+            }
+
+            ΩSPLMintAddressΩ tradedTokenMint = getTradedTokenMint(accountInfo);
+
+            JupiterPerpsPosition position = positionDecoder.decode(address, accountInfo, tradedTokenMint);
+            positions.add(position);
+        }
+
+        return Set.copyOf(positions);
+    }
+
+    private ΩSPLMintAddressΩ getTradedTokenMint(SolanaAccountInfo positionAccountInfo)
+            throws IOException, InterruptedException
+    {
+        ΩSolanaAddressΩ custodyAccount = positionDecoder.decodeCustodyAccount(positionAccountInfo);
+        SolanaAccountInfo custodyAccountInfo = solanaBlockChain.getAccountInfo(custodyAccount);
+
+        if (custodyAccountInfo == null) {
+            throw new IllegalArgumentException(
+                    "Jupiter Perps custody account does not exist: " + custodyAccount
+            );
+        }
+
+        ΩSPLMintAddressΩ mintAddress = custodyDecoder.decodeMint(custodyAccountInfo);
+        return mintAddress;
+    }
+
+    private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID =
+            "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu";
+    private static final int POSITION_OWNER_OFFSET = 8;
+
+    private final SolanaBlockChain solanaBlockChain;
+    private final AnchorIdlJupiterPerpsPositionDecoder positionDecoder;
+    private final AnchorIdlJupiterPerpsCustodyDecoder custodyDecoder;
+}

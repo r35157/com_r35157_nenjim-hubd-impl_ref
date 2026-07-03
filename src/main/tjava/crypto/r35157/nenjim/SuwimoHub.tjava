@@ -1,0 +1,23 @@
+package crypto.r35157.nenjim;
+
+public class SuwimoHub implements NenjimProcess {
+    @Override
+    public void run() throws Exception {
+    }
+
+    @Override
+    public void setNenjimProcessContext(NenjimContext context) {
+        this.nenjimContext = context;
+    }
+
+    @Override
+    public void setNenjimHub(NenjimHub hub) {
+    }
+
+    @Override
+    public String getProcessName() {
+        return "Suwimo Hub";
+    }
+
+    private NenjimContext nenjimContext;
+}

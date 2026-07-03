@@ -1,0 +1,17 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+public enum JupiterPerpsAsset {
+    SOL("FYq2BWQ1V5P1WFBqr3qB2Kb5yHVvSv7upzKodgQE5zXh"),
+    ETH("AFZnHPzy4mvVCffrVwhewHbFc93uTHvDSFrVH7GtfXF1"),
+    BTC("hUqAT1KQ7eW1i6Csp9CXYtpPfSAvi835V7wKi5fRfmC");
+
+    JupiterPerpsAsset(String oracleAccount) {
+        this.oracleAccount = oracleAccount;
+    }
+
+    public String oracleAccount() {
+        return oracleAccount;
+    }
+
+    private final String oracleAccount;
+}

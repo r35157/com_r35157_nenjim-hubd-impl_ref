@@ -1,0 +1,30 @@
+package com.r35157.libs.raydium;
+
+import java.math.BigDecimal;
+
+/**
+ * Represents basic information about a Raydium concentrated liquidity pool.
+ *
+ * <p>This record contains the pool-level information needed to interpret
+ * concentrated position state. The mint addresses and decimals are required when
+ * converting Raydium tick indexes into human-readable prices.</p>
+ *
+ * <p>This record is intentionally a low-level Raydium model. It does not describe
+ * an owner's position and does not calculate token amounts for a position.</p>
+ *
+ * @param poolId the Raydium concentrated liquidity pool id
+ * @param mintA the SPL mint address of token A
+ * @param mintADecimals the number of decimals used by token A
+ * @param mintB the SPL mint address of token B
+ * @param mintBDecimals the number of decimals used by token B
+ * @param priceEstimate the pool price estimate as reported by Raydium
+ */
+public record RaydiumConcentratedPoolInfo(
+        ΩRaydiumLiquidityPoolConcentratedIdΩ poolId,
+        ΩSPLMintAddressΩ mintA,
+        ΩamountDecimalsΩ mintADecimals,
+        ΩSPLMintAddressΩ mintB,
+        ΩamountDecimalsΩ mintBDecimals,
+        ΩPriceΩ priceEstimate
+) {
+}

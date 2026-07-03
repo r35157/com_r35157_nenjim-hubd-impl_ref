@@ -1,0 +1,10 @@
+package crypto.r35157.nenjim;
+
+public interface NenjimProcess {
+    void run() throws Exception;
+
+    void setNenjimProcessContext(NenjimContext context);
+    void setNenjimHub(NenjimHub hub);
+
+    String getProcessName();
+}

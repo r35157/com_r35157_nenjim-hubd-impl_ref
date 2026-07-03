@@ -1,0 +1,175 @@
+package crypto.r35157.cauldron.afets;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+
+import static crypto.r35157.TimeTools.parseTimeToMillis;
+
+public class Configuration {
+
+    public Configuration(@NotNull String configurationFilename) {
+        this.configurationFilename = configurationFilename;
+    }
+
+    public BigDecimal maxSpendPctOfFullPosition() {
+        return maxSpendPctOfFullPosition;
+    }
+
+    public long exchangeTransactionDelay() {
+        return exchangeTransactionDelay;
+    }
+
+    public BigDecimal expensiveFundingFeeThreshold() {
+        return expensiveFundingFeeThreshold;
+    }
+
+    public int minimumEmptyPositionsToRestart() {
+        return minimumEmptyPositionsToRestart;
+    }
+
+    public BigDecimal minimumPctEarningForLongs() {
+        return minimumPctEarningForLongs;
+    }
+
+    public BigDecimal minimumPctEarningForShorts() {
+        return minimumPctEarningForShorts;
+    }
+
+    public BigDecimal maxMarginAmountToTradePerIteration() {
+        return maxMarginAmountToTradePerIteration;
+    }
+
+    public BigDecimal maxStretchMarginAmountToTradePerIteration() {
+        return maxStretchMarginAmountToTradePerIteration;
+    }
+
+    public boolean executeOpen() {
+        return executeOpen;
+    }
+
+    public BigDecimal adjustedScoreTooBigPositionsPenaltyCoefficient() {
+        return adjustedScoreTooBigPositionsPenaltyCoefficient;
+    }
+
+    public boolean executeClose() {
+        return executeClose;
+    }
+
+    public boolean enableNotification() {
+        return enableNotification;
+    }
+
+    public boolean printFundingFees() {
+        return printFundingFees;
+    }
+
+    public boolean printEquilibriumStatus() {
+        return printEquilibriumStatus;
+    }
+
+    public boolean printPositionStatus() {
+        return printPositionStatus;
+    }
+
+    public boolean printProfitLoss() {
+        return printProfitLoss;
+    }
+
+    public boolean restartPositions() {
+        return restartPositions;
+    }
+
+    public long getIterationTime() {
+        return iterationTime;
+    }
+
+    public long getTimeOut() {
+        return timeOut;
+    }
+
+    public boolean detectAndPrepareForBrandNewPositions() {
+        return detectAndPrepareForBrandNewPositions;
+    }
+
+    /**
+     * Update this configuration from the configuration file.
+     * @throws IOException if the configuration file cannot be read.
+     */
+    public void update() throws IOException {
+        Path configFile = Paths.get(configurationFilename);
+        List<String> lines = Files.readAllLines(configFile);
+
+        for (String line : lines) {
+            line = line.trim();
+
+            // Skip empty lines or separator lines.
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+
+            // Assume key and value are separated by whitespace.
+            String[] parts = line.split("\\s+");
+            if (parts.length < 2) {
+                continue; // or throw an exception if file format must be strict
+            }
+
+            String key = parts[0];
+            String value = parts[1];
+
+            switch (key) {
+                case "IterationTime" -> iterationTime = parseTimeToMillis(value);
+                case "TimeOut" -> timeOut = parseTimeToMillis(value);
+                case "DetectAndPrepareForBrandNewPositions" -> detectAndPrepareForBrandNewPositions = Boolean.parseBoolean(value);
+                case "RestartPositions" -> restartPositions = Boolean.parseBoolean(value);
+                case "PrintEquilibriumStatus" -> printEquilibriumStatus = Boolean.parseBoolean(value);
+                case "PrintPositionStatus" -> printPositionStatus = Boolean.parseBoolean(value);
+                case "PrintProfitLoss" -> printProfitLoss = Boolean.parseBoolean(value);
+                case "PrintFundingFees" -> printFundingFees = Boolean.parseBoolean(value);
+                case "ExecuteOpen" -> executeOpen = Boolean.parseBoolean(value);
+                case "ExecuteClose" -> executeClose = Boolean.parseBoolean(value);
+                case "EnableNotification" -> enableNotification = Boolean.parseBoolean(value);
+                case "MaxMarginAmountToTradePerIteration" -> maxMarginAmountToTradePerIteration = new BigDecimal(value);
+                case "MaxStretchMarginAmountToTradePerIteration" -> maxStretchMarginAmountToTradePerIteration = new BigDecimal(value);
+                case "MinimumPctEarningForLongs" -> minimumPctEarningForLongs = new BigDecimal(value);
+                case "MinimumPctEarningForShorts" -> minimumPctEarningForShorts = new BigDecimal(value);
+                case "MinimumEmptyPositionsToRestart" -> minimumEmptyPositionsToRestart = Integer.parseInt(value);
+                case "ExpensiveFundingFeeThreshold" -> expensiveFundingFeeThreshold = new BigDecimal(value);
+                case "ExchangeTransactionDelay" -> exchangeTransactionDelay = Long.parseLong(value);
+                case "MaxSpendPctOfFullPosition" -> maxSpendPctOfFullPosition = new BigDecimal(value);
+                case "PriceDiscoveryDuration" -> priceDiscoveryDuration = parseTimeToMillis(value);
+                case "AdjustedScoreTooBigPositionsPenaltyCoefficient" -> adjustedScoreTooBigPositionsPenaltyCoefficient = new BigDecimal(value);
+                default -> System.out.println("WARNING! Configuration key '" + key + "' unknown! Skipping!");
+            }
+        }
+    }
+
+    private final String configurationFilename;
+
+    private long iterationTime;
+    private long timeOut;
+    private boolean detectAndPrepareForBrandNewPositions;
+    private boolean restartPositions;
+    private boolean printEquilibriumStatus;
+    private boolean printPositionStatus;
+    private boolean printProfitLoss;
+    private boolean printFundingFees;
+    private boolean executeOpen;
+    private boolean executeClose;
+    private boolean enableNotification;
+    private BigDecimal maxMarginAmountToTradePerIteration;
+    private BigDecimal maxStretchMarginAmountToTradePerIteration;
+    private BigDecimal minimumPctEarningForLongs;
+    private BigDecimal minimumPctEarningForShorts;
+    private int minimumEmptyPositionsToRestart;
+    private BigDecimal expensiveFundingFeeThreshold;
+    private long exchangeTransactionDelay;
+    private BigDecimal maxSpendPctOfFullPosition;
+    private long priceDiscoveryDuration;
+    private BigDecimal adjustedScoreTooBigPositionsPenaltyCoefficient;
+}

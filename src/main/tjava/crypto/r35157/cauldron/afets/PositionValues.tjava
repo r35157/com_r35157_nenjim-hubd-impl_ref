@@ -1,0 +1,18 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+public record PositionValues(
+        Position position,
+        BigDecimal currentPrice,
+        BigDecimal basePrice,
+        BigDecimal balance,
+        int leverage,
+        BigDecimal positionValue,
+        BigDecimal baseValue,
+        BigDecimal marginValue
+) {
+}
+
+
+

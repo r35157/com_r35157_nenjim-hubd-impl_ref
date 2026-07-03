@@ -1,0 +1,89 @@
+package com.r35157.libs.notification.impl.pushover;
+
+import com.r35157.libs.notification.BoundNotifier;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+
+public class PushOverNotifier implements BoundNotifier<PushMessage> {
+
+    public PushOverNotifier(ΩAPIKeyΩ token, ΩUserNameΩ userName) {
+        this.httpClient = HttpClient.newHttpClient();
+        this.token = token;
+        this.userName = userName;
+    }
+
+    @Override
+    public void push(PushMessage message) throws IOException {
+        String body = formEncode(
+                "token", token,
+                "user", userName,
+                "message", message.text()
+        );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(PUSHOVER_MESSAGES_URI)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse<String> response;
+
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch(InterruptedException ie) {
+            throw new IOException("Pushover request was interrupted!", ie);
+        }
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException("Pushover request failed! HTTP "
+                    + response.statusCode() + ": " + response.body());
+        }
+    }
+
+    private static String formEncode(String... keyValues) {
+        if (keyValues.length % 2 != 0) {
+            throw new IllegalArgumentException("keyValues must contain key/value pairs");
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < keyValues.length; i += 2) {
+            if (!result.isEmpty()) {
+                result.append('&');
+            }
+
+            result.append(encode(keyValues[i]))
+                    .append('=')
+                    .append(encode(keyValues[i + 1]));
+        }
+
+        return result.toString();
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private void test() throws IOException {
+        ΩAPIKeyΩ apiKey = "SomeKey";
+        ΩUserNameΩ userName = "userNmae";
+
+        BoundNotifier<PushMessage> boundNotifier = new PushOverNotifier(apiKey, userName);
+
+        PushMessage message = new PushMessage("Hello World!");
+        boundNotifier.push(message);
+    }
+
+    private static final URI PUSHOVER_MESSAGES_URI =
+            URI.create("https://api.pushover.net/1/messages.json");
+
+    private final HttpClient httpClient;
+    private final ΩAPIKeyΩ token;
+    private final ΩUserNameΩ userName;
+}

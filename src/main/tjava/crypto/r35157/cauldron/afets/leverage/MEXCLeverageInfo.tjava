@@ -1,0 +1,43 @@
+package crypto.r35157.cauldron.afets.leverage;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import crypto.r35157.cauldron.afets.MEXCFuturesPlugin;
+import crypto.r35157.cauldron.afets.ServiceResponse;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.io.IOException;
+import java.util.List;
+
+public class MEXCLeverageInfo {
+    public MEXCLeverageInfo(MEXCFuturesPlugin mexFuturesPlugin) {
+        this.mexFuturesPlugin = mexFuturesPlugin;
+
+        gson = new GsonBuilder()
+                .registerTypeAdapter(MEXCLeverageInfoItem.class, new MEXCLeverageInfoDeserializer())
+                .create();
+    }
+
+    public @Nullable MEXCLeverageInfoItem getLeverageInfo(@NotNull String symbol, int positionType)
+            throws IOException, InterruptedException {
+        ServiceResponse rs = mexFuturesPlugin.getLeverage(symbol);
+        String json = rs.body();
+        LeverageInfoResponse leverageInfoResponse = gson.fromJson(json, LeverageInfoResponse.class);
+        List<MEXCLeverageInfoItem> items = leverageInfoResponse.data();
+
+        MEXCLeverageInfoItem result = null;
+
+        for(MEXCLeverageInfoItem item : items) {
+            if(positionType == item.positionType()) {
+                result = item;
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    private final MEXCFuturesPlugin mexFuturesPlugin;
+    private final Gson gson;
+}

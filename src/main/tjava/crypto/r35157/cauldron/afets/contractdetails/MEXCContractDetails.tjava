@@ -1,0 +1,59 @@
+package crypto.r35157.cauldron.afets.contractdetails;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import crypto.r35157.cauldron.afets.ticker.MEXCTickerItem;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+public class MEXCContractDetails {
+    public MEXCContractDetails() {
+        map = new HashMap<>();
+        client = HttpClient.newHttpClient();
+
+        gson = new GsonBuilder()
+                .registerTypeAdapter(MEXCTickerItem.class, new MEXCContractDetailsDeserializer())
+                .create();
+
+        request = HttpRequest.newBuilder()
+                .uri(URI.create(API_URL))
+                .GET()
+                .build();
+    }
+
+    public void updateAll() throws Exception {
+        HttpResponse<String> httpResp = client.send(request, HttpResponse.BodyHandlers.ofString());
+        String json = httpResp.body();
+        ContractDetailsResponse resp = gson.fromJson(json, ContractDetailsResponse.class);
+        List<ContractDetailsItem> items = resp.data();
+
+        for (ContractDetailsItem item : items) {
+            map.put(item.symbol(), item);
+        }
+    }
+
+    public @Nullable ContractDetailsItem getContractDetails(@NotNull String symbol) {
+        ContractDetailsItem item = map.get(symbol);
+        return item;
+    }
+
+    public Set<String> getAllSymbols() {
+        return map.keySet();
+    }
+
+    private static final String API_URL = "https://contract.mexc.com/api/v1/contract/detail";
+
+    private final HttpClient client;
+    private final HttpRequest request;
+    private final Map<String, ContractDetailsItem> map;
+    private final Gson gson;
+}

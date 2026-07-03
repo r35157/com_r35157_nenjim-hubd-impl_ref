@@ -1,0 +1,17 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+public record PositionStatistics(
+        int totalNumberOfLongPositions,
+        int totalNumberOfShortPositions,
+        BigDecimal totalLongPositionsValue,
+        BigDecimal totalShortPositionsValue,
+        BigDecimal totalLongBaseValue,
+        BigDecimal totalShortBaseValue,
+        BigDecimal totalLongMarginValue,
+        BigDecimal totalShortMarginValue,
+        BigDecimal totalAvgLongPositionSize,
+        BigDecimal totalAvgShortPositionSize
+) {
+}

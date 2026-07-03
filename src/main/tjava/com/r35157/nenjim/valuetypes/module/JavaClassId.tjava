@@ -1,0 +1,12 @@
+package com.r35157.nenjim.valuetypes.module;
+
+//import com.r35157.libs.valuetypes.basic.Id;
+import org.jetbrains.annotations.NotNull;
+
+public record JavaClassId(
+    @NotNull String value
+) { //implements Id {
+    public static JavaClassId of(String javaClassId) {
+        return new JavaClassId(javaClassId);
+    }
+}

@@ -1,0 +1,13 @@
+package crypto.r35157;
+
+public class SemVer {
+    public SemVer(String semVer) {
+        this.semVer = semVer;
+    }
+
+    public String getSemVer() {
+        return semVer;
+    }
+
+    private String semVer;
+}

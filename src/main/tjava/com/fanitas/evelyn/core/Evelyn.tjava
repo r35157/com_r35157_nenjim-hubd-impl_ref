@@ -1,0 +1,5 @@
+package com.fanitas.evelyn.core;
+
+public interface Evelyn {
+    void executeService() throws Exception;
+}

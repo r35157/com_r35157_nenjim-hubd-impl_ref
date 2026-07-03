@@ -1,0 +1,38 @@
+package crypto.r35157.cauldron.afets.fundingrate;
+
+import com.google.gson.*;
+import org.jetbrains.annotations.NotNull;
+
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+
+public class MEXCFundingRatesDeserializer implements JsonDeserializer<MEXCFundingRateItem> {
+    @Override
+    public MEXCFundingRateItem deserialize(
+            @NotNull JsonElement json,
+            @NotNull Type typeOfT,
+            @NotNull JsonDeserializationContext context
+    ) throws JsonParseException {
+        JsonObject jsonObject = json.getAsJsonObject();
+
+        String symbol = jsonObject.get("symbol").getAsString();
+        BigDecimal fundingRate = jsonObject.get("fundingRate").getAsBigDecimal();
+        BigDecimal maxFundingRate = jsonObject.get("maxFundingRate").getAsBigDecimal();
+        BigDecimal minFundingRate = jsonObject.get("minFundingRate").getAsBigDecimal();
+        int collectCycle = jsonObject.get("collectCycle").getAsInt();
+        long nextSettleTime = jsonObject.get("nextSettleTime").getAsLong();
+        long timestamp = jsonObject.get("timestamp").getAsLong();
+
+        MEXCFundingRateItem item = new MEXCFundingRateItem(
+                symbol,
+                fundingRate,
+                maxFundingRate,
+                minFundingRate,
+                collectCycle,
+                nextSettleTime,
+                timestamp
+        );
+
+        return item;
+    }
+}

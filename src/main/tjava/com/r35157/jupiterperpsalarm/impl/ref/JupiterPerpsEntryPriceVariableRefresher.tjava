@@ -1,0 +1,86 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
+import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+public final class JupiterPerpsEntryPriceVariableRefresher {
+
+    public JupiterPerpsEntryPriceVariableRefresher(
+            Map<String, String> variables,
+            JupiterPerpsService jupiterPerpsService
+    ) {
+        this.variables = Objects.requireNonNull(variables, "variables");
+        this.jupiterPerpsService = Objects.requireNonNull(jupiterPerpsService, "jupiterPerpsService");
+    }
+
+    public void refresh() {
+        ΩSolanaWalletIdΩ  wallet = variables.get("JUPITER_PERPS_WALLET");
+
+        if (wallet == null || wallet.isBlank()) {
+            System.err.println("Cannot refresh Jupiter Perps entry price variables: JUPITER_PERPS_WALLET is not configured");
+            return;
+        }
+
+        try {
+            Set<JupiterPerpsPosition> positions = jupiterPerpsService.getOpenPositions(wallet);
+
+            System.out.println(
+                    "Fetched " + positions.size()
+                            + " open Jupiter Perps positions for wallet: " + wallet
+            );
+
+            removeEntryPriceVariables();
+
+            for (JupiterPerpsPosition position : positions) {
+                String variableName = createEntryPriceVariableName(position);
+
+                System.out.println(
+                        "Jupiter Perps position maps to variable "
+                                + variableName
+                                + " = "
+                                + position.entryPrice()
+                );
+                variables.put(variableName, position.entryPrice().toPlainString());
+            }
+        } catch (IOException | InterruptedException exception) {
+            if (exception instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+
+            System.err.println(
+                    "Could not refresh Jupiter Perps entry price variables: "
+                            + exception.getMessage()
+            );
+        }
+    }
+
+    private void removeEntryPriceVariables() {
+        variables.remove("SOL_LONG_ENTRY_PRICE");
+        variables.remove("SOL_SHORT_ENTRY_PRICE");
+        variables.remove("BTC_LONG_ENTRY_PRICE");
+        variables.remove("BTC_SHORT_ENTRY_PRICE");
+        variables.remove("ETH_LONG_ENTRY_PRICE");
+        variables.remove("ETH_SHORT_ENTRY_PRICE");
+    }
+
+    private static String createEntryPriceVariableName(JupiterPerpsPosition position) {
+        String asset = switch (position.tradedTokenMint()) {
+            case "So11111111111111111111111111111111111111112" -> "SOL";
+            case "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh" -> "BTC";
+            case "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs" -> "ETH";
+            default -> throw new IllegalArgumentException(
+                    "Unsupported Jupiter Perps traded token mint: " + position.tradedTokenMint()
+            );
+        };
+
+        return asset + "_" + position.direction() + "_ENTRY_PRICE";
+    }
+
+    private final Map<String, String> variables;
+    private final JupiterPerpsService jupiterPerpsService;
+}

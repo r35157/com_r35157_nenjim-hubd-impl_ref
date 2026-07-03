@@ -1,0 +1,42 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+import static crypto.r35157.cauldron.afets.PositionType.marginLong;
+import static java.math.RoundingMode.HALF_UP;
+
+public class ScoreCalculatorImpl implements ScoreCalculator {
+    @Override
+    public BigDecimal calculateScore(ScoreCalculatorInput input) {
+        // Guard clause
+        if(input.futureTokenBaseNotationPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("'futureTokenBaseNotationPrice' must be > 0");
+        }
+
+        if(input.currentTokenNotationPrice.compareTo(BigDecimal.ZERO) == 0) {
+            throw new ArithmeticException("'currentTokenNotationPrice' cannot be zero");
+        }
+
+        if(input.amountNotionalToSpend.compareTo(BigDecimal.ZERO) == 0) {
+            throw new ArithmeticException("Notional amount to spend cannot be zero");
+        }
+
+        // Correct calculation of units traded at actual market price
+        BigDecimal unitsToBeTraded = input.amountNotionalToSpend.divide(input.currentTokenNotationPrice, 20, HALF_UP);
+
+        BigDecimal priceDiff = (input.type == marginLong)
+                ? input.currentTokenBaseNotationPrice.subtract(input.futureTokenBaseNotationPrice)
+                : input.futureTokenBaseNotationPrice.subtract(input.currentTokenBaseNotationPrice);
+
+        // Profit improvement in absolute terms
+        BigDecimal profit = priceDiff.multiply(unitsToBeTraded);
+
+        // Relative profit improvement per dollar spent
+        BigDecimal relativeProfit = profit.divide(input.amountNotionalToSpend, 20, HALF_UP);
+
+        // Final intuitive score
+        BigDecimal score = relativeProfit.add(BigDecimal.ONE);
+
+        return score;
+    }
+}

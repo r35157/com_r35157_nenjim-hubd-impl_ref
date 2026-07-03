@@ -1,0 +1,68 @@
+package crypto.r35157.cauldron.afets;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+public class PushNotifier {
+    public PushNotifier(@NotNull String token, @NotNull String user) {
+        this.token = token;
+        this.user = user;
+    }
+
+    public void push(@NotNull String message) {
+        try {
+            // Build the POST data string with URL encoding
+            StringBuilder postData = new StringBuilder();
+            postData.append("token=").append(URLEncoder.encode(token, UTF_8));
+            postData.append("&user=").append(URLEncoder.encode(user, UTF_8));
+            postData.append("&message=").append(URLEncoder.encode(message, UTF_8));
+            byte[] postDataBytes = postData.toString().getBytes(UTF_8);
+
+            // Create the connection to the Pushover API
+            URL url = new URL(ENDPOINT);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+            conn.setRequestProperty("Content-Length", String.valueOf(postDataBytes.length));
+
+            // Write the POST data to the request body
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(postDataBytes);
+            }
+
+            // Read the response from the API
+            int responseCode = conn.getResponseCode();
+            InputStream is = (responseCode < HttpURLConnection.HTTP_BAD_REQUEST)
+                    ? conn.getInputStream() : conn.getErrorStream();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is, UTF_8));
+            String line;
+            StringBuilder response = new StringBuilder();
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+            reader.close();
+
+            // Output the response code and body
+            //System.out.println("Response Code: " + responseCode);
+            //System.out.println("Response: " + response.toString());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static final String ENDPOINT = "https://api.pushover.net/1/messages.json";
+
+    private final String token;
+    private final String user;
+}

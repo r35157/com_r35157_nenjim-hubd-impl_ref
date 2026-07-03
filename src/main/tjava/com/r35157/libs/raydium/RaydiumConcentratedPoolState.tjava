@@ -1,0 +1,32 @@
+package com.r35157.libs.raydium;
+
+import java.math.BigInteger;
+
+/**
+ * Represents raw on-chain state for a Raydium concentrated liquidity pool.
+ *
+ * <p>This record contains low-level CLMM pool state decoded from the Raydium
+ * concentrated liquidity pool account on Solana. It is different from
+ * {@link RaydiumConcentratedPoolInfo}, which represents pool information fetched
+ * from Raydium's REST API.</p>
+ *
+ * <p>The {@code sqrtPriceX64} field represents the current square-root price in
+ * Raydium's fixed-point Q64.64 format. This value can be used for more precise
+ * concentrated liquidity calculations than using the REST API price field.</p>
+ *
+ * <p>This record does not contain token mint metadata, decimals or display prices.
+ * Those values belong in {@link RaydiumConcentratedPoolInfo} or in higher-level
+ * calculations that combine pool state with pool information.</p>
+ *
+ * @param poolId the Raydium concentrated liquidity pool id
+ * @param liquidity the currently active liquidity in the pool
+ * @param sqrtPriceX64 the current square-root price in Q64.64 fixed-point format
+ * @param tickCurrent the current Raydium liquidity tick index
+ */
+public record RaydiumConcentratedPoolState(
+        ΩRaydiumLiquidityPoolConcentratedIdΩ poolId,
+        ΩRaydiumLiquidityΩ liquidity,
+        ΩRaydiumSqrtPriceX64Ω sqrtPriceX64,
+        ΩraydiumLiquidityTickIndexΩ tickCurrent
+) {
+}

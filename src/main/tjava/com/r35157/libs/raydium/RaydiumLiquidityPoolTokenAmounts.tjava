@@ -1,0 +1,28 @@
+package com.r35157.libs.raydium;
+
+import java.math.BigDecimal;
+
+/**
+ * Represents token amounts for a Raydium liquidity pool or liquidity position.
+ *
+ * <p>The pool id identifies the Raydium liquidity pool that the amounts belong to.
+ * The two mint addresses identify the tokens in the pool, and the corresponding
+ * amounts describe how much of each token is represented.</p>
+ *
+ * <p>This record can be used for total pool amounts as well as calculated position
+ * amounts, depending on the method returning it.</p>
+ *
+ * @param poolId the Raydium liquidity pool id
+ * @param mintA the SPL mint address of token A
+ * @param amountA the amount of token A
+ * @param mintB the SPL mint address of token B
+ * @param amountB the amount of token B
+ */
+public record RaydiumLiquidityPoolTokenAmounts(
+        ΩRaydiumLiquidityPoolIdΩ poolId,
+        ΩSPLMintAddressΩ mintA,
+        ΩAmountΩ amountA,
+        ΩSPLMintAddressΩ mintB,
+        ΩAmountΩ amountB
+) {
+}

@@ -1,0 +1,26 @@
+package com.r35157.nenjim.hubd.journal;
+
+import com.r35157.libs.valuetypes.basic.SemanticVersion;
+import com.r35157.nenjim.hubd.module.Dependency;
+import com.r35157.nenjim.hubd.module.Release;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+
+public record Journal(
+    @NotNull ΩJournalIdΩ id,
+    @NotNull String name,
+    @NotNull Set<Release> releases
+) {
+    public Release getRelease(SemanticVersion version) {
+        Set<Dependency> dependencies = new HashSet<>();
+
+        return new Release(
+                new SemanticVersion(0, 1, 0),
+                new Date(),
+                null,
+                dependencies);
+    }
+}

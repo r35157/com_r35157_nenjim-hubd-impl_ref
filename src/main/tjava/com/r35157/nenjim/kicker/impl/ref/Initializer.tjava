@@ -1,0 +1,53 @@
+package com.r35157.nenjim.kicker.impl.ref;
+
+import com.r35157.nenjim.hubd.NenjimHub;
+import com.r35157.nenjim.hubd.ctx.Context;
+import com.r35157.nenjim.kicker.NenjimKicker;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public final class Initializer {
+    static void main() {
+        try {
+            Initializer bs = new Initializer();
+            String classesCacheDirOrig = "~/.config/nenjim/kicker/cache/classes";
+            String classesCacheDir = (classesCacheDirOrig.startsWith("~/"))
+                    ? System.getProperty("user.home") + classesCacheDirOrig.substring(1)
+                    : classesCacheDirOrig;
+            Path pathToClassesCache = Path.of(classesCacheDir);
+
+            if(Files.exists(pathToClassesCache) == false) {
+                System.err.println("Cannot find '" + classesCacheDirOrig + "'");
+                System.exit(-1);
+            }
+
+            bs.startNenjimKicker(pathToClassesCache);
+        } catch(Throwable t) {
+            System.err.println("Error initializing NenjimKicker - " + t.getMessage());
+        }
+    }
+
+    public Initializer() {
+    }
+
+    private void startNenjimKicker(Path pathToClassCache) throws Exception {
+        System.out.println("Initializing NenjimKicker...");
+
+        NenjimHub nenjimHub = null;
+        Context defaultContext = new Context();
+        NenjimClassLoader nenjimClassLoader = new NenjimClassLoader(defaultContext, pathToClassCache);
+
+        Class<?> clazz = nenjimClassLoader.findClass("com.r35157.nenjim.kicker.impl.ref.NenjimKickerImpl");
+        Object instance = clazz.getDeclaredConstructor().newInstance();
+        NenjimKicker kicker = (NenjimKicker)instance;
+
+        System.out.println(kicker);
+        System.out.println("Loaded class: " + clazz.getName());
+        System.out.println("ClassLoader: " + clazz.getClassLoader());
+        System.out.println("Parent: " + clazz.getClassLoader().getParent());
+        System.out.println("Instance: " + instance);
+
+        System.out.println("Done!");
+    }
+}

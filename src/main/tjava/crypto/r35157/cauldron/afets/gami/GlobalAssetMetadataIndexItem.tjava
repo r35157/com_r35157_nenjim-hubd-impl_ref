@@ -1,0 +1,12 @@
+package crypto.r35157.cauldron.afets.gami;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
+
+public record GlobalAssetMetadataIndexItem(
+        @NotNull UUID gamiId,
+        @NotNull String name,
+        @Nullable String symbolMEXC
+) {}

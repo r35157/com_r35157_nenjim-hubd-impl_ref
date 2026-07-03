@@ -1,0 +1,245 @@
+package crypto.r35157.nenjim;
+
+import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.beans.Observable;
+import javafx.beans.binding.Bindings;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleLongProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.event.ActionEvent;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
+//import org.junit.jupiter.api.Disabled;
+//import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Method;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
+public class NenjimTestTool extends Application implements NenjimProcess {
+    @Override
+    public void run() throws Exception {
+        launch();
+    }
+
+    public static class FileNode {
+        private final SimpleStringProperty name;
+        private final SimpleLongProperty size;
+        private final SimpleStringProperty type;
+        private final BooleanProperty selected = new SimpleBooleanProperty(false);
+
+        public FileNode(String name, long size, String type) {
+            this.name = new SimpleStringProperty(name);
+            this.size = new SimpleLongProperty(size);
+            this.type = new SimpleStringProperty(type);
+        }
+        public SimpleStringProperty nameProperty() { return name; }
+        public SimpleLongProperty sizeProperty() { return size; }
+        public SimpleStringProperty typeProperty() { return type; }
+        public BooleanProperty selectedProperty() { return selected; }
+    }
+
+    @Override
+    public void stop() throws Exception {
+        super.stop();
+    }
+
+    @Override
+    public void start(Stage primaryStage) {
+        // When the user clicks the window “X”, tear down JavaFX only:
+        primaryStage.setOnCloseRequest(event -> {
+            // triggers Application.stop() and shuts down FX machinery
+            Platform.exit();
+            // → no System.exit(): the rest of your Nenjin VM keeps running
+        });
+
+        // Load icons
+        Image folderIcon = new Image(getClass().getResourceAsStream("/icons/folder.png"));
+        Image fileIcon = new Image(getClass().getResourceAsStream("/icons/file.png"));
+
+        // Build tree items
+        TreeItem<FileNode> root = new TreeItem<>(new FileNode("Projekt", 0, "Folder"));
+        root.setExpanded(true);
+
+        TreeItem<FileNode> src = new TreeItem<>(new FileNode("src", 0, "Folder"));
+        src.getChildren().add(new TreeItem<>(new FileNode("Main.java", 15000, "File")));
+        src.getChildren().add(new TreeItem<>(new FileNode("Utils.java", 8200, "File")));
+        root.getChildren().add(src);
+
+        TreeItem<FileNode> res = new TreeItem<>(new FileNode("resources", 0, "Folder"));
+        res.getChildren().add(new TreeItem<>(new FileNode("icon.png", 2500, "File")));
+        root.getChildren().add(res);
+
+        // Create TreeTableView
+        TreeTableView<FileNode> treeTable = new TreeTableView<>(root);
+        treeTable.setShowRoot(true);
+
+        // Name column with tri-state checkbox and icon
+        TreeTableColumn<FileNode, String> nameCol = new TreeTableColumn<>("Name");
+        nameCol.setCellValueFactory(param -> param.getValue().getValue().nameProperty());
+        nameCol.setPrefWidth(300);
+        nameCol.setCellFactory(col -> new TreeTableCell<FileNode, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                } else {
+                    TreeItem<FileNode> treeItem = getTreeTableRow().getTreeItem();
+                    FileNode node = treeItem.getValue();
+                        // Create checkbox
+                        CheckBox checkBox = new CheckBox();
+                    checkBox.setAllowIndeterminate(true);
+                    // Bind selected
+                    checkBox.selectedProperty().bindBidirectional(node.selectedProperty());
+                    // Bind indeterminate to partial selection of children
+                    Observable[] childProps = treeItem.getChildren().stream()
+                        .map(child -> (Observable) child.getValue().selectedProperty())
+                        .toArray(Observable[]::new);
+                    checkBox.indeterminateProperty().bind(Bindings.createBooleanBinding(() -> {
+                        boolean any = treeItem.getChildren().stream()
+                            .anyMatch(child -> child.getValue().selectedProperty().get());
+                        boolean all = treeItem.getChildren().stream()
+                            .allMatch(child -> child.getValue().selectedProperty().get());
+                        return any && !all;
+                    }, childProps));
+                    // Propagate clicks to children
+                    checkBox.addEventHandler(ActionEvent.ACTION, e -> {
+                        if (!checkBox.isIndeterminate()) {
+                            treeItem.getChildren().forEach(child ->
+                                child.getValue().selectedProperty().set(checkBox.isSelected())
+                            );
+                        }
+                    });
+                        // Create icon
+                        ImageView iv = new ImageView(
+                                node.typeProperty().get().equals("Folder") ? folderIcon : fileIcon
+                        );
+                        iv.setFitHeight(16);
+                        iv.setFitWidth(16);
+                        // Layout
+                        HBox container = new HBox(5, checkBox, iv);
+                        setText(item);
+                        setGraphic(container);
+                }
+            }
+        });
+
+        // Size column
+        TreeTableColumn<FileNode, Number> sizeCol = new TreeTableColumn<>("Size (bytes)");
+        sizeCol.setCellValueFactory(param -> param.getValue().getValue().sizeProperty());
+        sizeCol.setPrefWidth(120);
+
+        // Type column
+        TreeTableColumn<FileNode, String> typeCol = new TreeTableColumn<>("Type");
+        typeCol.setCellValueFactory(param -> param.getValue().getValue().typeProperty());
+        typeCol.setPrefWidth(100);
+
+        treeTable.getColumns().setAll(nameCol, sizeCol, typeCol);
+
+        Button runButton = new Button("Execute Tests");
+        runButton.setOnAction(event -> runTests());
+
+        // Show scene
+        StackPane stackPane = new StackPane(treeTable);
+        BorderPane rootPane = new BorderPane();
+        rootPane.setTop(stackPane);
+        rootPane.setBottom(runButton);
+
+        Scene scene = new Scene(rootPane, 700, 450);
+
+        primaryStage.setTitle("Nenjim Test Tool");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+    }
+
+    @Override
+    public void setNenjimProcessContext(NenjimContext context) {
+        this.nenjimContext = context;
+    }
+
+    @Override
+    public void setNenjimHub(NenjimHub hub) {
+    }
+
+    @Override
+    public String getProcessName() {
+        return "Nenjim Test Tool";
+    }
+
+    private void runTests() {
+        // Map over projekter og deres konfiguration
+        Map<String, ProjectConfig> projects = Map.of(
+                "NenjimHub", new ProjectConfig(
+                        Path.of("/home/minimons/projects/nenjim_testtool-tests/build/classes/java/test"),
+                        List.of(
+                                "crypto.r35157.nenjim.testtool.TestsTOC"
+                        )
+                )
+        );
+
+        for (Map.Entry<String, ProjectConfig> entry : projects.entrySet()) {
+            String projectName = entry.getKey();
+            ProjectConfig config = entry.getValue();
+
+            System.out.println("===> Projekt: " + projectName);
+            DirectoryClassLoader loader = new DirectoryClassLoader(config.classDir);
+
+            for (String className : config.testClasses) {
+                System.out.println("--> Tester klasse: " + className);
+                try {
+                    Class<?> clazz = loader.loadClass(className);
+
+                    // TODO: Renable when import is fixed
+                    /*Disabled disabledClass = clazz.getAnnotation(Disabled.class);
+                    if (disabledClass != null) {
+                        String reason = disabledClass.value();
+                        System.out.println("\uD83D\uDEAB --> Klasse '" + className + "' disabled! (Reason: " + reason + ")");
+                        continue;
+                    }*/
+
+                    Object instance = clazz.getDeclaredConstructor().newInstance();
+
+                    // TODO: Renable when import is fixed
+                    /*
+                    for (Method method : clazz.getDeclaredMethods()) {
+                        if (method.isAnnotationPresent(Test.class)) {
+                            Disabled disabledTest = method.getAnnotation(Disabled.class);
+                            String methodName = method.getName();
+
+                            if(disabledTest != null) {
+                                String reason = disabledTest.value();
+                                System.out.println("\uD83D\uDEAB --> Test '" + methodName + "' disabled! (Reason: " + reason + ")");
+                                continue;
+                            }
+
+                            System.out.print("   Kører test: '" + methodName + "' ... ");
+                            try {
+                                method.setAccessible(true);
+                                method.invoke(instance);
+                                System.out.println("✅");
+                            } catch (Throwable t) {
+                                System.out.println("❌ Fejl: " + t.getCause());
+                            }
+                        }
+                    }*/
+                } catch (Exception e) {
+                    System.out.println("🚫 Kunne ikke loade klasse: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private NenjimContext nenjimContext;
+}

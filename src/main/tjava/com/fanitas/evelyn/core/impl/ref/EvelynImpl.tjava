@@ -1,0 +1,266 @@
+package com.fanitas.evelyn.core.impl.ref;
+
+import com.fanitas.evelyn.core.*;
+import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionConcentrated;
+
+import com.r35157.libs.basic.Pair;
+import com.r35157.libs.basic.Triblet;
+import com.r35157.libs.raydium.Raydium;
+import com.r35157.libs.raydium.RaydiumLiquidityPoolPrice;
+import com.r35157.libs.solana.SPLTokenHolding;
+import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaConstants;
+import com.r35157.libs.valuetypes.basic.AssetPrice;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import com.r35157.libs.valuetypes.basic.TradingPair;
+
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SOLANA;
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SYRUPUSDC;
+import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.SPL_TOKEN_PROGRAM;
+import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.TOKEN_2022_PROGRAM;
+
+public class EvelynImpl implements Evelyn {
+
+    public EvelynImpl(
+            State state,
+            DesiredPositionCalculator desiredPositionCalculator,
+            Raydium raydium,
+            SolanaBlockChain solanaChain
+    ) {
+        this.state = state;
+        this.desiredPositionCalculator = desiredPositionCalculator;
+        this.raydium = raydium;
+        this.solanaChain = solanaChain;
+    }
+
+    @Override
+    public void executeService() throws Exception {
+        handleRebalancingProposal();
+    }
+
+    private SPLTokenHolding getSPLHolding(ΩSolanaAddressΩ ownerAddress, ΩSPLMintAddressΩ splMintAddress) throws Exception {
+        Map<ΩSPLMintAddressΩ, SPLTokenHolding> holdings = new HashMap<>();
+
+        holdings.putAll(solanaChain.getSPLTokenHoldings(ownerAddress, SPL_TOKEN_PROGRAM));
+        holdings.putAll(solanaChain.getSPLTokenHoldings(ownerAddress, TOKEN_2022_PROGRAM));
+
+        SPLTokenHolding result = holdings.get(splMintAddress);
+        return result;
+    }
+
+    private MoneyAmount add(MoneyAmount a, ΩAmountΩ b) {
+        MoneyAmount ma = new MoneyAmount(a.amount().add(b), a.currencyType());
+        return ma;
+    }
+
+    private MoneyAmount add(MoneyAmount a, MoneyAmount b) {
+        if(a.currencyType() != b.currencyType()) {
+            String errTxt = "Cannot add " + b.currencyType()
+                    + " to " + a.currencyType();
+            throw new IllegalArgumentException(errTxt);
+        }
+
+        MoneyAmount ma = new MoneyAmount(a.amount().add(b.amount()), a.currencyType());
+        return ma;
+    }
+
+    private MoneyAmount subtract(MoneyAmount a, MoneyAmount b) {
+        if(a.currencyType() != b.currencyType()) {
+            String errTxt = "Cannot subtract " + b.currencyType()
+                    + " from " + a.currencyType();
+            throw new IllegalArgumentException(errTxt);
+        }
+
+        MoneyAmount ma = new MoneyAmount(a.amount().subtract(b.amount()), a.currencyType());
+        return ma;
+    }
+
+    private MoneyAmount subtract(MoneyAmount a, ΩAmountΩ b) {
+        MoneyAmount ma = new MoneyAmount(a.amount().subtract(b), a.currencyType());
+        return ma;
+    }
+
+    private ΩAmountΩ subtract(ΩAmountΩ a, ΩAmountΩ b) {
+        return a.subtract(b);
+    }
+
+    private ΩAmountΩ subtract(ΩAmountΩ a, MoneyAmount b) {
+        return a.subtract(b.amount());
+    }
+
+    private void handleRebalancingProposal() {
+        try {
+            ΩSolanaAddressΩ solanaAddressForEvelynIOU = state.getSolanaAddressForEvelynIOU();
+            ΩSPLMintAddressΩ syrupUSDCMintAddr = SolanaConstants.SPL_TOKEN_SYRUPUSDC;
+
+            AssetPrice currentPriceFromRaydium;
+            SPLTokenHolding syrupHolding = getSPLHolding(solanaAddressForEvelynIOU, syrupUSDCMintAddr);
+
+            ΩSyrupAmountΩ inactiveInAccountSyrup = new ΩSyrupAmountΩ(
+                    syrupHolding.uiAmount(),
+                    SYRUPUSDC.getCurrencyType()
+            );
+
+            while(true) {
+                state.update();
+                ΩmilliSecondsΩ iterationStartTime = System.currentTimeMillis();
+
+                try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                    RaydiumLiquidityPoolPrice concentratedResult;
+                    Future<RaydiumLiquidityPoolPrice> cFuture = executor.submit(
+                            () -> new RaydiumLiquidityPoolPrice(
+                                    state.getRaydiumPoolId(),
+                                    raydium.fetchPoolPrice(state.getRaydiumPoolId())
+                            )
+                    );
+
+                    concentratedResult = cFuture.get();
+                    currentPriceFromRaydium = concentratedResult.price();
+                }
+
+                System.out.println("Iteration interval: " + (state.getIterationInterval() / 1000) + " secs");
+
+                System.out.println("Solana balances:");
+                ΩSolanaAmountΩ solBalanceEvelynAccount = solanaChain.getBalanceInSolana(state.getSolanaAddressForEvelynIOU());
+                System.out.println("   Evelyn account: " + solBalanceEvelynAccount.amount());
+                ΩSolanaAmountΩ solBalanceBurnAccount = solanaChain.getBalanceInSolana(state.getSolanaAddressForEvelynIOUBurner());
+                System.out.println("     Burn account: " + solBalanceBurnAccount.amount());
+                System.out.println("SYRUP owned by Evelyn: " + state.getSyrupOwnedByEvelyn().amount());
+                System.out.println("SYRUP inactive on Evelyn account: " + inactiveInAccountSyrup);
+
+                System.out.println("Pool price: " + currentPriceFromRaydium);
+
+                Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> totalDistributedSums =
+                        desiredPositionCalculator.calculateTotalDistributedSums();
+                ΩSolanaAmountΩ totalDistributedSumSolana = totalDistributedSums.left();
+                ΩSyrupAmountΩ totalDistributedSumSyrup = totalDistributedSums.right();
+                System.out.println("Total amount currently distributed: " + totalDistributedSumSolana
+                        + " / " + totalDistributedSumSyrup);
+
+                Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> amountsLocked =
+                        desiredPositionCalculator.calculateLockedSums(currentPriceFromRaydium);
+                ΩSolanaAmountΩ amountLockedSolana = amountsLocked.left();
+                ΩSyrupAmountΩ amountLockedSyrup = amountsLocked.right();
+                System.out.println("Total amount locked due to HIGH price: " + amountLockedSolana);
+                System.out.println("Total amount locked due to LOW price: " + amountLockedSyrup);
+
+                ΩSyrupAmountΩ totalAmountSyrup = add(totalDistributedSumSyrup, inactiveInAccountSyrup);
+                ΩSyrupAmountΩ reservedForBurnSyrup = subtract(totalAmountSyrup, state.getSyrupOwnedByEvelyn());
+
+                ΩSolanaAmountΩ readyForBurnSolana = subtract(solBalanceEvelynAccount, SOFT_LOW_LIMIT_SOLANA_BALANCE);
+                System.out.println("Amount reserved for burn: "
+                        + "Solana: " + readyForBurnSolana
+                        + ", Syrup:" + reservedForBurnSyrup);
+
+                Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> totalReadyAmount = desiredPositionCalculator
+                        .calculateRedistributableSums(
+                                currentPriceFromRaydium,
+                                solBalanceEvelynAccount,
+                                amountZeroSolana,           // We do not burn Solana
+                                inactiveInAccountSyrup,
+                                reservedForBurnSyrup
+                        );
+                ΩSolanaAmountΩ solTotalReadyAmount = totalReadyAmount.left();
+                ΩSyrupAmountΩ syrupTotalReadyAmount = totalReadyAmount.right();
+                System.out.println("Total amount of Syrup ready for distribution: " + syrupTotalReadyAmount);
+
+                HashMap<ΩRaydiumLiquidityPoolPositionNftIdΩ, Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ>> rebalancingProposal =
+                        desiredPositionCalculator.calculateRebalancingProposal(
+                                currentPriceFromRaydium,
+                                solTotalReadyAmount,
+                                syrupTotalReadyAmount
+                        );
+
+                Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> liquidityPositions =
+                        state.getLiquidityPositions();
+
+                Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, Triblet<ΩSyrupAmountΩ, ΩSyrupAmountΩ, ΩSyrupAmountΩ>> diffs =
+                        calculateDiffs(rebalancingProposal, liquidityPositions);
+
+                String minKey = diffs.entrySet().stream()
+                        .min(Comparator.comparing(entry -> entry.getValue().right().amount()))
+                        .map(Map.Entry::getKey)
+                        .orElseThrow();
+
+                String maxKey = diffs.entrySet().stream()
+                        .max(Comparator.comparing(entry -> entry.getValue().right().amount()))
+                        .map(Map.Entry::getKey)
+                        .orElseThrow();
+
+                System.out.println("Move value from (" + maxKey + "): ");
+
+                RaydiumLiquidityPoolPositionConcentrated maxPos = liquidityPositions.get(maxKey);
+                Triblet<ΩSyrupAmountΩ, ΩSyrupAmountΩ, ΩSyrupAmountΩ> maxDiff = diffs.get(maxKey);
+                System.out.println("   " + maxPos.priceRange().from() + ".."
+                        + maxPos.priceRange().to()
+                        + " - Current: " + maxDiff.left().amount()
+                        + ", Suggested: " + maxDiff.middle().amount()
+                        + ", Diff: " + maxDiff.right().amount()
+                );
+
+                System.out.println(" --> ");
+
+                RaydiumLiquidityPoolPositionConcentrated minPos = liquidityPositions.get(minKey);
+                Triblet<ΩSyrupAmountΩ, ΩSyrupAmountΩ, ΩSyrupAmountΩ> minDiff = diffs.get(minKey);
+                System.out.println("   " + minPos.priceRange().from() + ".."
+                        + minPos.priceRange().to()
+                        + " - Current: " + minDiff.left().amount()
+                        + ", Suggested: " + minDiff.middle().amount()
+                        + ", Diff: " + minDiff.right().amount());
+
+                ΩmilliSecondsΩ iterationExecutionTime = (System.currentTimeMillis() - iterationStartTime);
+
+                for(ΩmilliSecondsΩ sleepTime = state.getIterationInterval() - iterationExecutionTime; sleepTime > 0; sleepTime -= 1000) {
+                    System.out.print("\rSleeping for " + (sleepTime / 1000) + " secs...      ");
+                    System.out.flush();
+                    Thread.sleep(1000L);
+                }
+                System.out.println();
+                System.out.println("-------------------------------------------------------------");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private HashMap<ΩRaydiumLiquidityPoolPositionNftIdΩ, Triblet<ΩSyrupAmountΩ, ΩSyrupAmountΩ, ΩSyrupAmountΩ>> calculateDiffs(
+            Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ>> rebalancingProposal,
+            Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> liquidityProviderPositionMap
+    ) {
+        HashMap<ΩRaydiumLiquidityPoolPositionNftIdΩ, Triblet<ΩSyrupAmountΩ, ΩSyrupAmountΩ, ΩSyrupAmountΩ>> diffs =
+                new HashMap<>(rebalancingProposal.size());
+
+        for(ΩRaydiumLiquidityPoolPositionNftIdΩ nftId : rebalancingProposal.keySet()) {
+            RaydiumLiquidityPoolPositionConcentrated pos = liquidityProviderPositionMap.get(nftId);
+            ΩSyrupAmountΩ currentlyAmountAdded = pos.amountMintB();
+            ΩSyrupAmountΩ suggestedAmount = rebalancingProposal.get(nftId).right();
+            ΩSyrupAmountΩ diff = subtract(currentlyAmountAdded, suggestedAmount);
+            Triblet<ΩSyrupAmountΩ, ΩSyrupAmountΩ, ΩSyrupAmountΩ> t = new Triblet<>(
+                    currentlyAmountAdded,
+                    suggestedAmount,
+                    diff
+            );
+            diffs.put(nftId, t);
+        }
+
+        return diffs;
+    }
+
+    private final static ΩSolanaAmountΩ amountZeroSolana = new ΩSolanaAmountΩ(
+            BigDecimal.ZERO,
+            SOLANA.getCurrencyType()
+    );
+
+    private final ΩAmountΩ SOFT_LOW_LIMIT_SOLANA_BALANCE = new BigDecimal("0.1");
+
+    private final State state;
+    private final DesiredPositionCalculator desiredPositionCalculator;
+    private final Raydium raydium;
+    private final SolanaBlockChain solanaChain;
+}

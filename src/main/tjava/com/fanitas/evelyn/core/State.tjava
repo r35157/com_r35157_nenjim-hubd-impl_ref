@@ -1,0 +1,19 @@
+package com.fanitas.evelyn.core;
+
+import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionConcentrated;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.Map;
+
+public interface State {
+    void update() throws IOException, InterruptedException;
+    ΩmilliSecondsΩ getIterationInterval();
+    ΩSolanaAmountΩ getSyrupOwnedByEvelyn();
+    ΩSolanaAddressΩ getSolanaAddressForEvelynIOU();
+    ΩSolanaAddressΩ getSolanaAddressForEvelynIOUBurner();
+    ΩRaydiumLiquidityPoolIdΩ getRaydiumPoolId();
+    ΩCurveWidthΩ getCurveWidth();
+    Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> getLiquidityPositions();
+}

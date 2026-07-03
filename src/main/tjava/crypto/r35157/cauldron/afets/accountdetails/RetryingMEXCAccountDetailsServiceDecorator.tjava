@@ -1,0 +1,59 @@
+package crypto.r35157.cauldron.afets.accountdetails;
+
+import crypto.r35157.cauldron.afets.InvalidAPIKeyException;
+import crypto.r35157.cauldron.afets.MEXCFuturesPlugin;
+import crypto.r35157.nenjim.EncryptedFileProperties;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class RetryingMEXCAccountDetailsServiceDecorator implements MEXCAccountDetailsService {
+    public RetryingMEXCAccountDetailsServiceDecorator(
+            MEXCFuturesPlugin mexFuturesPlugin,
+            MEXCAccountDetailsService accountDetailsService,
+            int maxNumberOfRetries,
+            EncryptedFileProperties secrets,
+            long sleepTime
+    ) {
+        this.mexFuturesPlugin = mexFuturesPlugin;
+        this.accountDetailsService = accountDetailsService;
+        this.maxNumberOfRetires = maxNumberOfRetries;
+        this.secrets = secrets;
+        this.sleepTime = sleepTime;
+    }
+
+    public @NotNull AccountDetails getDetails() throws InvalidAPIKeyException, Exception {
+        boolean keyInvalidKnown = false;
+
+        for(int i = 0; i < maxNumberOfRetires - 1; i++) {
+            try {
+                return accountDetailsService.getDetails();
+            } catch(InvalidAPIKeyException e) {
+                if(keyInvalidKnown) {
+                    throw e;
+                } else {
+                    keyInvalidKnown = true;
+                    log.error("ERROR: Invalid MEXC API key (" + e.getMessage() + ") - Updating and retrying...");
+                    secrets.refresh();
+                    String mexcWebKey = secrets.getProperty("assetaz_exchange_mexc_webkey");
+                    mexFuturesPlugin.setWebKey(mexcWebKey);
+                }
+            } catch(Exception e) {
+                log.error("ERROR: Getting account details (" + e.getMessage() + ") - Try "
+                        + (i + 1) + "/" + maxNumberOfRetires + "), retrying in " + sleepTime + "ms...");
+            }
+
+            Thread.sleep(sleepTime);
+        }
+
+        return accountDetailsService.getDetails();
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(RetryingMEXCAccountDetailsServiceDecorator.class);
+
+    private final MEXCFuturesPlugin mexFuturesPlugin;
+    private final MEXCAccountDetailsService accountDetailsService;
+    private final int maxNumberOfRetires;
+    private final EncryptedFileProperties secrets;
+    private final long sleepTime;
+}

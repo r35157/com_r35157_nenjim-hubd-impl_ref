@@ -1,0 +1,44 @@
+package com.r35157.libs.solana.valuetypes.economic;
+
+/**
+ * Represents a Solana SPL token program supported by this integration.
+ *
+ * <p>Solana has more than one token program. The original SPL Token Program is
+ * used by many existing tokens, while the Token-2022 Program supports newer token
+ * functionality and extensions.</p>
+ *
+ * <p>The program address is used when querying token accounts owned by a wallet,
+ * for example when discovering SPL token holdings or NFT-like token holdings
+ * under a specific token program.</p>
+ */
+public enum SolanaSPLTokenProgram {
+    /**
+     * The original Solana SPL Token Program.
+     */
+    SPL_TOKEN_PROGRAM("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+
+    /**
+     * The Solana Token-2022 Program.
+     */
+    TOKEN_2022_PROGRAM("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+
+    /**
+     * Creates a Solana SPL token program entry.
+     *
+     * @param address the Solana program address for the token program
+     */
+    SolanaSPLTokenProgram(ΩSPLProgramIdΩ address) {
+        this.address = address;
+    }
+
+    /**
+     * Returns the Solana program address for this token program.
+     *
+     * @return the SPL token program address
+     */
+    public ΩSPLProgramIdΩ getAddress() {
+        return address;
+    }
+
+    private final ΩSPLProgramIdΩ address;
+}

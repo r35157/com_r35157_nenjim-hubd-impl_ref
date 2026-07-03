@@ -1,0 +1,45 @@
+package com.r35157.libs.notification.impl.smtp;
+
+import com.r35157.libs.notification.AddressedNotifier;
+import com.r35157.libs.notification.BoundNotifier;
+import com.r35157.libs.valuetypes.basic.Credentials;
+import com.r35157.libs.valuetypes.basic.NetworkEndPoint;
+import com.r35157.libs.valuetypes.basic.SmtpConfiguration;
+
+import java.io.IOException;
+
+public class SMTPNotifier implements AddressedNotifier<SMTPDestination, EmailMessage> {
+
+    public SMTPNotifier(SmtpConfiguration smtpConfiguration) {
+        this.smtpConfiguration = smtpConfiguration;
+    }
+
+    @Override
+    public void push(SMTPDestination destination, EmailMessage message) throws IOException {
+        throw new UnsupportedOperationException("Not implemented yet!");
+    }
+
+    private void test() throws IOException {
+        ΩHostnameΩ hostName = new ΩHostnameΩ("SomeSMTPHost");
+        ΩportNumberΩ portNumber = 2525;
+        NetworkEndPoint networkEndPoint = new NetworkEndPoint(hostName, portNumber);
+
+        ΩUserNameΩ userName = "SomeUser";
+        ΩPasswordΩ password = "SomePassword";
+        Credentials credentials = new Credentials(userName, password);
+
+        SmtpConfiguration smtpConfiguration = new SmtpConfiguration(networkEndPoint, credentials);
+        AddressedNotifier<SMTPDestination, EmailMessage> notifier = new SMTPNotifier(smtpConfiguration);
+
+        ΩEmailAddressΩ emailAddress = "SomeReceiver";
+        SMTPDestination destination = new SMTPDestination(emailAddress);
+        BoundNotifier boundNotifier = notifier.bind(destination);
+
+        EmailSubject subject = new EmailSubject("SomeSubject");
+        EmailBody body = new EmailBody("SomeBody");
+        EmailMessage message = new EmailMessage(subject, body);
+        boundNotifier.push(message);
+    }
+
+    private final SmtpConfiguration smtpConfiguration;
+}

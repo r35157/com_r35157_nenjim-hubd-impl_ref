@@ -1,0 +1,8 @@
+package com.r35157.libs.basic;
+
+public record Triblet<L, M, R>(
+        L left,
+        M middle,
+        R right
+) {
+}

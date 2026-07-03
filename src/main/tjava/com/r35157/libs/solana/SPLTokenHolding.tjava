@@ -1,0 +1,30 @@
+package com.r35157.libs.solana;
+
+import java.math.BigDecimal;
+
+/**
+ * Represents an SPL token holding owned by a Solana address.
+ *
+ * <p>The holding describes one SPL token account and the token mint it belongs to.
+ * The amount is represented both as a UI amount and as the raw on-chain amount,
+ * together with the number of decimals used by the token mint.</p>
+ *
+ * <p>The program id identifies which SPL token program owns the token account,
+ * for example the original SPL Token Program or the Token-2022 Program.</p>
+ *
+ * @param tokenAccount the SPL token account holding the token balance
+ * @param mintAddress the SPL mint address of the token
+ * @param uiAmount the human-readable token amount
+ * @param rawAmount the raw on-chain token amount before decimal conversion
+ * @param decimals the number of decimals used by the token mint
+ * @param programId the SPL token program id that owns the token account
+ */
+public record SPLTokenHolding(
+        ΩSPLTokenAccountΩ tokenAccount,
+        ΩSPLMintAddressΩ mintAddress,
+        ΩAmountΩ uiAmount,
+        ΩRawAmountΩ rawAmount,
+        ΩamountDecimalsΩ decimals,
+        ΩSPLProgramIdΩ programId
+) {
+}

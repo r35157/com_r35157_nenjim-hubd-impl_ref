@@ -1,0 +1,61 @@
+package com.fanitas.evelyn.math;
+
+import java.math.BigDecimal;
+import java.math.MathContext;
+
+import static java.math.BigDecimal.ZERO;
+
+public class BigDecimalUtils {
+    public static BigDecimal min(BigDecimal a, BigDecimal b) {
+        return a.compareTo(b) <= 0 ? a : b;
+    }
+
+    public static BigDecimal max(BigDecimal a, BigDecimal b) {
+        return a.compareTo(b) >= 0 ? a : b;
+    }
+
+    public static BigDecimal sqrt(BigDecimal value, MathContext mc) {
+        if (value.compareTo(ZERO) < 0) {
+            throw new IllegalArgumentException("sqrt af negativ værdi");
+        }
+        if (value.compareTo(ZERO) == 0) {
+            return ZERO;
+        }
+
+        BigDecimal x = new BigDecimal(Math.sqrt(value.doubleValue()), mc);
+
+        for (int i = 0; i < 20; i++) {
+            x = x.add(value.divide(x, mc), mc).divide(TWO, mc);
+        }
+
+        return x;
+    }
+
+    public static double erf(BigDecimal x) {
+        double value = x.doubleValue();
+        double sign = value < 0 ? -1.0 : 1.0;
+        value = Math.abs(value);
+
+        double t = 1.0 / (1.0 + 0.5 * value);
+
+        double tau = t * Math.exp(
+                -value * value
+                        - 1.26551223
+                        + t * (1.00002368
+                        + t * (0.37409196
+                        + t * (0.09678418
+                        + t * (-0.18628806
+                        + t * (0.27886807
+                        + t * (-1.13520398
+                        + t * (1.48851587
+                        + t * (-0.82215223
+                        + t * 0.17087277))))))))
+        );
+
+        double result = sign * (1.0 - tau);
+        return result;
+    }
+
+    public static final BigDecimal TWO = new BigDecimal("2");
+    public static final BigDecimal THREE = new BigDecimal("3");
+}

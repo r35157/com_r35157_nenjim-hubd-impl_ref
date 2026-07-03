@@ -1,0 +1,11 @@
+package com.r35157.libs.notification.impl.pushover;
+
+import com.r35157.libs.notification.NotificationMessage;
+
+public record PushMessage(String text) implements NotificationMessage {
+    public PushMessage {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Push message cannot be blank");
+        }
+    }
+}

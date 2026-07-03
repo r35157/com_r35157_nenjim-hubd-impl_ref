@@ -1,0 +1,9 @@
+package crypto.r35157.cauldron.afets.leverage;
+
+import java.util.List;
+
+public record LeverageInfoResponse(
+    boolean success,
+    int code,
+    List<MEXCLeverageInfoItem> data
+) { }

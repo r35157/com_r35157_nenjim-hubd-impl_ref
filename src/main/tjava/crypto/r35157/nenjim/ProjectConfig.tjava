@@ -1,0 +1,14 @@
+package crypto.r35157.nenjim;
+
+import java.nio.file.Path;
+import java.util.List;
+
+public class ProjectConfig {
+    public final Path classDir;
+    public final List<String> testClasses;
+
+    public ProjectConfig(Path classDir, List<String> testClasses) {
+        this.classDir = classDir;
+        this.testClasses = testClasses;
+    }
+}

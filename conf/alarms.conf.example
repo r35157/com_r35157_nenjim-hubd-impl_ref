@@ -1,0 +1,56 @@
+# General configurations
+#####################################################
+{{JUPITER_PERPS_WALLET}}  8abcYourWalletAddressHere
+
+
+# Constant Name             Value
+####################################
+
+{{SOL_LONG_ENTRY_PRICE}}    73.67
+{{SOL_LONG_LIQ_PRICE}}      70.28
+{{SOL_SHORT_ENTRY_PRICE}}   70.47
+{{SOL_SHORT_LIQ_PRICE}}     75.01
+
+{{ETH_LONG_ENTRY_PRICE}}    1589.63
+{{ETH_LONG_LIQ_PRICE}}      1461.11
+{{ETH_SHORT_ENTRY_PRICE}}   1545.29
+{{ETH_SHORT_LIQ_PRICE}}     1698.42
+
+{{BTC_LONG_ENTRY_PRICE}}    61236.03
+{{BTC_LONG_LIQ_PRICE}}      40984.70
+{{BTC_SHORT_ENTRY_PRICE}}   59451.94
+{{BTC_SHORT_LIQ_PRICE}}     65084.53
+
+
+# Id   Asset   Direction                          Target   Trigger           Severity   Note
+###############################################################################################################################
+
+# SOL SHORT
+1      SOL     ABOVE       {{SOL_SHORT_LIQ_PRICE}}-1.25%   ONETIME           CRITICAL   "🚨 LIKVIDERINGS-risiko SOL Short!"
+2      SOL     ABOVE        {{SOL_SHORT_ENTRY_PRICE}}+3%   PERSISTENT:900   INFO       "🌱 Short SOL now"
+3      SOL     BELOW        {{SOL_SHORT_ENTRY_PRICE}}-3%   PERSISTENT:900   INFO       "💵 Close SOL Short"
+
+# SOL LONG
+4      SOL     BELOW        {{SOL_LONG_LIQ_PRICE}}+1.25%   ONETIME           CRITICAL   "🚨 LIKVIDERINGS-risiko SOL Long!"
+5      SOL     BELOW         {{SOL_LONG_ENTRY_PRICE}}-3%   PERSISTENT:900   INFO       "🌱 Long SOL now"
+6      SOL     ABOVE         {{SOL_LONG_ENTRY_PRICE}}+3%   PERSISTENT:900   INFO       "💵 Close SOL Long"
+
+# ETH SHORT
+7      ETH     ABOVE          {{ETH_SHORT_LIQ_PRICE}}-1%   ONETIME           CRITICAL   "🚨 LIKVIDERINGS-risiko ETH Short!"
+8      ETH     ABOVE        {{ETH_SHORT_ENTRY_PRICE}}+3%   PERSISTENT:900   INFO       "🌱 Short ETH now"
+9      ETH     BELOW        {{ETH_SHORT_ENTRY_PRICE}}-3%   PERSISTENT:900   INFO       "💵 Close ETH Short"
+
+# ETH LONG
+10     ETH     BELOW           {{ETH_LONG_LIQ_PRICE}}+1%   ONETIME           CRITICAL   "🚨 LIKVIDERINGS-risiko ETH Long!"
+11     ETH     BELOW         {{ETH_LONG_ENTRY_PRICE}}-3%   PERSISTENT:900   INFO       "🌱 Long ETH now"
+12     ETH     ABOVE         {{ETH_LONG_ENTRY_PRICE}}+3%   PERSISTENT:900   INFO       "💵 Close ETH Long"
+
+# BTC SHORT
+13     BTC     ABOVE          {{BTC_SHORT_LIQ_PRICE}}-1%   ONETIME           CRITICAL   "🚨 LIKVIDERINGS-risiko BTC Short!"
+14     BTC     ABOVE        {{BTC_SHORT_ENTRY_PRICE}}+3%   PERSISTENT:900   INFO       "🌱 Short BTC now"
+15     BTC     BELOW        {{BTC_SHORT_ENTRY_PRICE}}-3%   PERSISTENT:900   INFO       "💵 Close BTC Short"
+
+# BTC LONG
+16     BTC     BELOW           {{BTC_LONG_LIQ_PRICE}}+1%   ONETIME           CRITICAL   "🚨 LIKVIDERINGS-risiko BTC Long!"
+17     BTC     BELOW         {{BTC_LONG_ENTRY_PRICE}}-3%   PERSISTENT:900   INFO       "🌱 Long BTC now"
+18     BTC     ABOVE         {{BTC_LONG_ENTRY_PRICE}}+3%   PERSISTENT:900   INFO       "💵 Close BTC Long"

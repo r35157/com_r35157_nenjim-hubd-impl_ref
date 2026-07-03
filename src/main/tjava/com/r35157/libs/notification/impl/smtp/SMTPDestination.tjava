@@ -1,0 +1,5 @@
+package com.r35157.libs.notification.impl.smtp;
+
+import com.r35157.libs.notification.NotificationDestination;
+
+public record SMTPDestination(ΩEmailAddressΩ emailAddress) implements NotificationDestination { }

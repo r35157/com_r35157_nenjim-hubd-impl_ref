@@ -1,0 +1,11 @@
+package com.r35157.nenjim.hubd.impl.ref;
+
+import com.r35157.nenjim.hubd.journal.Journal;
+import com.r35157.nenjim.hubd.journal.JournalManager;
+
+public class JournalManagerImpl implements JournalManager {
+    @Override
+    public Journal getJournal(String s) {
+        return new Journal(null, null, null);
+    }
+}

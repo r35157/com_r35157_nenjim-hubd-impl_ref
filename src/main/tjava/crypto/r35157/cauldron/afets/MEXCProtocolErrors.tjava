@@ -1,0 +1,114 @@
+package crypto.r35157.cauldron.afets;
+
+import java.util.Arrays;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+public enum MEXCProtocolErrors {
+    operationSucceeded(0, "Operate succeed", true),
+    publicAbnormal(9999, "Public abnormal", false),
+    internalError(500, "Internal error", false),
+    systemBusy(501, "System busy", false),
+    unauthorized(401, "Unauthorized", true),
+    apiKeyExpired(402, "Api_key expired", true),
+    IpNotOnWhitelist(406, "Accessed IP is not in the whitelist", true),
+    unknownSource(506, "Unknown source of request", true),
+    excessiveRequestFrequency(510, "Excessive frequency of requests", false),
+    endpointInaccessible(511, "Endpoint inaccessible", true),
+    invalidRequest(513, "Invalid request(for open api serves time more or less than 10s)", false),
+    parameterError(600, "Parameter error", true),
+    dataDecodingError(601, "Data decoding error", true),
+    verifyFailed(602, "Verify failed", true),
+    repeatedRequests(603, "Repeated requests", false),
+    accountReadPermissionRequired(701, "Account read permission is required", true),
+    accpuntModifyPermissionRequired(702, "Account modify permission is required", true),
+    tradeInformationReadPermissionRequired(703, "Trade information read permission is required", true),
+    transactionInformationModifyPermissionRequired(704, "Transaction information modify permission is required", true),
+    accountDoesNotExist(1000, "Account does not exist", true),
+    contractDoesNotExist(1001, "Contract does not exist", true),
+    contractNotActivated(1002, "Contract not activated", true),
+    errorRiskLimitLevel(1003, "Error in risk limit level", true),
+    amountError(1004, "Amount error", true),
+    wrongOrderDirection(2001, "Wrong order direction", true),
+    wrongOrderType1(2002, "Wrong opening type", true),
+    overpriced(2003, "Overpriced to pay", true),
+    lowPriceForSelling(2004, "Low-price for selling", true),
+    balanceInsufficient(2005, "Balance insufficient", true),
+    leverageRatioError(2006, "Leverage ratio error", true),
+    orderPriceError(2007, "Order price error", true),
+    insufficientQuantity(2008, "The quantity is insufficient", true),
+    nonexistentPosition(2009, "Positions do not exist or have been closed", true),
+    orderQuanityError(2011, "Order quantity error", true),
+    cancelOrdersOverMaxLimit(2013, "Cancel orders over maximum limit", true),
+    batchQuantityExceedsLimit(2014, "The quantity of batch order exceeds the limit", true),
+    priceOrQuantityAccuracyError(2015, "Price or quantity accuracy error", true),
+    triggerVolumeOverMax(2016, "Trigger volume over the maximum", true),
+    exceedingMaxAvailableMargin(2018, "Exceeding the maximum available margin", true),
+    activeOpenPosition(2019, "There is an active open position", true),
+    leverageNotConsistentWithPosition(2021, "The single leverage is not consistent with the existing position leverage", true),
+    wrongOrderType2(2022, "Wrong position type", true),
+    positionsOverMaxLeverage(2023, "There are positions over the maximum leverage", true),
+    ordersOverMaxLeverage(2024, "There are orders with leverage over the maximum", true),
+    positionsOverMaxAllowable(2025, "The holding positions is over the maximum allowable positions", true),
+    leverageModificationForCrossNotAllowed(2026, "Modification of leverage is not supported for cross", true),
+    onlyOneCrossOrIsolatedInSameDirection(2027, "There is only one cross or isolated in the same direction", true),
+    maxOrderQuantityExceeded(2028, "The maximum order quantity is exceeded", true),
+    orderTypeError(2029, "Error order type", true),
+    externalOrderIdTooLong(2030, "External order ID is too long (Max. 32 bits )", true),
+    positionExceedsRiskLimit(2031, "The allowable holding position exceed the current risk limit", true),
+    orderPriceLessThanLongPositionForcedLiquidationPrice(2032, "Order price is less than long position force liquidate price", true),
+    orderPriceMoreThanShortPositionForcedLiquidationPrice(2033, "Order price is more than short position force liquidate price", true),
+    batchQueryQuantityLimitExceeded(2034, "The batch query quantity limit is exceeded", true),
+    unsupportedMarketPriceTier(2035, "Unsupported market price tier", true),
+    triggerPriceTypeError(3001, "Trigger price type error", true),
+    triggerTypeError(3002, "Trigger type error", true),
+    executiveCycleError(3003, "Executive cycle error", true),
+    triggerPriceError(3004, "Trigger price error", true),
+    unsupportedCurrency(4001, "Unsupported currency", true),
+    orderLimitReached(2036, "The orders more than the limit, please contact customer service", true),
+    transactionPostTooFast(2037, "Frequent transactions, please try it later", false),
+    positionLimitReached(2038, "The maximum allowable position quantity is exceeded, please contact customer service!", true),
+    takePriceAndStopLossError(5001, "The take-price and the stop-loss price cannot be none at the same time", true),
+    stopLimitOrderDoNotExist(5002, "The Stop-Limit order does not exist or has closed", true),
+    takeProfitStopLossPriceSettingError(5003, "Take-profit and stop-loss price setting is wrong", true),
+    takeProfitStopLossOrderVolumeError(5004, "The take-profit and stop-loss order volume is more than the holding positions can be liquidated", true),
+    tradeForbidden(6001, "Trading forbidden", true),
+    openForbidden(6002, "Open forbidden", true),
+    timeRangeError(6003, "Time range error", true),
+    tradingPairAndStatusMissing(6004, "The trading pair and status should be fill in", true),
+    tradingPairNotAvailable(6005, "The trading pair is not available", true);
+
+    MEXCProtocolErrors(int errorCode, String description, boolean persistent) {
+        this.errorCode = errorCode;
+        this.description = description;
+        this.persistent = persistent;
+    }
+
+    public int getErrorCode() {
+        return errorCode;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public boolean isPersistent() {
+        return persistent;
+    }
+
+    @Override
+    public String toString() {
+        return errorCode + ": " + description;
+    }
+
+    private static final Map<Integer, MEXCProtocolErrors> ERROR_CODE_MAP =
+            Arrays.stream(values()).collect(Collectors.toMap(MEXCProtocolErrors::getErrorCode, e -> e));
+
+    public static MEXCProtocolErrors fromErrorCode(int code) {
+        return ERROR_CODE_MAP.get(code);
+    }
+
+    private final int errorCode;
+    private final String description;
+    private final boolean persistent;
+}

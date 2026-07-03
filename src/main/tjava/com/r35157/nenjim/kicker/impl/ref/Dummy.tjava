@@ -1,0 +1,20 @@
+package com.r35157.nenjim.kicker.impl.ref;
+
+import com.r35157.nenjim.kicker.NenjimProcess;
+//import org.apache.logging.log4j.LogManager;
+//import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
+
+public final class Dummy implements NenjimProcess {
+    @Override
+    public void run() {
+        //log.error("Process '" + getName() + "' started.");
+    }
+
+    @Override
+    public @NotNull String getName() {
+        return "Just A Dummy";
+    }
+
+    //private static final Logger log = LogManager.getLogger(Dummy.class);
+}

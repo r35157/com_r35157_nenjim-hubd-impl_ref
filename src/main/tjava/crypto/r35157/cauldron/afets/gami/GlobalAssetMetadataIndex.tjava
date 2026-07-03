@@ -1,0 +1,94 @@
+package crypto.r35157.cauldron.afets.gami;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+public class GlobalAssetMetadataIndex {
+    public GlobalAssetMetadataIndex(String configFilename) {
+        this.configFilename = configFilename;
+    }
+
+    public @Nullable GlobalAssetMetadataIndexItem getByMEXCSymbol(@NotNull String localSymbol) {
+        // TODO: Currently hardcoded to work with MEXC only
+        for(GlobalAssetMetadataIndexItem item : items) {
+            if(item.symbolMEXC().equals(localSymbol)) {
+                return item;
+            }
+        }
+
+        return null;
+    }
+
+    public @Nullable GlobalAssetMetadataIndexItem getById(@NotNull UUID uuid) {
+        for(GlobalAssetMetadataIndexItem item : items) {
+            if(item.gamiId().equals(uuid)) {
+                return item;
+            }
+        }
+
+        return null;
+    }
+
+    public void updateAll() throws Exception {
+        List<GlobalAssetMetadataIndexItem> items = new ArrayList<>();
+        List<String> lines = Files.readAllLines(Paths.get(configFilename));
+
+        for(String origLine : lines) {
+            String line = origLine.trim();
+
+            // Skip if the line is empty or is a full comment line.
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+
+            // Remove any trailing comment from the line (everything after a '#' character).
+            int commentIndex = line.indexOf('#');
+            if (commentIndex != -1) {
+                line = line.substring(0, commentIndex).trim();
+            }
+            // Skip the line if nothing is left.
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            // Split the line on one or more whitespace characters.
+            String[] parts = line.split("\\s+");
+            // Expecting at least 3 parts: Name, GamiId, and MexcSymbol.
+            if (parts.length != 3) {
+                log.error("ERROR: Unparseable line in '" + configFilename + "' (" + origLine + ")");
+                continue;
+            }
+
+            // The file format is:
+            // Name, GamiId, MexcSymbol
+            String name = parts[0];
+            String gamiIdStr = parts[1];
+            String mexcSymbol = parts[2];
+
+            GlobalAssetMetadataIndexItem item = new GlobalAssetMetadataIndexItem(
+                    UUID.fromString(gamiIdStr),
+                    name,
+                    mexcSymbol
+            );
+            items.add(item);
+        }
+
+        this.items = items;
+
+        // TODO: This is ugly - but lets just drop all those entries that do not exist on MEXC
+        items.removeIf(item -> item.symbolMEXC() == null);
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalAssetMetadataIndex.class);
+
+    private final String configFilename;
+    private List<GlobalAssetMetadataIndexItem> items;
+}

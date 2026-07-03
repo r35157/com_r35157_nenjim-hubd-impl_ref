@@ -1,0 +1,12 @@
+package com.r35157.nenjim.valuetypes.journal;
+
+import org.jetbrains.annotations.NotNull;
+//import com.r35157.libs.valuetypes.basic.Id;
+
+public record JournalId(
+    @NotNull String value
+) { //implements Id {
+    public static JournalId of(String journalId) {
+        return new JournalId(journalId);
+    }
+}

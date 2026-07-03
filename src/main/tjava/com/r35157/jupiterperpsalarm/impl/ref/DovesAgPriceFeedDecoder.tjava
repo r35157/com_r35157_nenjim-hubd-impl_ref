@@ -1,0 +1,88 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.time.Instant;
+import java.util.Arrays;
+
+public final class DovesAgPriceFeedDecoder {
+
+    public static OraclePrice decode(
+            JupiterPerpsAsset asset,
+            byte[] accountData,
+            long slot,
+            String source
+    ) {
+        if (accountData.length < ACCOUNT_SIZE) {
+            throw new IllegalArgumentException(
+                    "Doves AG account is too short: " + accountData.length +
+                    " bytes; expected at least " + ACCOUNT_SIZE
+            );
+        }
+
+        byte[] discriminator = Arrays.copyOfRange(accountData, 0, 8);
+        if (!Arrays.equals(discriminator, AG_PRICE_FEED_DISCRIMINATOR)) {
+            throw new IllegalArgumentException(
+                    "Unexpected Anchor discriminator. The oracle layout may have changed."
+            );
+        }
+
+        BigInteger rawPrice = readUnsignedLongLittleEndian(accountData, PRICE_OFFSET);
+        int exponent = accountData[EXPONENT_OFFSET];
+        long timestamp = ByteBuffer.wrap(accountData, TIMESTAMP_OFFSET, Long.BYTES)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .getLong();
+
+        BigDecimal priceUsd = new BigDecimal(rawPrice).scaleByPowerOfTen(exponent);
+
+        return new OraclePrice(
+                asset,
+                rawPrice,
+                exponent,
+                priceUsd,
+                Instant.ofEpochSecond(timestamp),
+                slot,
+                source
+        );
+    }
+
+    private static BigInteger readUnsignedLongLittleEndian(byte[] data, int offset) {
+        byte[] positiveBigEndian = new byte[Long.BYTES + 1];
+        for (int index = 0; index < Long.BYTES; index++) {
+            positiveBigEndian[Long.BYTES - index] = data[offset + index];
+        }
+        return new BigInteger(positiveBigEndian);
+    }
+
+    private static void putUnsignedLongLittleEndian(
+            byte[] data,
+            int offset,
+            BigInteger value
+    ) {
+        BigInteger remaining = value;
+        for (int index = 0; index < Long.BYTES; index++) {
+            data[offset + index] = remaining.byteValue();
+            remaining = remaining.shiftRight(8);
+        }
+    }
+
+    private DovesAgPriceFeedDecoder() {
+    }
+
+    // Anchor discriminator: sha256("account:AgPriceFeed")[0..8]
+    private static final byte[] AG_PRICE_FEED_DISCRIMINATOR = {
+            0x70, (byte) 0xF9, (byte) 0x8B, (byte) 0xD9,
+            (byte) 0xD7, (byte) 0xD0, (byte) 0xF9, 0x36
+    };
+
+    // Layout from the Doves IDL:
+    // discriminator 8
+    // mint 32, edgeFeed 32, clFeed 32, pythFeed 32, pythFeedId 32
+    // price u64, expo i8, timestamp i64, config(u32,u32,u64), bump u8
+    private static final int PRICE_OFFSET = 168;
+    private static final int EXPONENT_OFFSET = 176;
+    private static final int TIMESTAMP_OFFSET = 177;
+    private static final int ACCOUNT_SIZE = 202;
+}

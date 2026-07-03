@@ -1,0 +1,80 @@
+package com.r35157.nenjim.hubd.impl.ref;
+
+import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
+import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+import com.r35157.libs.jupiter.perps.impl.anchoridl.AnchorIdlJupiterPerpsServiceImpl;
+import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.impl.ref.SolanaBlockChainImpl;
+import com.r35157.nenjim.hubd.ctx.Context;
+import com.r35157.nenjim.hubd.NenjimHub;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.lang.management.ClassLoadingMXBean;
+import java.lang.management.ManagementFactory;
+
+import com.r35157.nenjim.hubd.ctx.ContextManager;
+import com.r35157.nenjim.hubd.journal.JournalManager;
+import com.r35157.nenjim.hubd.impl.ref.JournalManagerImpl;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Set;
+
+public class Main {
+
+    // TODO: Consider if we really need a Main class or we just need to move the main method to NenjimHubImpl?
+    static void main(String[] args) throws Exception {
+        NenjimHubImpl nenjimHub = new NenjimHubImpl();
+
+        /*
+        SolanaBlockChain sbc = new SolanaBlockChainImpl();
+        JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
+        ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
+        Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
+        int a=0;
+        */
+        nenjimHub.awaitShutdown();
+
+        /*        try {
+            log.info("Auto-starting 2 Nenjim application(s)...");
+            log.info("   Starting AssetAZCore...");
+            //com.r35157.;
+
+            log.info("   Starting jupiterperpsalarm...");
+            String[] params = new String[] {
+                "--config=/home/minimons/projects/com_r35157_nenjim-hubd-impl_ref/conf/alarms.conf"
+            };
+            com.r35157.jupiterperpsalarm.Main.main(params);
+*/
+        //hub = new NenjimHubImpl();
+
+        /*
+        String classesCacheDirRaw = "~/.config/nenjim/cache/classes";
+        String classesCacheDir = (classesCacheDirRaw.startsWith("~/"))
+                ? System.getProperty("user.home") + classesCacheDirRaw.substring(1)
+                : classesCacheDirRaw;
+        Path pathToClassesCache = Path.of(classesCacheDir);
+
+        if(Files.exists(pathToClassesCache) == false) {
+            System.err.println("Cannot find '" + classesCacheDirRaw + "'");
+            System.exit(-1);
+        }*/
+
+            //System.out.println("Initializing initial NenjimClassLoader with default context...");
+            //JournalManager journalManager = new JournalManagerImpl();
+            //ContextManager contextManager = new ContextManagerImpl();
+            //Context defaultContext = contextManager.getDefault();
+
+            //NenjimClassLoader nenjimClassLoader = new NenjimClassLoader(journalManager, defaultContext);
+            //Class<?> clazz = nenjimClassLoader.findClass("com.r35157.nenjim.hubd.impl.ref.NenjimHubImpl");
+
+        /*NenjimHub nenjimHub = null;
+        Context defaultContext = new Context();
+
+        Object instance = clazz.getDeclaredConstructor().newInstance();
+        NenjimKicker kicker = (NenjimKicker)instance;
+        */
+            //int a = 0;
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
+}

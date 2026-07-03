@@ -1,0 +1,63 @@
+package crypto.r35157.cauldron.afets;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.*;
+import static java.nio.file.StandardWatchEventKinds.*;
+
+public class EventWatcher {
+    public EventWatcher(Thread workerThread, String directoryName) throws IllegalArgumentException {
+        this.workerThread = workerThread;
+        this.directory = Paths.get(directoryName);
+
+        if(!(Files.exists(directory) && Files.isDirectory(directory))) {
+            String error = "'" + directory.toAbsolutePath().normalize() + "' is not a directory or do not exist!";
+            throw new IllegalArgumentException(error);
+        }
+    }
+
+    public void start() throws IOException {
+        log.info("Register watch on '$EVELYN_HOME/tmp/iteration.signal' to signal thread '" + workerThread.getName()
+                + "' to start an iteration.");
+
+        WatchService watchService = FileSystems.getDefault().newWatchService();
+        directory.register(watchService, ENTRY_CREATE);
+
+        Thread.ofVirtual().start(() -> {
+            try {
+                while (true) {
+                    WatchKey key = watchService.take();     // Blocking
+
+                    for (WatchEvent<?> event : key.pollEvents()) {
+                        WatchEvent.Kind<?> kind = event.kind();
+                        Path filename = (Path) event.context();
+
+                        if (kind == ENTRY_CREATE && "iteration.signal".equals(filename.toString())) {
+                            log.info("EventWatcher found 'tmp/iteration.signal' file "
+                                    + "- sleeping worker thread will be waken now (and the signal file will be deleted).");
+                            Path fullPath = directory.resolve(filename);
+                            try {
+                                Files.deleteIfExists(fullPath);
+                            } catch (IOException e) {
+                                log.error("ERROR: Could NOT delete signal file 'tmp/iteration.signal'! ("
+                                        + e.getMessage() + ")");
+                            }
+
+                            workerThread.interrupt();
+                        }
+                    }
+                    key.reset();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(EventWatcher.class);
+
+    private final Path directory;
+    private final Thread workerThread;
+}

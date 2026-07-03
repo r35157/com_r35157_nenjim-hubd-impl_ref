@@ -1,0 +1,28 @@
+package com.r35157.libs.valuetypes.basic;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.math.BigDecimal;
+
+public record AssetPrice(
+        @NotNull ΩPriceΩ price,
+        @NotNull TradingPair tradingPair
+) implements Comparable<AssetPrice> {
+
+    @Override
+    public int compareTo(@NotNull AssetPrice other) {
+        if (!tradingPair.equals(other.tradingPair)) {
+            throw new IllegalArgumentException(
+                    "AssetPrice values with different trading pairs cannot be compared: "
+                            + tradingPair + " and " + other.tradingPair
+            );
+        }
+
+        return price.compareTo(other.price);
+    }
+
+    @Override
+    public @NotNull String toString() {
+        return price + " " + tradingPair.quote();
+    }
+}

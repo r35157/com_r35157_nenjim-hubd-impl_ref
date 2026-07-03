@@ -1,0 +1,109 @@
+package crypto.r35157.cauldron;
+
+//import org.json.JSONObject;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+
+public class PriceFetcher {
+    public static void main(String[] args) throws Exception {
+        new PriceFetcher();
+        Thread.currentThread().join();
+    }
+
+    public PriceFetcher() {
+        File file = new File(PRICE_FILENAME);
+        boolean isFileEmpty = !file.exists() || file.length() == 0;
+
+        ScheduledExecutorService executorService = newSingleThreadScheduledExecutor();
+
+        // Initializing BufferedWriter outside the try-with-resources block to manage it manually
+        BufferedWriter bw;
+        try {
+            FileWriter fw = new FileWriter(PRICE_FILENAME, true);
+            bw = new BufferedWriter(fw);
+
+            if (isFileEmpty) {
+                bw.write(HEADER);
+                bw.newLine();
+            }
+
+            // Flushing the header line
+            bw.flush();
+
+            BufferedWriter finalBw = bw; // Needed to access bw inside the Runnable
+            Runnable task = () -> {
+                try {
+                    ZonedDateTime now = ZonedDateTime.now();
+                    long timestamp = System.currentTimeMillis();
+                    String humanReadableTimestamp = now.format(formatter);
+                    String sourceId = SOURCEID_COINGECKO;
+                    Map<String, Number> prices = getPrices();
+
+                    for(String assetId : prices.keySet()) {
+                        double price = prices.get(assetId).doubleValue();
+                        finalBw.write(timestamp + ";" + humanReadableTimestamp + ";" + sourceId + ";" + "fiatdkk_" + assetId + ";" + price);
+                        finalBw.newLine();
+                    }
+
+                    finalBw.flush();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            };
+
+            executorService.scheduleAtFixedRate(task, 0, POLL_INTERVAL, POLL_TIMEUNIT);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Map<String, Number> getPrices() throws Exception {
+        String urlString = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,monero,bitcoin-cash,usd-coin&vs_currencies=dkk";
+        URL url = new URL(urlString);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+
+        // Read the response
+        BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+        String inputLine;
+        StringBuilder content = new StringBuilder();
+        while ((inputLine = in.readLine()) != null) {
+            content.append(inputLine);
+        }
+        in.close();
+
+        // Parse JSON response
+        /*
+        JSONObject jsonResponse = new JSONObject(content.toString());
+
+        // Map response to a simple HashMap
+        Map<String, Number> cryptoPrices = new HashMap<>();
+        for (String crypto : jsonResponse.keySet()) {
+            JSONObject cryptoData = jsonResponse.getJSONObject(crypto);
+            double price = cryptoData.getDouble("dkk");
+            cryptoPrices.put(crypto, price);
+        }
+
+        return cryptoPrices;
+         */
+        return null;
+    }
+
+    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss z");
+    private static final String PRICE_FILENAME = "prices.csv";
+    private static final String HEADER = "# Epoch ; Human readable timestamp ; Source ID ; Pair (for example fiatdkk_bitcoin) ; Price";
+
+    private static final String SOURCEID_COINGECKO = "CoinGecko";
+    private static final TimeUnit POLL_TIMEUNIT = TimeUnit.MINUTES;
+    private static final int POLL_INTERVAL = 15;
+}

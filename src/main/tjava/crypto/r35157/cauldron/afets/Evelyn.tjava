@@ -1,0 +1,1497 @@
+package crypto.r35157.cauldron.afets;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import crypto.r35157.TimeTools;
+import crypto.r35157.cauldron.afets.accountdetails.AccountDetails;
+import crypto.r35157.cauldron.afets.accountdetails.MEXCAccountDetailsService;
+import crypto.r35157.cauldron.afets.contractdetails.ContractDetailsItem;
+import crypto.r35157.cauldron.afets.contractdetails.MEXCContractDetails;
+import crypto.r35157.cauldron.afets.fundingrate.MEXCFundingRateItem;
+import crypto.r35157.cauldron.afets.fundingrate.MEXCFundingRates;
+import crypto.r35157.cauldron.afets.gami.GlobalAssetMetadataIndex;
+import crypto.r35157.cauldron.afets.gami.GlobalAssetMetadataIndexItem;
+import crypto.r35157.cauldron.afets.leverage.MEXCLeverageInfo;
+import crypto.r35157.cauldron.afets.leverage.MEXCLeverageInfoItem;
+import crypto.r35157.cauldron.afets.nenjim.NenjimObjectRepository;
+import crypto.r35157.cauldron.afets.ticker.MEXCTicker;
+import crypto.r35157.cauldron.afets.ticker.MEXCTickerItem;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.text.DecimalFormat;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+
+import static crypto.r35157.cauldron.Version.VERSION_EVELYN;
+import static crypto.r35157.cauldron.afets.PositionType.marginLong;
+import static crypto.r35157.cauldron.afets.PositionType.marginShort;
+import static java.math.BigDecimal.ONE;
+import static java.math.BigDecimal.ZERO;
+import static java.math.RoundingMode.DOWN;
+import static java.math.RoundingMode.HALF_UP;
+
+/*
+ * Evelyn - the Anti-Fragile Equilibrium Trading Strategy
+ */
+public class Evelyn {
+    public static void main(String[] args) {
+        new Evelyn();
+    }
+
+    public Evelyn() {
+        log.info("Starting Evelyn " + VERSION_EVELYN);
+        log.debug("   Configuration:");
+
+        try {
+            nor = new NenjimObjectRepository();  // In the future we will NOT create this. It should be given to us from Nenjim.
+
+            configuration = nor.getConfiguration();
+            pushNotifier = nor.getPushNotifier();
+            gami = nor.getGlobalAssetMetadataIndex();
+            ticker = nor.getTicker();
+            contractDetails = nor.getContractDetails();
+            timeOuts = nor.getTimeOuts();
+            portfolio = nor.getPortfolio();
+            mexcFuturesPlugin = nor.getMexcFuturesPlugin();
+            mexcFundingRates = nor.getMexcFundingRates();
+            mexcLeverageInfo = nor.getMexcLeverageInfo();
+            scoreCalculator = nor.getScoreCalculator();
+            accountDetailsService = nor.getAccountDetails();
+            pushNotification("Evelyn started!");
+
+            execute();
+        } catch(Exception e) {
+            String message = "Evelyn STOPPED due to an exception: '" + e.getMessage() + "'";
+            pushNotification(message);
+            log.error(message, e);
+        }
+
+        System.exit(1);
+    }
+
+    private void pushNotification(String message) {
+        if(configuration.enableNotification()) {
+            pushNotifier.push(message);
+        }
+    }
+
+    private void execute() throws Exception {
+        log.info("      Iteration time: {}", TimeTools.formatTimeFromMillis(configuration.getIterationTime()));
+
+        while (true) {
+            final String laterTime = TimeTools.formatLaterTime(configuration.getIterationTime());
+            log.info("Sleeping until {}...", laterTime);
+
+            try {
+                Thread.sleep(configuration.getIterationTime());
+            } catch(InterruptedException e) {
+                log.info("Worker thread has been woken up but the signaller - running iteration now.");
+            }
+
+            updateLocalCache();
+
+            if(configuration.detectAndPrepareForBrandNewPositions()) {
+                detectAndPrepareForBrandNewPositions();
+            }
+
+            final List<PositionValues> positionValuesList = calculatePositionValues(portfolio.getPositions());
+            final PositionStatistics positionStatistics = calculatePositionStatistics(positionValuesList);
+
+            if(configuration.printPositionStatus()) {
+                logPositionStatistics(positionStatistics);
+            }
+
+            final AccountDetails accountDetails;
+            final BigDecimal marginAvailable;
+
+            try {
+                accountDetails = accountDetailsService.getDetails();
+                marginAvailable = accountDetails.availableOpen();
+            } catch(Exception e) {
+                log.error("ERROR: Getting account details from Exchange - skipping iteration (" + e.getMessage() + ")");
+                continue;
+            }
+
+            final BigDecimal totalLeverageAllPositions = calculateAverageLeverageForAllPositions(positionValuesList);
+            final BigDecimal availableOpenLeveraged = marginAvailable.multiply(totalLeverageAllPositions);
+
+            if(configuration.printEquilibriumStatus()) {
+                final EquilibriumStatus equilibriumStatus = calculateEquilibriumStatus(
+                        positionStatistics,
+                        marginAvailable,
+                        totalLeverageAllPositions
+                );
+
+                logEquilibriumStatus(equilibriumStatus, marginAvailable, availableOpenLeveraged, totalLeverageAllPositions);
+            }
+
+            if(configuration.printProfitLoss()) {
+                final ProfitLoss profitLoss = calculateProfitAndLoss(positionStatistics);
+                logProfitAndLoss(profitLoss);
+            }
+
+            if(configuration.printFundingFees()) {
+                final FundingFeeStatus fundingFeeStatus = calculateFundingFeeStats(positionValuesList);
+                printFundingFeeStats(fundingFeeStatus);
+            }
+
+            PositionSideAction action = decideAction(
+                    availableOpenLeveraged,
+                    positionStatistics
+            );
+
+            BigDecimal maxMarginAmountToTradePerIteration = configuration.maxMarginAmountToTradePerIteration();
+            BigDecimal maxStretchMarginAmountToTradePerIteration = configuration.maxStretchMarginAmountToTradePerIteration();
+            handleNextAction(
+                    maxMarginAmountToTradePerIteration,
+                    maxStretchMarginAmountToTradePerIteration,
+                    action,
+                    positionValuesList
+            );
+
+            if(configuration.restartPositions()) {
+                final Map<Position, Integer> positionsToRestart = detectPositionsToRestart();
+                int minimumEmptyPositionsToRestart = configuration.minimumEmptyPositionsToRestart();
+                restartPositions(positionsToRestart, minimumEmptyPositionsToRestart, positionValuesList);
+            }
+        }
+    }
+
+    private BigDecimal calculateAverageLeverageForAllPositions(List<PositionValues> positionValuesList) {
+        BigDecimal totalMarginValue = BigDecimal.ZERO;
+        BigDecimal totalPositionValue = BigDecimal.ZERO;
+
+        for(PositionValues positionValues : positionValuesList) {
+            BigDecimal positionValue = positionValues.positionValue();
+            BigDecimal marginValue = positionValues.marginValue();
+
+            totalMarginValue = totalMarginValue.add(marginValue);
+            totalPositionValue = totalPositionValue.add(positionValue);
+        }
+
+        BigDecimal averageLeverage = totalPositionValue.divide(totalMarginValue, 20, HALF_UP);
+
+        return averageLeverage;
+    }
+
+    private boolean handleNextAction(
+            BigDecimal maxMarginAmountToTradePerIteration,
+            BigDecimal maxStretchMarginAmountToTradePerIteration,
+            PositionSideAction action,
+            List<PositionValues> positionValuesList
+    ) throws Exception {
+        boolean didTrade = false;
+
+        switch(action) {
+            case OpenLong -> {
+                if(configuration.executeOpen()) {
+                    didTrade = handleNextContractOpen(
+                            positionValuesList,
+                            PositionSideAction.OpenLong,
+                            maxMarginAmountToTradePerIteration,
+                            maxStretchMarginAmountToTradePerIteration
+                    );
+                }
+            }
+            case OpenShort -> {
+                if(configuration.executeOpen()) {
+                    didTrade = handleNextContractOpen(
+                            positionValuesList,
+                            PositionSideAction.OpenShort,
+                            maxMarginAmountToTradePerIteration,
+                            maxStretchMarginAmountToTradePerIteration
+                    );
+                }
+            }
+            case CloseLong -> {
+                if(configuration.executeClose()) {
+                    didTrade = handleNextContractClose(
+                            positionValuesList,
+                            PositionSideAction.CloseLong,
+                            maxMarginAmountToTradePerIteration
+                    );
+                }
+            }
+            case CloseShort -> {
+                if(configuration.executeClose()) {
+                    didTrade = handleNextContractClose(
+                            positionValuesList,
+                            PositionSideAction.CloseShort,
+                            maxMarginAmountToTradePerIteration
+                    );
+                }
+            }
+        }
+
+        return didTrade;
+    }
+
+    private PositionSideAction decideAction(BigDecimal availableLeveragedMargin, PositionStatistics positionStatistics) {
+        PositionSideAction action;
+        BigDecimal totalPositionsLongs = positionStatistics.totalLongPositionsValue();
+        BigDecimal totalPositionsShorts = positionStatistics.totalShortPositionsValue();
+
+        if (totalPositionsLongs.compareTo(totalPositionsShorts) > 0
+                && totalPositionsLongs.compareTo(availableLeveragedMargin) > 0) {
+            // Position size of all LONG positions is greater that both shorts and available margin - Sell some...
+            action = PositionSideAction.CloseLong;
+        } else if (totalPositionsShorts.compareTo(totalPositionsLongs) > 0
+                && totalPositionsShorts.compareTo(availableLeveragedMargin) > 0) {
+            // Position size of all SHORT positions is greater that both longs and available margin - Sell some...
+            action = PositionSideAction.CloseShort;
+        } else {
+            // Available Margin HAS to be biggest now, so we have to open... but what?
+            action = (totalPositionsLongs.compareTo(totalPositionsShorts) > 0)
+                    ? PositionSideAction.OpenShort
+                    : PositionSideAction.OpenLong;
+        }
+
+        return action;
+    }
+
+    /*
+    private List<PositionSideAction> decideActions(
+            BigDecimal amountToSpend,
+            BigDecimal availableLeveragedMargin,
+            PositionStatus positionStatus
+    ) {
+        BigDecimal totalPositionValuesLongs = positionStatus.totalLongPositionsValue();
+        BigDecimal totalPositionValuesShorts = positionStatus.totalShortPositionsValue();
+
+        final BigDecimal grandTotal = availableLeveragedMargin
+                .add(totalPositionValuesLongs)
+                .add(totalPositionValuesShorts);
+        final BigDecimal average = grandTotal.divide(BigDecimal.valueOf(3), HALF_UP);
+
+        BigDecimal newTotalPositionValuesLongs;
+        BigDecimal newTotalPositionValuesShorts;
+        BigDecimal newAvailableLeveragedMargin;
+        BigDecimal longDistance;
+        BigDecimal shortDistance;
+        BigDecimal availDistance;
+        BigDecimal distanceScore;
+
+        HashMap<PositionSideAction, BigDecimal> sortMap = new HashMap<>();
+
+        // Calculate distanceScore if doing OpenLong
+        newTotalPositionValuesLongs = totalPositionValuesLongs.add(amountToSpend);
+        newTotalPositionValuesShorts = totalPositionValuesShorts;
+        newAvailableLeveragedMargin = availableLeveragedMargin.subtract(amountToSpend);
+        longDistance = average.subtract(newTotalPositionValuesLongs).abs();
+        shortDistance = average.subtract(newTotalPositionValuesShorts).abs();
+        availDistance = average.subtract(newAvailableLeveragedMargin).abs();
+        distanceScore = longDistance.add(shortDistance).add(availDistance);
+        sortMap.put(PositionSideAction.OpenLong, distanceScore);
+
+        // Calculate distanceScore if doing OpenShort
+        newTotalPositionValuesLongs = totalPositionValuesLongs;
+        newTotalPositionValuesShorts = totalPositionValuesShorts.add(amountToSpend);
+        newAvailableLeveragedMargin = availableLeveragedMargin.subtract(amountToSpend);
+        longDistance = average.subtract(newTotalPositionValuesLongs).abs();
+        shortDistance = average.subtract(newTotalPositionValuesShorts).abs();
+        availDistance = average.subtract(newAvailableLeveragedMargin).abs();
+        distanceScore = longDistance.add(shortDistance).add(availDistance);
+        sortMap.put(PositionSideAction.OpenShort, distanceScore);
+
+        // Calculate distanceScore if doing CloseLong
+        newTotalPositionValuesLongs = totalPositionValuesLongs.subtract(amountToSpend);
+        newTotalPositionValuesShorts = totalPositionValuesShorts;
+        newAvailableLeveragedMargin = availableLeveragedMargin.add(amountToSpend);
+        longDistance = average.subtract(newTotalPositionValuesLongs).abs();
+        shortDistance = average.subtract(newTotalPositionValuesShorts).abs();
+        availDistance = average.subtract(newAvailableLeveragedMargin).abs();
+        distanceScore = longDistance.add(shortDistance).add(availDistance);
+        sortMap.put(PositionSideAction.CloseLong, distanceScore);
+
+        // Calculate distanceScore if doing CloseShort
+        newTotalPositionValuesLongs = totalPositionValuesLongs;
+        newTotalPositionValuesShorts = totalPositionValuesShorts.subtract(amountToSpend);
+        newAvailableLeveragedMargin = availableLeveragedMargin.add(amountToSpend);
+        longDistance = average.subtract(newTotalPositionValuesLongs).abs();
+        shortDistance = average.subtract(newTotalPositionValuesShorts).abs();
+        availDistance = average.subtract(newAvailableLeveragedMargin).abs();
+        distanceScore = longDistance.add(shortDistance).add(availDistance);
+        sortMap.put(PositionSideAction.CloseShort, distanceScore);
+
+        // Sort the distanceScores in ascending order
+        List<PositionSideAction> actions = sortMap.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList())
+                .reversed();
+
+        return actions;
+    }
+    */
+
+    private void updateLocalCache() throws Exception {
+        configuration.update();
+        contractDetails.updateAll();
+        gami.updateAll();
+        portfolio.updateAll();
+        ticker.updateAll();
+        mexcFundingRates.updateAll();
+    }
+
+    private Map<Position, Integer> detectPositionsToRestart() {
+        List<Position> positions = portfolio.getPositions();
+        Map<Position, Integer> positionsToRestart = new HashMap<>();
+
+        for (Position position : positions) {
+            String symbol = position.gamiId().symbolMEXC();
+            ContractDetailsItem contractDetailsItem = contractDetails.getContractDetails(symbol);
+
+            BigDecimal contractSize = contractDetailsItem.contractSize();
+            BigDecimal balanceTokens = position.balance();
+
+            int balanceContracts = balanceTokens.divide(contractSize, 20, HALF_UP).intValue();
+
+            if (balanceContracts <= 1) {  // We do not let the position go to zero as we want to keep the statistics which is lost if we close the position totally
+                BigDecimal price = ticker.getPrice(symbol).lastPrice();
+                BigDecimal valueOfOneContract = contractSize.multiply(price);
+                int leverage = position.leverage();
+
+                int quantityOfContractsWeCanTradeWithinLimit = calculateNumberOfContractsToTradeWithinLimit(valueOfOneContract, leverage);
+
+                if (quantityOfContractsWeCanTradeWithinLimit > 0) {
+                    positionsToRestart.put(position, quantityOfContractsWeCanTradeWithinLimit);
+                } else {
+                    PositionType type = position.type();
+                    BigDecimal minimumRequired = valueOfOneContract.divide(BigDecimal.valueOf(leverage), 20, HALF_UP);
+                    String minimumRequiredStr = df4.format(minimumRequired);
+
+                    String msg = "Skipping restart of " + symbol + "/" + type
+                            + " as the lot value is outside the limits, even after leverage and stretch! "
+                            + "Increase leverage or increase 'MaxMarginAmountToTradePerIteration' "
+                            + "to atleast " + minimumRequiredStr + " - or consider using 'MaxStretchMarginAmountToTradePerIteration'";
+                    log.info(msg);
+                }
+            }
+        }
+        return positionsToRestart;
+    }
+
+    record RestartCandidate (
+
+    ) {
+
+    }
+
+    private int calculateNumberOfContractsToTradeWithinLimit(BigDecimal valueOfOneContract, int leverage) {
+        int quantityOfContractWeCanAfford = 0;
+        BigDecimal maxMarginAmount = configuration.maxMarginAmountToTradePerIteration();
+        BigDecimal maxContractPrice = maxMarginAmount.multiply(BigDecimal.valueOf(leverage));
+
+        if(valueOfOneContract.compareTo(maxContractPrice) < 0) {
+            quantityOfContractWeCanAfford = maxContractPrice
+                    .divideToIntegralValue(valueOfOneContract)
+                    .intValue();
+        } else {
+            // We could not afford a single contract - try stretch
+            BigDecimal maxStretchMarginAmount = configuration.maxStretchMarginAmountToTradePerIteration();
+            BigDecimal maxStretchContractPrice = maxStretchMarginAmount.multiply(BigDecimal.valueOf(leverage));
+            if(valueOfOneContract.compareTo(maxStretchContractPrice) < 0) {
+                // We can afford at least one contract under stretch - but ONLY ONE ALLOWED UNDER STRETCH
+                quantityOfContractWeCanAfford = 1;
+            }
+        }
+
+        return quantityOfContractWeCanAfford;
+    }
+
+    private PositionValues getPositionValue(Position position, List<PositionValues> positionValuesList) {
+        for(PositionValues value : positionValuesList) {
+            if(value.position().equals(position)) {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private void restartPositions(
+            Map<Position, Integer> positionsToRestart,
+            int minimumEmptyPositionsToRestart,
+            List<PositionValues> positionValuesList
+    ) throws Exception {
+        boolean tooFewToRestart = (positionsToRestart.size() < minimumEmptyPositionsToRestart);
+        if(tooFewToRestart) {
+            return;
+        }
+
+        final AccountDetails accountDetails = accountDetailsService.getDetails();
+        BigDecimal available = accountDetails.availableOpen();
+
+        log.info("Trying to restart {} positions...", positionsToRestart.size());
+        if(available.compareTo(ZERO) <= 0) {
+            log.warn("WARNING:    Currently not enough available margin to restart any positions!");
+            return;
+        }
+
+        for (Position position : positionsToRestart.keySet()) {
+            String symbol = position.gamiId().symbolMEXC();
+            int quantityToTradeContracts = positionsToRestart.get(position);
+
+            PositionType type = position.type();
+            int leverage = position.leverage();
+
+            MEXCPositionSide side = (type == PositionType.marginLong) ? MEXCPositionSide.OpenLong : MEXCPositionSide.OpenShort;
+
+            String msg = "   Restarting " + symbol + "/" + type + "(" + leverage + "x) - opening "
+                    + quantityToTradeContracts + " contract(s)...";
+            log.info(msg);
+
+            GlobalAssetMetadataIndexItem indexItem = gami.getByMEXCSymbol(symbol);
+
+            if(indexItem == null) {
+                String message = "ERROR: '" + symbol + "' not found in GAMI - Skipping!";
+                pushNotification(message);
+                log.error(message);
+                continue;
+            }
+
+            UUID gamiId = position.gamiId().gamiId();
+            GlobalAssetMetadataIndexItem metaData = gami.getById(gamiId);
+
+            PositionValues positionValues = getPositionValue(position, positionValuesList);
+            BigDecimal price = positionValues.currentPrice();
+
+            ContractDetailsItem contractDetailsItem = contractDetails.getContractDetails(symbol);
+            BigDecimal numberOfTokensPerContract = contractDetailsItem.contractSize();
+            BigDecimal contractValue = numberOfTokensPerContract.multiply(price);
+            final BigDecimal marginPricePerContract = contractValue.divide(new BigDecimal(leverage), 4, HALF_UP);
+
+            final BigDecimal marginPriceForOpening = marginPricePerContract.multiply(BigDecimal.valueOf(quantityToTradeContracts));
+            available = accountDetails.availableOpen();
+
+            if(available.compareTo(marginPriceForOpening) <= 0) {
+                String message = "WARNING: Available margin too low to open '" + metaData.symbolMEXC()
+                        + "'. Have $" + df4.format(available)
+                        + ", needing $" + df4.format(marginPriceForOpening)
+                        + " - skipping until next iteration!";
+                log.warn(message);
+                continue;
+            }
+
+            String json = mexcFuturesPlugin.trade(side, quantityToTradeContracts, symbol, leverage);
+
+            if(json == null) {
+                String message = "ERROR: Could not trade '" + symbol + "' - Empty reply from MEXC";
+                pushNotification(message);
+                log.error(message);
+                continue;
+            }
+
+            if(!json.contains("success\":true")) {
+                MEXCProtocolErrors error = mapErrorMessage(json);
+                String message = "ERROR: Could not trade '" + symbol + "'! (" + error.toString() + ")";
+                pushNotification(message);
+                log.error(message + ": " + json);
+                continue;
+            }
+
+            UUID uuid = indexItem.gamiId();
+
+            PositionType positionType = position.type();
+            timeOuts.putInTimeout(uuid, positionType, symbol);
+
+            long exchangeTransactionDelay = configuration.exchangeTransactionDelay();
+
+            Thread.sleep(exchangeTransactionDelay);
+        }
+
+        updateLocalCache();
+    }
+
+    private MEXCProtocolErrors mapErrorMessage(String json) {
+        if(json == null || json.isEmpty()) {
+            return null;
+        }
+
+        JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+        int code = obj.get("code").getAsInt();
+
+        return MEXCProtocolErrors.fromErrorCode(code);
+    }
+
+    private FundingFeeStatus calculateFundingFeeStats(List<PositionValues> positionValuesList) {
+        BigDecimal totalFeesToPay = BigDecimal.ZERO;
+        BigDecimal totalFeesToReceive = BigDecimal.ZERO;
+        List<String> feeWarnings = new ArrayList<>();
+
+        for(PositionValues positionValues : positionValuesList) {
+            String mexcSymbol = positionValues.position().gamiId().symbolMEXC();
+            MEXCFundingRateItem fundingRateItem = mexcFundingRates.getFundingRate(mexcSymbol);
+
+            PositionType type = positionValues.position().type();
+            BigDecimal fundingRate = fundingRateItem.fundingRate();
+
+            if(fundingRate.compareTo(BigDecimal.ZERO) != 0) {
+                BigDecimal fee = positionValues.positionValue().multiply(fundingRate).abs();
+
+                BigDecimal expensiveFundingFeeThreshold = configuration.expensiveFundingFeeThreshold();
+                if(fee.compareTo(expensiveFundingFeeThreshold) >= 0) {
+                    feeWarnings.add("WARNING: Expensive funding rate $" + df2.format(fee)
+                            + " for " + mexcSymbol + "(" + type + ")");
+                }
+
+                if (type == marginLong) {
+                    if (fundingRate.compareTo(BigDecimal.ZERO) > 0) {
+                        // Positive rate: Long traders will pay short traders
+                        totalFeesToPay = totalFeesToPay.add(fee);
+                    } else {
+                        // Negative rate: Short traders will pay long traders
+                        totalFeesToReceive = totalFeesToReceive.add(fee);
+                    }
+                } else {
+                    if (fundingRate.compareTo(BigDecimal.ZERO) > 0) {
+                        // Positive rate: Long traders will pay short traders
+                        totalFeesToReceive = totalFeesToReceive.add(fee);
+                    } else {
+                        // Negative rate: Short traders will pay long traders
+                        totalFeesToPay = totalFeesToPay.add(fee);
+                    }
+                }
+            }
+        }
+
+        FundingFeeStatus feeStatus = new FundingFeeStatus(
+            feeWarnings,
+            totalFeesToPay,
+            totalFeesToReceive
+        );
+
+        return feeStatus;
+    }
+
+    private void printFundingFeeStats(FundingFeeStatus fundingFeeStatus) {
+        BigDecimal totalFeesToPay = fundingFeeStatus.totalFeesToPay();
+        BigDecimal totalFeesToReceive = fundingFeeStatus.totalFeesToReceive();
+
+        for(String warning : fundingFeeStatus.feeWarnings()) {
+            log.info("   {}", warning);
+        }
+
+        log.info("Funding fees (pay / receive):");
+        log.info("   ${} / ${}", df4.format(totalFeesToPay), df4.format(totalFeesToReceive));
+    }
+
+    private ProfitLoss calculateProfitAndLoss(PositionStatistics positionStatistics) {
+        BigDecimal pnlOnLongs = positionStatistics.totalLongPositionsValue()
+                .subtract(positionStatistics.totalLongBaseValue());
+        BigDecimal pnlOnShorts = positionStatistics.totalShortBaseValue()
+                .subtract(positionStatistics.totalShortPositionsValue());
+        BigDecimal pnlUnrealized = pnlOnLongs.add(pnlOnShorts);
+
+        ProfitLoss profitLoss = new ProfitLoss(
+                pnlOnLongs,
+                pnlOnShorts,
+                pnlUnrealized
+        );
+
+        return profitLoss;
+    }
+
+    private PositionStatistics calculatePositionStatistics(List<PositionValues> positionValuesList) {
+        BigDecimal totalPositionsLongs = ZERO;
+        BigDecimal totalPositionsShorts = ZERO;
+        BigDecimal totalBaseLongs = ZERO;
+        BigDecimal totalBaseShorts = ZERO;
+        BigDecimal totalMarginLong = ZERO;
+        BigDecimal totalMarginShort = ZERO;
+        int totalNumberOfLongPositions = 0;
+        int totalNumberOfShortPositions = 0;
+
+        for (PositionValues positionValues : positionValuesList) {
+            Position position = positionValues.position();
+            PositionType type = position.type();
+
+            BigDecimal positionValue = positionValues.positionValue();
+            BigDecimal baseValue = positionValues.baseValue();
+            BigDecimal marginValue = positionValues.marginValue();
+
+            if (marginLong == type) {
+                totalPositionsLongs = totalPositionsLongs.add(positionValue);
+                totalBaseLongs = totalBaseLongs.add(baseValue);
+                totalMarginLong = totalMarginLong.add(marginValue);
+                totalNumberOfLongPositions++;
+            } else {
+                totalPositionsShorts = totalPositionsShorts.add(positionValue);
+                totalBaseShorts = totalBaseShorts.add(baseValue);
+                totalMarginShort = totalMarginShort.add(marginValue);
+                totalNumberOfShortPositions++;
+            }
+        }
+
+        BigDecimal avgLongPositionSize = totalPositionsLongs.divide(BigDecimal.valueOf(totalNumberOfLongPositions),
+                20, HALF_UP);
+        BigDecimal avgShortPositionSize = totalPositionsShorts.divide(BigDecimal.valueOf(totalNumberOfShortPositions),
+                20, HALF_UP);
+
+        PositionStatistics positionStatistics = new PositionStatistics(
+                totalNumberOfLongPositions,
+                totalNumberOfShortPositions,
+                totalPositionsLongs,
+                totalPositionsShorts,
+                totalBaseLongs,
+                totalBaseShorts,
+                totalMarginLong,
+                totalMarginShort,
+                avgLongPositionSize,
+                avgShortPositionSize
+        );
+
+        return positionStatistics;
+    }
+
+    private void logProfitAndLoss(ProfitLoss profitLoss) {
+        log.info("Profit and Loss (longs + short = unrealized pnl):");
+        String msg = "   $" + df2.format(profitLoss.pnlOnLongs()) +
+                " + $" + df2.format(profitLoss.pnlOnShorts())
+                + " = $" + df2.format(profitLoss.pnlUnrealized());
+        log.info(msg);
+    }
+
+
+    private EquilibriumStatus calculateEquilibriumStatus(
+            PositionStatistics positionStatistics,
+            BigDecimal marginAvailable,
+            BigDecimal totalLeverageAllPositions
+    ) {
+        BigDecimal totalLongPositionsValue = positionStatistics.totalLongPositionsValue();
+        BigDecimal totalShortPositionsValue = positionStatistics.totalShortPositionsValue();
+        BigDecimal notionalAvailable = marginAvailable.multiply(totalLeverageAllPositions);
+
+        BigDecimal grandTotal = notionalAvailable.add(totalLongPositionsValue).add(totalShortPositionsValue);
+
+        BigDecimal longs = totalLongPositionsValue.divide(grandTotal, 4, HALF_UP);
+        BigDecimal shorts = totalShortPositionsValue.divide(grandTotal, 4, HALF_UP);
+        BigDecimal leveragedAvailable = notionalAvailable.divide(grandTotal, 4, HALF_UP);
+
+        EquilibriumStatus equilibriumStatus = new EquilibriumStatus(
+                longs,
+                shorts,
+                leveragedAvailable
+        );
+
+        return equilibriumStatus;
+    }
+
+    private void logEquilibriumStatus(
+            EquilibriumStatus equilibriumStatus,
+            BigDecimal availableMargin,
+            BigDecimal availableLeveragedMargin,
+            BigDecimal leverage
+    ) {
+        BigDecimal hundred = new BigDecimal(100);
+
+        log.info("Equilibrium status:");
+        String longEquilibriumStr = df2.format(equilibriumStatus.longEquilibrium().multiply(hundred));
+        String shortEquilibriumStr = df2.format(equilibriumStatus.shortEquilibrium().multiply(hundred));
+        String availableEquilibriumStr = df2.format(equilibriumStatus.availableEquilibrium().multiply(hundred));
+
+        log.info("        Long: {}%", longEquilibriumStr);
+        log.info("       Short: {}%", shortEquilibriumStr);
+        log.info("   Available: {}% (${} / ${} - leverage: {}x)",
+                availableEquilibriumStr,
+                df2.format(availableMargin),
+                df2.format(availableLeveragedMargin),
+                df2.format(leverage));
+    }
+
+    private void logPositionStatistics(PositionStatistics positionStatistics) {
+        BigDecimal totalLongPositionsValue = positionStatistics.totalLongPositionsValue();
+        BigDecimal totalLongBaseValue = positionStatistics.totalLongBaseValue();
+        BigDecimal totalLongMarginValue = positionStatistics.totalLongMarginValue();
+
+        BigDecimal totalShortPositionsValue = positionStatistics.totalShortPositionsValue();
+        BigDecimal totalShortBaseValue = positionStatistics.totalShortBaseValue();
+        BigDecimal totalShortMarginValue = positionStatistics.totalShortMarginValue();
+
+        BigDecimal avgLongPostionSize = positionStatistics.totalAvgLongPositionSize();
+        BigDecimal avgShortPositionSize = positionStatistics.totalAvgShortPositionSize();
+
+        log.info("Position statistics:");
+
+        log.info("     Number of positions: longs:{} / shorts:{} / total:{}",
+                positionStatistics.totalNumberOfLongPositions(),
+                positionStatistics.totalNumberOfShortPositions(),
+                positionStatistics.totalNumberOfLongPositions() + positionStatistics.totalNumberOfShortPositions());
+
+        log.info("    Total position value: longs:${} / shorts:${} / total:${}",
+                df2.format(totalLongPositionsValue),
+                df2.format(totalShortPositionsValue),
+                df2.format(totalLongPositionsValue.add(totalShortPositionsValue)));
+
+        log.info("        Total base value: longs:${} / shorts:${} / total:${}",
+                df2.format(totalLongBaseValue),
+                df2.format(totalShortBaseValue),
+                df2.format(totalLongBaseValue.add(totalShortBaseValue)));
+
+        log.info("      Total margin value: longs:${} / shorts:${} / total:${}",
+                df2.format(totalLongMarginValue),
+                df2.format(totalShortMarginValue),
+                df2.format(totalLongMarginValue.add(totalShortMarginValue)));
+
+        log.info("   Average position size: longs:${} / shorts:${}",
+                df2.format(avgLongPostionSize),
+                df2.format(avgShortPositionSize));
+    }
+
+    private List<PositionValues> calculatePositionValues(List<Position> allPositions) {
+        List<PositionValues> positionAmounts = new ArrayList<>();
+
+        for (Position position : allPositions) {
+            String localSymbol = position.gamiId().symbolMEXC();
+
+            MEXCTickerItem item = ticker.getPrice(localSymbol);
+            if (item == null) {
+                log.info("  {} not found in ticker - skipping!", localSymbol);
+                continue;
+            }
+
+            BigDecimal currentPrice = item.lastPrice();
+            BigDecimal basePrice = position.basePrice();
+            BigDecimal balanceInTokens = position.balance();
+            int leverage = position.leverage();
+            BigDecimal positionValue = balanceInTokens.multiply(currentPrice);
+            BigDecimal baseValue = balanceInTokens.multiply(basePrice);
+            BigDecimal marginValue = baseValue.divide(BigDecimal.valueOf(leverage), 20, HALF_UP);
+
+            PositionValues pv = new PositionValues(
+                    position,
+                    currentPrice,
+                    basePrice,
+                    balanceInTokens,
+                    leverage,
+                    positionValue,
+                    baseValue,
+                    marginValue
+            );
+
+            positionAmounts.add(pv);
+        }
+
+        return positionAmounts;
+    }
+
+    private List<NextCloseableInfo> calculateClosingScores(
+            List<PositionValues> positionValuesList,
+            BigDecimal maxMarginAmountToTradePerIteration
+    ) {
+        List<NextCloseableInfo> nextCloseableList = new ArrayList<>();
+
+        for(PositionValues positionValues : positionValuesList) {
+            BigDecimal currentPrice = positionValues.currentPrice();
+            BigDecimal basePrice = positionValues.basePrice();
+            Position position = positionValues.position();
+
+            NextCloseableInfo nextCloseableInfo = calculateClosingScore(
+                    maxMarginAmountToTradePerIteration,
+                    currentPrice,
+                    basePrice,
+                    position
+            );
+
+            nextCloseableList.add(nextCloseableInfo);
+        }
+
+        return nextCloseableList;
+    }
+
+    private NextCloseableInfo calculateClosingScore(
+            BigDecimal maxMarginAmountToTradePerIteration,
+            BigDecimal currentPrice,
+            BigDecimal basePrice,
+            Position position
+    ) {
+        PositionType positionType = position.type();
+        String symbol = position.gamiId().symbolMEXC();
+        ContractDetailsItem contractDetailsItem = contractDetails.getContractDetails(symbol);
+
+        BigDecimal rawScore;
+        BigDecimal priceDiff;
+        BigDecimal earningPct;
+
+        if(positionType == marginLong) {
+            rawScore = currentPrice.divide(basePrice,20, HALF_UP);
+            priceDiff = currentPrice.subtract(basePrice);
+            earningPct = currentPrice.divide(basePrice,20, HALF_UP).subtract(ONE);
+        } else {
+            rawScore = basePrice.divide(currentPrice,20, HALF_UP);
+            priceDiff = basePrice.subtract(currentPrice);
+            earningPct = ONE.subtract(currentPrice.divide(basePrice, 20, HALF_UP));
+        }
+
+        // TODO: EVE-51: Implement score adjustments for closing too
+        BigDecimal adjustedScore = rawScore;
+
+        BigDecimal contractSize = contractDetailsItem.contractSize();
+        BigDecimal balanceTokens = position.balance();
+        int balanceContracts = balanceTokens.divide(contractSize, 20, HALF_UP).intValue();
+        BigDecimal earning = priceDiff.multiply(contractSize);
+
+        int leverage = position.leverage();
+        BigDecimal valueOfOneContract = currentPrice.multiply(contractSize);
+        BigDecimal marginPriceOfAContract = valueOfOneContract.divide(BigDecimal.valueOf(leverage), 20, HALF_UP);
+
+        int quantityOfContractsInTradeForMarginAmount = maxMarginAmountToTradePerIteration.divideToIntegralValue(marginPriceOfAContract).intValue();
+
+        if(quantityOfContractsInTradeForMarginAmount == 0) {
+            // A single contract has a higher value than Evelyn.conf/MaxUnleveragedAmountToTradePerIteration. But it is ok to just close one then.
+            // Because we can always close one - means that we can ignore stretch
+            quantityOfContractsInTradeForMarginAmount = 1;
+        }
+
+        int quantityToTradeContracts = quantityOfContractsInTradeForMarginAmount;
+
+        if(balanceContracts > 1 && quantityToTradeContracts >= balanceContracts) {
+            quantityToTradeContracts = balanceContracts - 1;  // We will not sell everything out. We want to keep one contract to keep the statistics.
+        }
+
+        BigDecimal quantityToTradeTokens = contractSize.multiply(BigDecimal.valueOf(quantityToTradeContracts));
+
+        NextCloseableInfo nextCloseableInfo = new NextCloseableInfo(
+                position,
+                quantityToTradeTokens,
+                quantityToTradeContracts,
+                positionType,
+                earning,
+                earningPct,
+                rawScore,
+                adjustedScore,
+                balanceTokens,
+                balanceContracts,
+                leverage
+        );
+
+        return nextCloseableInfo;
+    }
+
+    private boolean handleNextContractClose(
+            List<PositionValues> positionValuesList,
+            PositionSideAction action,
+            BigDecimal maxMarginAmountToTradePerIteration
+    ) throws Exception {
+        int left = positionValuesList.size();
+        int totalNum = left;
+        int num;
+
+        List<PositionValues> candidates = filterOkType(positionValuesList, action);
+        num = candidates.size();
+        int wrongTypeNum = left - num;
+        left -= wrongTypeNum;
+
+        candidates = filterQuarantined(candidates);
+        num = candidates.size();
+        int quarantinedNum = left - num;
+        left -= quarantinedNum;
+
+        List<NextCloseableInfo> closeableCandidatesInfo = calculateClosingScores(
+                candidates,
+                maxMarginAmountToTradePerIteration
+        );
+
+        closeableCandidatesInfo = filterNonEmptyPositions(closeableCandidatesInfo);
+        num = closeableCandidatesInfo.size();
+        int balanceOfOneNum = left - num;
+        left -= balanceOfOneNum;
+
+        closeableCandidatesInfo = filterBelowCloseScoreLimit(closeableCandidatesInfo);
+        num = closeableCandidatesInfo.size();
+        int badScoreNum = left - num;
+        left -= badScoreNum;
+
+        int closeableNum = closeableCandidatesInfo.size();
+
+        // Sort descending (according to adjustedScore)
+        closeableCandidatesInfo.sort(Comparator.comparing(o -> ((NextCloseableInfo) o).adjustedScore()).reversed());
+
+        String msg = action + " candidates: Total:" + totalNum
+                + " - wrongType:" + wrongTypeNum
+                + " - quarantined:" + quarantinedNum
+                + " - badScore:" + badScoreNum
+                + " - balanceOfOne:" + balanceOfOneNum
+                + " = closeable:" + closeableNum;
+        log.info(msg);
+
+        if (closeableCandidatesInfo.isEmpty()) {
+            log.info("   Nothing closeable!");
+            return false;
+        }
+
+        NextCloseableInfo nextCloseableInfo = closeableCandidatesInfo.get(0);
+        performClose(nextCloseableInfo);
+
+        // Do NOT put this position into time-out as it is OK to keep liquidating it on each iteration
+        return true;
+    }
+
+    private List<PositionValues> filterOkType(List<PositionValues> positionValuesList, PositionSideAction action) {
+        List<PositionValues> result = new ArrayList<>();
+
+        for (PositionValues positionValue : positionValuesList) {
+            PositionType positionType = positionValue.position().type();
+
+            boolean doAdd = switch (action) {
+                case OpenLong, CloseLong -> positionType == marginLong;
+                case OpenShort, CloseShort -> positionType == marginShort;
+            };
+
+            if (doAdd) {
+                result.add(positionValue);
+            }
+        }
+
+        return result;
+    }
+
+    private boolean handleNextContractOpen(
+            List<PositionValues> positionValuesList,
+            PositionSideAction action,
+            BigDecimal maxMarginAmountToTradePerIteration,
+            BigDecimal maxStretchMarginAmountToTradePerIteration
+    ) throws Exception {
+        int left = positionValuesList.size();
+        int totalNum = left;
+        int num;
+
+        List<PositionValues> candidates = filterOkType(positionValuesList, action);
+        num = candidates.size();
+        int wrongTypeNum = left - num;
+        left -= wrongTypeNum;
+
+        int totalNumberOfPositionsOfThisType = left;
+
+        candidates = filterQuarantined(candidates);
+        num = candidates.size();
+        int quarantinedNum = left - num;
+        left -= quarantinedNum;
+
+        candidates = filterTimedOuts(candidates);
+        num = candidates.size();
+        int timedOutNum = left - num;
+        left -= timedOutNum;
+
+        // TODO: EVE-50: Re-enable maxOwnable
+//candidates = filterMaxOwnable(nonTimedOut);
+//num = nonMaxOwnable.size();
+        int maxOwnableNum = 0;
+//int maxOwnableNum = left - num;
+//left -= maxOwnableNum;
+
+        final List<FutureBasePrices> futureBasePrices = calculateAllFutureBasePrices(
+                maxMarginAmountToTradePerIteration,
+                maxStretchMarginAmountToTradePerIteration,
+                candidates,
+                totalNumberOfPositionsOfThisType
+        );
+
+        final List<FutureBasePrices> goodScore = filterBelowAdjustedScoreLimit(futureBasePrices);
+        num = goodScore.size();
+        int badScoreNum = left - num;
+        left -= badScoreNum;
+
+        final List<FutureBasePrices> openable = goodScore;
+        int openableNum = openable.size();
+
+        // Sort descending - according to adjustedScore
+        openable.sort(Comparator.comparing(o -> ((FutureBasePrices) o).adjustedScore()).reversed());
+
+        String msg = action + " candidates: Total:" + totalNum
+                + " - wrongType:" + wrongTypeNum
+                + " - quarantined:" + quarantinedNum
+                + " - timedOut:" + timedOutNum
+                + " - maxOwnable:" + maxOwnableNum
+                + " - badScore:" + badScoreNum
+                + " = openable:" + openableNum;
+        log.info(msg);
+
+        if (openable.isEmpty()) {
+            log.info("   Nothing openable!");
+            return false;
+        }
+
+        FutureBasePrices nextBuyInfo = openable.get(0);
+        performOpen(nextBuyInfo);
+
+        // Put this position in timeout for a while
+        Position position = nextBuyInfo.position();
+        UUID uuid = position.gamiId().gamiId();
+        PositionType positionType = position.type();
+        String symbol = position.gamiId().symbolMEXC();
+        timeOuts.putInTimeout(uuid, positionType, symbol);
+
+        return true;
+    }
+
+    private void detectAndPrepareForBrandNewPositions() throws Exception {
+        Map<String, Object> remoteSymbols = new HashMap<>();
+        for(String symbol : ticker.getAllSymbols()) {
+            if(symbol.endsWith("_USDT")) {
+                if(symbol.equals("USDC_USDT")) {        // We do not want to buy that!
+                    continue;
+                }
+                remoteSymbols.put(symbol + "/long", symbol + "/long");  // We do not need the actual value - only the symbols
+                remoteSymbols.put(symbol + "/short", symbol + "/short");  // We do not need the actual value - only the symbols
+            }
+        }
+
+        List<Position> positions = portfolio.getPositions();
+        for(Position position : positions) {
+            String symbol = position.gamiId().symbolMEXC() + "/" + position.type().toString();
+            remoteSymbols.remove(symbol);
+        }
+
+        if(remoteSymbols.isEmpty()) {
+            return;
+        }
+
+        log.info("Detected {} new symbols! Preparing to start (remember to add the following entries into Positions.json)...",
+                remoteSymbols.size());
+
+        for(String positionId : remoteSymbols.keySet()) {
+            int positionTypeInt;
+            MEXCPositionSide side;
+
+            if(positionId.endsWith("/long")) {
+                side = MEXCPositionSide.OpenLong;
+                positionTypeInt = 1;    // Long
+            } else {
+                side = MEXCPositionSide.OpenShort;
+                positionTypeInt = 2;    // Short
+            }
+
+            int index = positionId.indexOf('/');
+            String symbol = positionId.substring(0, index);
+
+            MEXCLeverageInfoItem leverageInfo = mexcLeverageInfo.getLeverageInfo(symbol, positionTypeInt);
+            int leverage = leverageInfo.leverage();
+
+            int contractsToOpen = 2;
+            log.info("   Initializing position by opening {} contracts on '{}'", contractsToOpen, positionId);
+            String json = mexcFuturesPlugin.trade(side, 2, symbol, leverage);
+
+            if(json == null || !json.contains("success\":true")) {
+                String message = "ERROR: Could not trade '" + symbol + "'";
+                pushNotification(message);
+                log.error(message + ": " + json);
+                continue;
+            }
+
+            long exchangeTransactionDelay = configuration.exchangeTransactionDelay();
+            Thread.sleep(exchangeTransactionDelay);
+        }
+
+        updateLocalCache();
+    }
+
+    private List<PositionValues> filterQuarantined(List<PositionValues> positionValuesList) {
+        List<PositionValues> result = new ArrayList<>();
+
+        for (PositionValues positionValues : positionValuesList) {
+            Position position = positionValues.position();
+
+            if (position.quarantined()) {
+                continue;
+            }
+
+            result.add(positionValues);
+        }
+
+        return result;
+    }
+
+    private List<PositionValues> filterTimedOuts(List<PositionValues> positionValuesList) {
+        List<PositionValues> result = new ArrayList<>();
+
+        for(PositionValues positionValues : positionValuesList) {
+            Position position = positionValues.position();
+            UUID gamiId = position.gamiId().gamiId();
+            PositionType positionType = position.type();
+            boolean isInTimeOut = timeOuts.isInTimeOut(gamiId, positionType);
+
+            if(isInTimeOut) {
+                continue;
+            }
+
+            result.add(positionValues);
+        }
+
+        return result;
+    }
+
+    private List<FutureBasePrices> filterBelowAdjustedScoreLimit(List<FutureBasePrices> futureBasePricesList) {
+        List<FutureBasePrices> filteredList = new ArrayList<>();
+
+        for (FutureBasePrices futureBasePrices : futureBasePricesList) {
+            BigDecimal adjustedScore = futureBasePrices.adjustedScore();
+
+            if (adjustedScore.compareTo(ONE) <= 0) {
+                log.debug("   {}: Score:{} / Adjusted score:{} - Below limit!",
+                        futureBasePrices.position().gamiId().symbolMEXC(),
+                        futureBasePrices.rawScore(),
+                        adjustedScore
+                );
+                continue;
+            } else {
+                log.debug("   {}: Score:{} / Adjusted score:{} - Accepted!",
+                        futureBasePrices.position().gamiId().symbolMEXC(),
+                        futureBasePrices.rawScore(),
+                        adjustedScore
+                );
+                filteredList.add(futureBasePrices);
+            }
+        }
+
+        return filteredList;
+    }
+
+    private List<NextCloseableInfo> filterNonEmptyPositions(List<NextCloseableInfo> nextCloseableInfoList) {
+        List<NextCloseableInfo> filteredList = new ArrayList<>();
+
+        for (NextCloseableInfo nextCloseableInfo : nextCloseableInfoList) {
+            if (nextCloseableInfo.balanceContracts() < 2) {
+                // Do not close everything on the position. Keep one so that statistics are not reset
+                continue;
+            }
+
+            filteredList.add(nextCloseableInfo);
+        }
+
+        return filteredList;
+    }
+
+    private List<NextCloseableInfo> filterBelowCloseScoreLimit(List<NextCloseableInfo> nextCloseableInfoList) {
+        List<NextCloseableInfo> filteredList = new ArrayList<>();
+
+        for (NextCloseableInfo nextCloseableInfo : nextCloseableInfoList) {
+            BigDecimal score = nextCloseableInfo.adjustedScore();
+
+            BigDecimal minimumPctEarning = (nextCloseableInfo.positionType() == marginLong)
+                ? configuration.minimumPctEarningForLongs()
+                : configuration.minimumPctEarningForShorts();
+
+            BigDecimal limit = BigDecimal.ONE.add(minimumPctEarning.divide(BigDecimal.valueOf(100), 20, HALF_UP));
+            if (score.compareTo(limit) < 0) {
+                continue;
+            }
+
+            filteredList.add(nextCloseableInfo);
+        }
+
+        return filteredList;
+    }
+
+    private List<FutureBasePrices> filterMaxOwnable(List<FutureBasePrices> futureBasePricesList) {
+        List<FutureBasePrices> filteredList = new ArrayList<>();
+
+        for (FutureBasePrices futureBasePrices : futureBasePricesList) {
+            Position position = futureBasePrices.position();
+
+            BigDecimal max = position.maxTotal();
+            if (max != null && position.balance().compareTo(max) >= 0) {
+                // Max has been reached - skip this!
+                continue;
+            }
+
+            filteredList.add(futureBasePrices);
+        }
+
+        return filteredList;
+    }
+
+    private void performClose(NextCloseableInfo nextCloseableInfo) throws Exception {
+        String time = getFormattedTime();
+
+        UUID gamiId = nextCloseableInfo.position().gamiId().gamiId();
+        GlobalAssetMetadataIndexItem metaData = gami.getById(gamiId);
+        int balanceContracts = nextCloseableInfo.balanceContracts();
+
+        BigDecimal quantityToTradeTokens = nextCloseableInfo.quantityToTradeTokens();
+        int quantityToTradeContracts = nextCloseableInfo.quantityToTradeContracts();
+        BigDecimal earning = nextCloseableInfo.earning().multiply(BigDecimal.valueOf(quantityToTradeContracts));
+        String earningStr = df4.format(earning);
+        int leverage = nextCloseableInfo.leverage();
+        BigDecimal earningPct = nextCloseableInfo.earningPct().multiply(BigDecimal.valueOf(100));
+        BigDecimal earningPctLeveraged = earningPct.multiply(BigDecimal.valueOf(leverage));
+        PositionType positionType = nextCloseableInfo.positionType();
+
+        String msg = "   " + time + " - " + metaData.name() + "/" + metaData.symbolMEXC()
+                + ": Close " + quantityToTradeContracts + "/" + balanceContracts + " " + positionType + " contract(s) ("
+                + quantityToTradeTokens + " tokens). " + "Earning: $" + earningStr
+                + " (%" + df2.format(earningPctLeveraged) + " x" + leverage + ")";
+        log.info(msg);
+
+        MEXCPositionSide side = (positionType == PositionType.marginLong)
+                ? MEXCPositionSide.CloseLong
+                : MEXCPositionSide.CloseShort;
+
+        String jsonResult = mexcFuturesPlugin.trade(side, quantityToTradeContracts, metaData.symbolMEXC());
+
+        if(jsonResult == null || !jsonResult.contains("success\":true")) {
+            String message = "ERROR: Could not trade!";
+            pushNotification(message);
+            log.error(message + ": " + jsonResult);
+        }
+    }
+
+    private String getFormattedTime() {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+        ZonedDateTime nowCET = ZonedDateTime.now(ZoneId.of("CET"));
+        String time = formatter.format(nowCET);
+        return time;
+    }
+
+    private void performOpen(FutureBasePrices nextOpenInfo) throws Exception {
+        PositionType type = nextOpenInfo.type();
+        Position position = nextOpenInfo.position();
+        UUID gamiId = position.gamiId().gamiId();
+        GlobalAssetMetadataIndexItem metaData = gami.getById(gamiId);
+        BigDecimal quantityTokens = nextOpenInfo.quantityAbleToBuy();
+        BigDecimal targetPrice = nextOpenInfo.futureBasePrice();
+        BigDecimal rawScore = nextOpenInfo.rawScore();
+        BigDecimal adjustedScore = nextOpenInfo.adjustedScore();
+        String time = getFormattedTime();
+
+        String symbol = position.gamiId().symbolMEXC();
+        ContractDetailsItem contractDetailsItem = contractDetails.getContractDetails(symbol);
+        BigDecimal contractSize = contractDetailsItem.contractSize();
+        int quantityToTradeContracts = quantityTokens.divide(contractSize, 0, HALF_UP).intValue();
+
+        BigDecimal price = nextOpenInfo.currentPrice();
+        BigDecimal spendAmountLeveraged = quantityTokens.multiply(price);
+        int leverage = nextOpenInfo.position().leverage();
+        final BigDecimal marginPrice = spendAmountLeveraged.divide(new BigDecimal(leverage), 4, HALF_UP);
+
+        String msg = time + " - " + metaData.name() + "/" + metaData.symbolMEXC()
+                + ": Open " + quantityToTradeContracts + " " + type + " contract(s) (" + quantityTokens + " tokens), "
+                + "Spending $" + df4.format(marginPrice) + " / $" + df4.format(spendAmountLeveraged)
+                + " to reach base price $" + targetPrice.toPlainString()
+                + " - Score (raw/adjusted): " + df4.format(rawScore) + " / " + df4.format(adjustedScore) + ".";
+        log.info(msg);
+
+        MEXCPositionSide side = (type == PositionType.marginLong)
+                ? MEXCPositionSide.OpenLong
+                : MEXCPositionSide.OpenShort;
+
+        final BigDecimal marginPriceForOpening = marginPrice.multiply(BigDecimal.valueOf(quantityToTradeContracts));
+        final AccountDetails accountDetails = accountDetailsService.getDetails();
+        final BigDecimal available = accountDetails.availableOpen();
+
+        if(available.compareTo(marginPriceForOpening) <= 0) {
+            String message = "WARNING: Available margin too low to open '" + metaData.symbolMEXC()
+                    + "'. Have $" + df4.format(available)
+                    + ", needing $" + df4.format(marginPriceForOpening)
+                    + " - skipping until next iteration!";
+            log.warn(message);
+        }
+
+        String json = mexcFuturesPlugin.trade(side, quantityToTradeContracts, metaData.symbolMEXC());
+
+        if(json == null) {
+            String message = "ERROR: Could not trade '" + symbol + "' - Empty reply from MEXC";
+            pushNotification(message);
+            log.error(message);
+        }
+
+        if(!json.contains("success\":true")) {
+            MEXCProtocolErrors error = mapErrorMessage(json);
+            String errorStr = (error == null)
+                    ? ""
+                    : " (" + error + ")";
+            String message = "ERROR: Could not trade '" + symbol + "'!" + errorStr;
+            pushNotification(message);
+            log.error(message + ": " + json);
+        }
+    }
+
+    private static BigDecimal roundToNearestMultiple(BigDecimal number, BigDecimal multiple) {
+        BigDecimal divided = number.divide(multiple, 0, HALF_UP);
+        return divided.multiply(multiple);
+    }
+
+    private List<FutureBasePrices> calculateAllFutureBasePrices(
+            BigDecimal maxMarginAmountToTradePerIteration,
+            BigDecimal maxStretchMarginAmountToTradePerIteration,
+            List<PositionValues> positionValuesList,
+            int totalNumberOfPositionsOfThisType
+    ) {
+        if(positionValuesList == null || positionValuesList.isEmpty()) {
+            return List.of();
+        }
+
+        List<FutureBasePrices> futureBasePrices = new ArrayList<>();
+
+        BigDecimal totalPositionsValue = ZERO;
+        int numberOfPositions = positionValuesList.size();
+
+        for(PositionValues positionValues : positionValuesList) {
+            totalPositionsValue = totalPositionsValue.add(positionValues.positionValue());
+        }
+
+        BigDecimal averagePositionValue = totalPositionsValue.divide(
+                BigDecimal.valueOf(numberOfPositions), 4, HALF_UP);
+
+        for(PositionValues positionValues : positionValuesList) {
+            FutureBasePrices fap = calculateFutureBasePrices(
+                    positionValues,
+                    maxMarginAmountToTradePerIteration,
+                    maxStretchMarginAmountToTradePerIteration,
+                    averagePositionValue,
+                    totalNumberOfPositionsOfThisType
+            );
+            futureBasePrices.add(fap);
+        }
+
+        return futureBasePrices;
+    }
+
+    private FutureBasePrices calculateFutureBasePrices(
+            PositionValues positionValues,
+            BigDecimal maxMarginAmountToTradePerIteration,
+            BigDecimal maxStretchMarginAmountToTradePerIteration,
+            BigDecimal averagePositionValue,
+            int totalNumberOfPositions
+    ) {
+        Position position = positionValues.position();
+        String symbol = position.gamiId().symbolMEXC();
+        ContractDetailsItem contractDetailsItem = contractDetails.getContractDetails(symbol);
+        BigDecimal contractSize = contractDetailsItem.contractSize();
+        BigDecimal positionValue = positionValues.positionValue();
+        BigDecimal currentTokenNotationPrice = positionValues.currentPrice();
+        int leverage = positionValues.leverage();
+
+        BigDecimal amountNotionalToSpend = bl.calculateContractValueToTrade(
+                maxMarginAmountToTradePerIteration,
+                maxStretchMarginAmountToTradePerIteration,
+                positionValue,
+                currentTokenNotationPrice,
+                contractSize,
+                leverage,
+                configuration.maxSpendPctOfFullPosition()
+        );
+
+        BigDecimal quantityAbleToTrade = amountNotionalToSpend.divide(
+                currentTokenNotationPrice,
+                20,
+                DOWN
+        ).setScale(position.numberOfDecimalsInTrade(), DOWN);
+        quantityAbleToTrade = roundToNearestMultiple(quantityAbleToTrade, contractSize);
+
+        BigDecimal contractsAbleToTrade = quantityAbleToTrade.divideToIntegralValue(contractSize);
+
+        BigDecimal futureTokenBaseNotationPrice = calculateFutureBasePrice(
+                position.balance(),
+                currentTokenNotationPrice,
+                positionValues.basePrice(),
+                quantityAbleToTrade
+        );
+
+        PositionType positionType = position.type();
+        BigDecimal currentTokenBaseNotationPrice = positionValues.basePrice();
+
+        ScoreCalculatorInput input = new ScoreCalculatorInput(
+                currentTokenBaseNotationPrice,
+                futureTokenBaseNotationPrice,
+                currentTokenNotationPrice,
+                amountNotionalToSpend,
+                totalNumberOfPositions,
+                contractSize,
+                BigDecimal.valueOf(leverage),
+                positionType,
+                averagePositionValue
+        );
+
+        BigDecimal rawScore = scoreCalculator.calculateScore(input);
+
+        BigDecimal penaltyCoefficient = configuration.adjustedScoreTooBigPositionsPenaltyCoefficient();
+        BigDecimal adjustedScore = calculateAdjustedScore(
+                rawScore,
+                positionValue,
+                averagePositionValue,
+                penaltyCoefficient
+        );
+
+        FutureBasePrices fap = new FutureBasePrices(
+                position,
+                positionType,
+                quantityAbleToTrade,
+                contractsAbleToTrade,
+                futureTokenBaseNotationPrice,
+                rawScore,
+                adjustedScore,
+                currentTokenNotationPrice
+        );
+
+        return fap;
+    }
+
+    private static BigDecimal calculateAdjustedScore(
+            BigDecimal rawScore,
+            BigDecimal positionValue,
+            BigDecimal averagePositionValue,
+            BigDecimal penaltyCoefficient
+    ) {
+        if (positionValue.compareTo(averagePositionValue) <= 0) {
+            // Only those positions that are larger than the average should be penalized.
+            return rawScore;
+        }
+
+        final BigDecimal K = penaltyCoefficient;     // Use 1.0 for "halve at double size"
+
+        BigDecimal positionRatio = positionValue.divide(averagePositionValue, MC);
+        BigDecimal diff = positionRatio.subtract(BigDecimal.ONE, MC);
+        BigDecimal diffSquared = diff.multiply(diff, MC);
+        BigDecimal denominator = BigDecimal.ONE.add(K.multiply(diffSquared, MC), MC);
+        BigDecimal adjustedScore = rawScore.divide(denominator, MC);
+
+        return adjustedScore;
+    }
+
+    private BigDecimal calculateFutureBasePrice(
+            final BigDecimal currentTokenBalance,
+            final BigDecimal currentTokenPrice,
+            final BigDecimal currentTokenBasePrice,
+            final BigDecimal tokenQuantityAbleToBuy
+    ) {
+        BigDecimal futureTokenBalance = currentTokenBalance.add(tokenQuantityAbleToBuy);
+        BigDecimal totalValueForTrade = tokenQuantityAbleToBuy.multiply(currentTokenPrice);
+        BigDecimal currentPositionBaseValue = currentTokenBasePrice.multiply(currentTokenBalance);
+        BigDecimal futurePositionBaseValue = currentPositionBaseValue.add(totalValueForTrade);
+        BigDecimal futureTokenBasePrice = futurePositionBaseValue.divide(futureTokenBalance, MC);
+
+        return futureTokenBasePrice;
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(Evelyn.class);
+
+    private static final MathContext MC = new MathContext(20, HALF_UP);
+    private static final BigDecimal K = new BigDecimal("0.01", MC);  // Constant in punishment algo
+
+    private static final DecimalFormat df0 = new DecimalFormat("#,##0");
+    private static final DecimalFormat df2 = new DecimalFormat("#,##0.00");
+    private static final DecimalFormat df4 = new DecimalFormat("#,##0.0000");
+
+    private final BusinessLogic bl = new BusinessLogicImpl();
+
+    private NenjimObjectRepository nor = null;
+    private GlobalAssetMetadataIndex gami = null;
+    private TimeOuts timeOuts = null;
+    private MEXCTicker ticker = null;
+    private MEXCContractDetails contractDetails = null;
+    private MEXCFundingRates mexcFundingRates = null;
+    private MEXCLeverageInfo mexcLeverageInfo = null;
+    private Portfolio portfolio = null;
+    private MEXCFuturesPlugin mexcFuturesPlugin = null;
+    private ScoreCalculator scoreCalculator = null;
+    private PushNotifier pushNotifier = null;
+    private Configuration configuration = null;
+    private MEXCAccountDetailsService accountDetailsService = null;
+}

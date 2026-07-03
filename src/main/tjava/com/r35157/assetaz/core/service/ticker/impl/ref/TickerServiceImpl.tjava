@@ -1,0 +1,6 @@
+package com.r35157.assetaz.core.service.ticker.impl.ref;
+
+import com.r35157.assetaz.core.service.ticker.TickerService;
+
+public class TickerServiceImpl implements TickerService {
+}

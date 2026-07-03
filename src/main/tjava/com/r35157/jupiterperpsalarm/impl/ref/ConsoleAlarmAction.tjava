@@ -1,0 +1,25 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+public final class ConsoleAlarmAction implements AlarmAction {
+    @Override
+    public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
+        System.err.println();
+        System.err.println("============================================================");
+        System.err.printf(
+                "ALARM: %s is %s USD; target %s %s USD%n",
+                price.asset(),
+                price.priceUsd().toPlainString(),
+                alarm.direction(),
+                alarm.target().toPlainString()
+        );
+        System.err.printf(
+                "Trigger: %s, oracle time: %s, slot: %d, source: %s%n",
+                alarm.trigger(),
+                price.oracleTime(),
+                price.slot(),
+                price.source()
+        );
+        System.err.println("============================================================");
+        System.err.println();
+    }
+}

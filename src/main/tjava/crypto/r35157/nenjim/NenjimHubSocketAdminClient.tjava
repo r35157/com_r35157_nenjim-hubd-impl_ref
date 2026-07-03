@@ -1,0 +1,74 @@
+package crypto.r35157.nenjim;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+
+public class NenjimHubSocketAdminClient implements NenjimProcess {
+    public NenjimHubSocketAdminClient() {
+        this.portNumber = SOCKET_ADMIN_PORT;
+    }
+
+    @Override
+    public void setNenjimProcessContext(NenjimContext context) {
+        this.nenjimContext = context;
+    }
+
+    @Override
+    public void setNenjimHub(NenjimHub hub) {
+    }
+
+    @Override
+    public String getProcessName() {
+        return "NenjimHub Socket Admin Client";
+    }
+
+    @Override
+    public void run() throws Exception {
+        try (ServerSocket server = new ServerSocket(portNumber)) {
+            System.out.println("NenjimHub Socket Admin Client ready and listening on port: " + portNumber);
+            while (true) {
+                try (
+                        Socket client = server.accept();
+                        BufferedReader in = new BufferedReader(
+                                new InputStreamReader(client.getInputStream()));
+                        PrintWriter out = new PrintWriter(
+                                client.getOutputStream(), true)   // autoFlush = true
+                ) {
+                    System.out.println("Connection received from: "
+                            + client.getRemoteSocketAddress());
+
+                    out.println("Protocol: NenjimAdmin-0.1");
+                    out.println("OK");
+                    out.flush();
+
+                    while(true) {
+                        String line = in.readLine();
+                        if(line.trim().isEmpty()) {
+                            out.println("OK");
+                        } else if (line.toUpperCase().startsWith("NOOP")) {
+                            long start = System.currentTimeMillis();
+                            //nenjimContext.noOp();
+                            out.println("OK (" + (System.currentTimeMillis() - start) + "ms)");
+                        } else if ("QUIT".equalsIgnoreCase(line)) {
+                            out.println("OK");
+                            System.out.println("Connection closed by client");
+                            break;
+                        } else {
+                            out.println("Error: 400 - Unknown command");
+                        }
+                    }
+                    System.out.println("Session ended!");
+                }
+            }
+        }
+    }
+
+    private static final int SOCKET_ADMIN_PORT = 38010;
+
+    private final int portNumber;
+
+    private NenjimContext nenjimContext;
+}

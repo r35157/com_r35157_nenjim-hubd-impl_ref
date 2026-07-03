@@ -1,0 +1,7 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+public class EarningsStatistics {
+    BigDecimal totalEarnings;
+}

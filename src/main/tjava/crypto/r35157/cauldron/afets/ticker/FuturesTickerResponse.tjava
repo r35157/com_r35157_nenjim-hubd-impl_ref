@@ -1,0 +1,9 @@
+package crypto.r35157.cauldron.afets.ticker;
+
+import java.util.List;
+
+public record FuturesTickerResponse(
+        boolean success,
+        int code,
+        List<MEXCTickerItem> data
+) { }

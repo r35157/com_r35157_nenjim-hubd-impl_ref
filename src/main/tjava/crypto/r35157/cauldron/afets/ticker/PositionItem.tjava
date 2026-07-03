@@ -1,0 +1,36 @@
+package crypto.r35157.cauldron.afets.ticker;
+
+import java.util.List;
+
+public record PositionItem(
+        long positionId,
+        String symbol,
+        int positionType,   // 1=Long, 2=Short
+        int openType,
+        int state,
+        double holdVol,
+        double frozenVol,
+        double closeVol,
+        double holdAvgPrice,
+        String holdAvgPriceFullyScale,
+        double openAvgPrice,
+        String openAvgPriceFullyScale,
+        double closeAvgPrice,
+        double liquidatePrice,
+        double oim,
+        double im,
+        double holdFee,
+        double realised,
+        int leverage,
+        double marginRatio,
+        long createTime,
+        long updateTime,
+        boolean autoAddIm,
+        int version,
+        double profitRatio,
+        double newOpenAvgPrice,
+        double newCloseAvgPrice,
+        double closeProfitLoss,
+        double fee,
+        List<Object> deductFeeList
+) {}

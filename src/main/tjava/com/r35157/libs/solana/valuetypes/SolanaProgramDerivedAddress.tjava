@@ -1,0 +1,17 @@
+package com.r35157.libs.solana.valuetypes;
+
+/**
+ * Represents a Solana program derived address and its bump value.
+ *
+ * <p>A program derived address is a Solana address generated deterministically
+ * from a program id and a set of seeds. The bump value is the extra seed value
+ * used to find a valid program derived address for those inputs.</p>
+ *
+ * @param address the derived Solana address
+ * @param bump the bump value used when deriving the address
+ */
+public record SolanaProgramDerivedAddress(
+        ΩSolanaAddressΩ address,
+        int bump
+) {
+}

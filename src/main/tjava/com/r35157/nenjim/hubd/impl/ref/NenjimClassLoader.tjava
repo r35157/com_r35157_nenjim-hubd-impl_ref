@@ -1,0 +1,63 @@
+package com.r35157.nenjim.hubd.impl.ref;
+
+import com.r35157.libs.valuetypes.basic.SemanticVersion;
+import com.r35157.nenjim.hubd.ctx.Context;
+import com.r35157.nenjim.hubd.journal.Journal;
+import com.r35157.nenjim.hubd.journal.JournalManager;
+import com.r35157.nenjim.hubd.module.Release;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public final class NenjimClassLoader extends ClassLoader {
+    // TODO: Check protection - it is only main that can create a 'half' initialized classloader (and set the rest with setters afterwards)
+    NenjimClassLoader(JournalManager journalManager, Context context) {
+        this.journalManager = journalManager;
+        this.context = context;
+        //moduleVersion = new SemanticVersion(0, 1, 0);
+    }
+
+    private String getModuleName(String className) {
+        return className.substring(0, className.lastIndexOf("."));
+    }
+
+    @Override
+    protected Class<?> findClass(String className) throws ClassNotFoundException {
+        System.out.println("NenjimClassLoader asked to load '" + className + "'...");
+
+        // Check if we have any local version preferences configured for the associated Context.
+        SemanticVersion version = context.getVersion(className);
+
+        if(version == null) {
+            // No local configurations for a specific version has been configured for this package
+            // in this Context. Use the version the developer do recommend in the Journal.
+            String moduleName = getModuleName(className);
+            System.out.println("   Context (" + context.getName() + ") does NOT have any special version requirements for the module '" + moduleName + "' - use vendor recommendation from journal...");
+            Journal journal = journalManager.getJournal(moduleName);
+            Release release = journal.getRelease(version);
+            System.out.println("   Journal did recommend version '" + version + "' for the module '" + moduleName + "'");
+        }
+        System.out.println("Searching for class '" + className + "' in local Nenjim class cache...");
+        String relativePath = className.replace('.', '/') + ".class";
+        int a = 0;
+/*
+        Path classFile = classCacheRoot.resolve(relativePath);
+
+        if (!Files.exists(classFile)) {
+            throw new ClassNotFoundException("Class not found: " + className + " at " + classFile);
+        }
+
+        try {
+            byte[] classBytes = Files.readAllBytes(classFile);
+            return defineClass(className, classBytes, 0, classBytes.length);
+        } catch (IOException e) {
+            throw new ClassNotFoundException("Failed to load class: " + className, e);
+        }
+    */
+        return null;
+    }
+
+    private JournalManager journalManager;
+    private Context context;
+}

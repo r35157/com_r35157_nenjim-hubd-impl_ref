@@ -1,0 +1,33 @@
+package crypto.r35157.cauldron;
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
+
+public class FormatterUtils {
+    public static String formatPercentage(double val) {
+        DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
+        symbols.setGroupingSeparator('.');
+        symbols.setDecimalSeparator(',');
+
+        // Create a DecimalFormat object with a pattern
+        DecimalFormat df = new DecimalFormat("#,##0.00", symbols);
+
+        // Format the double value
+        String formattedValue = df.format(val * 100) + "%";
+        return formattedValue;
+    }
+
+    public static String formatAmount(double val) {
+        DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
+        symbols.setGroupingSeparator('.');
+        symbols.setDecimalSeparator(',');
+
+        // Create a DecimalFormat object with a pattern
+        DecimalFormat df = new DecimalFormat("#,##0.00", symbols);
+
+        // Format the double value
+        String formattedValue = df.format(val);
+        return formattedValue;
+    }
+}

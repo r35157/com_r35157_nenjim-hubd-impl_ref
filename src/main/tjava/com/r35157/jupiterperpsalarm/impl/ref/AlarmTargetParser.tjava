@@ -1,0 +1,60 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+
+public final class AlarmTargetParser {
+
+    private AlarmTargetParser() {
+    }
+
+    public static BigDecimal parse(String targetStr) {
+        String trimmedTargetStr = targetStr.trim();
+
+        if (trimmedTargetStr.endsWith("%")) {
+            int plusIndex = trimmedTargetStr.indexOf('+');
+            int minusIndex = trimmedTargetStr.indexOf('-', 1);
+
+            if (plusIndex >= 0) {
+                return parseTargetPercentage(trimmedTargetStr, plusIndex, true);
+            }
+
+            if (minusIndex >= 0) {
+                return parseTargetPercentage(trimmedTargetStr, minusIndex, false);
+            }
+        }
+
+        BigDecimal target = new BigDecimal(trimmedTargetStr);
+        validateTarget(target, targetStr);
+        return target;
+    }
+
+    private static BigDecimal parseTargetPercentage(
+            String targetStr,
+            int operatorIndex,
+            boolean add
+    ) {
+        BigDecimal base = new BigDecimal(targetStr.substring(0, operatorIndex));
+        String percentStr = targetStr.substring(operatorIndex + 1, targetStr.length() - 1);
+        BigDecimal percent = new BigDecimal(percentStr);
+
+        BigDecimal delta = base
+                .multiply(percent)
+                .divide(BigDecimal.valueOf(100));
+
+        BigDecimal target = add ? base.add(delta) : base.subtract(delta);
+
+        validateTarget(base, targetStr);
+        validateTarget(percent, targetStr);
+        validateTarget(target, targetStr);
+
+        return target;
+    }
+
+    private static void validateTarget(BigDecimal target, String originalTargetStr) {
+        if (target.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "Target must be zero or positive: " + originalTargetStr
+            );
+        }
+    }
+}

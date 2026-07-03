@@ -1,0 +1,9 @@
+package crypto.r35157.nenjim;
+
+import java.io.IOException;
+
+public interface ImmutableProperties {
+    String getProperty(String key) throws IOException;
+    void refresh() throws IOException;
+    int getSize();
+}

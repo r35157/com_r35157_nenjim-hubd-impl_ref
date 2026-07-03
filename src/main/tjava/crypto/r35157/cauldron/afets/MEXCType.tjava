@@ -1,0 +1,25 @@
+package crypto.r35157.cauldron.afets;
+
+public enum MEXCType {
+    PriceLimitOrder(1),
+    PostOnlyMaker(2),
+    TransactOrCancelInstantly(3),
+    TransactCompletelyOrCancelCompletely(4),
+    MarketOrders(5),
+    ConvertMarketPriceToCurrentPrice(6);
+
+    private final int value;
+
+    MEXCType(int value) {
+        this.value = value;
+    }
+
+    public int getValue() {
+        return value;
+    }
+
+    @Override
+    public String toString() {
+        return String.valueOf(value);
+    }
+}

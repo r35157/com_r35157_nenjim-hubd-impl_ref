@@ -1,0 +1,303 @@
+package com.fanitas.evelyn.core.impl.ref;
+
+import com.fanitas.evelyn.core.State;
+import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionAccounting;
+import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionConcentrated;
+import com.r35157.libs.raydium.*;
+import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
+import com.r35157.libs.valuetypes.basic.*;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+public class StateImpl implements State {
+
+    public StateImpl(Raydium raydium) throws IOException, InterruptedException {
+        this.raydium = raydium;
+        update();
+    }
+
+    @Override
+    public ΩmilliSecondsΩ getIterationInterval() {
+        return iterationInterval;
+    }
+
+    @Override
+    public ΩSyrupAmountΩ getSyrupOwnedByEvelyn() {
+        return syrupOwnedByEvelyn;
+    }
+
+    @Override
+    public ΩSolanaAddressΩ getSolanaAddressForEvelynIOU() {
+        return solanaAddressForEvelynIOU;
+    }
+
+    @Override
+    public ΩSolanaAddressΩ getSolanaAddressForEvelynIOUBurner() {
+        return solanaAddressForEvelynIOUBurner;
+    }
+
+    @Override
+    public ΩRaydiumLiquidityPoolIdΩ getRaydiumPoolId() {
+        return raydiumPoolId;
+    }
+
+    @Override
+    public BigDecimal getCurveWidth() {
+        return curveWidth;
+    }
+
+    @Override
+    public Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> getLiquidityPositions() {
+        return liquidityPositions;
+    }
+
+    public void update() throws IOException, InterruptedException {
+        System.out.print("Updating from config file...");
+        updateStateFromPersistence();
+        System.out.println(" Done.");
+        System.out.print("Updating from Raydium...");
+        updateStateFromRaydium();
+        System.out.println(" Done.");
+        System.out.print("Updating from positions file...");
+        updateStateFromPositionsFile();
+        System.out.println(" Done.");
+    }
+
+    private void updateStateFromPersistence() throws IOException {
+        try (BufferedReader reader = Files.newBufferedReader(PATH_EVELYN_STATE, StandardCharsets.UTF_8)) {
+            iterationInterval = readIterationInterval(reader);
+            syrupOwnedByEvelyn = readSyrupOwnedByEvelyn(reader);
+            solanaAddressForEvelynIOU = readSolanaAddress(reader);
+            solanaAddressForEvelynIOUBurner = readSolanaAddress(reader);
+            raydiumPoolId = readRaydiumPoolId(reader);
+            curveWidth = readCurveWidth(reader);
+        }
+    }
+
+    private void updateStateFromRaydium() throws IOException, InterruptedException {
+        Set<ΩRaydiumLiquidityPoolPositionNftIdΩ> positionNftIds =
+                raydium.fetchConcentratedPositionNftIds(solanaAddressForEvelynIOU);
+
+        Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> positions =
+                new HashMap<>();
+
+        System.out.println("Detected " + positionNftIds.size() + " position(s)...");
+        for (ΩRaydiumLiquidityPoolPositionNftIdΩ positionNftId : positionNftIds) {
+            RaydiumConcentratedPositionState positionState =
+                    raydium.fetchConcentratedPositionState(positionNftId);
+
+            RaydiumConcentratedPoolInfo poolInfo =
+                    raydium.fetchConcentratedPoolInfo(positionState.poolId());
+
+            RaydiumConcentratedPoolState poolState =
+                    raydium.fetchConcentratedPoolState(positionState.poolId());
+
+            CurrencyType ctSol = WellKnownCurrencyTypes.SOLANA.getCurrencyType();
+            CurrencyType ctSyrup = WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType();
+
+            int mintBDecimals = poolInfo.mintBDecimals();
+            Range<AssetPrice> priceRange = raydium.calculateConcentratedPositionPriceRange(
+                    positionState,
+                    poolInfo,
+                    mintBDecimals
+            );
+
+            RaydiumLiquidityPoolTokenAmounts tokenAmounts =
+                    raydium.calculateConcentratedPositionTokenAmounts(
+                            positionState,
+                            poolInfo,
+                            poolState
+                    );
+
+            MoneyAmount solAmount = new MoneyAmount(tokenAmounts.amountA(), ctSol);
+            MoneyAmount syrupAmount = new MoneyAmount(tokenAmounts.amountB(), ctSyrup);
+            RaydiumLiquidityPoolPositionConcentrated position =
+                    new RaydiumLiquidityPoolPositionConcentrated(
+                            positionState.poolId(),
+                            positionNftId,
+                            priceRange,
+                            solAmount,
+                            syrupAmount,
+                            null // The accounting info will be added from 'conf/positions.conf' later.
+                    );
+
+            positions.put(positionNftId, position);
+            System.out.println("   Added '" + position.nftId() + "': "
+                    + "Range:" + position.priceRange()
+                    + ", Liquidity:" + solAmount + "," + syrupAmount
+            );
+        }
+
+        liquidityPositions = Map.copyOf(positions);
+    }
+
+    private void updateStateFromPositionsFile() throws IOException {
+        Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionAccounting> accountingEntries =
+                readPositionAccounting();
+
+        Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> updatedEntries =
+                new HashMap<>(liquidityPositions);
+
+        for (RaydiumLiquidityPoolPositionAccounting accountingEntry : accountingEntries.values()) {
+            String nftId = accountingEntry.nftId();
+            RaydiumLiquidityPoolPositionConcentrated position = updatedEntries.get(nftId);
+
+            if (position == null) {
+                System.out.println(
+                        "WARNING: File 'conf/positions.conf' contains accounting for an NFT '" + nftId
+                                + "' that was not discovered in the wallet!");
+                continue;
+            }
+
+            RaydiumLiquidityPoolPositionConcentrated updatedPosition =
+                    new RaydiumLiquidityPoolPositionConcentrated(
+                            position.poolId(),
+                            position.nftId(),
+                            position.priceRange(),
+                            position.amountMintA(),
+                            position.amountMintB(),
+                            accountingEntry
+                    );
+
+            updatedEntries.put(nftId, updatedPosition);
+        }
+
+        liquidityPositions = Map.copyOf(updatedEntries);
+    }
+
+    private Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionAccounting> readPositionAccounting()
+            throws IOException {
+        Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionAccounting> result = new HashMap<>();
+
+        try (BufferedReader reader = Files.newBufferedReader(PATH_POSITIONS, StandardCharsets.UTF_8)) {
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+
+                // Remove comments at end of line
+                int index = line.indexOf('#');
+                if(index > -1) {
+                    line = line.substring(0, index).trim();
+                }
+
+                RaydiumLiquidityPoolPositionAccounting accounting = mapPositionAccounting(line);
+
+                RaydiumLiquidityPoolPositionAccounting previous = result.put(
+                        accounting.nftId(),
+                        accounting
+                );
+
+                if (previous != null) {
+                    throw new IOException("Duplicate position accounting for NFT id: " + accounting.nftId());
+                }
+            }
+        }
+
+        return Map.copyOf(result);
+    }
+
+    private RaydiumLiquidityPoolPositionAccounting mapPositionAccounting(String line) throws IOException {
+        String[] values = line.split(";");
+
+        if (values.length != 5) {
+            String errormsg = "Expected position accounting line with 5 fields: "
+                    + "'NFTId ; AddedMintA ; AddedMintB ; BorrowedMintA ; BorrowedMintB'. "
+                    + "Line was: '" + line + "'";
+            throw new IOException(errormsg);
+        }
+
+        ΩRaydiumLiquidityPoolPositionNftIdΩ nftId = values[0].trim();
+        ΩAmountΩ addedMintA = new BigDecimal(values[1].trim());
+        ΩAmountΩ addedMintB = new BigDecimal(values[2].trim());
+        ΩAmountΩ borrowedMintA = new BigDecimal(values[3].trim());
+        ΩAmountΩ borrowedMintB = new BigDecimal(values[4].trim());
+
+        return new RaydiumLiquidityPoolPositionAccounting(
+                nftId,
+                addedMintA,
+                addedMintB,
+                borrowedMintA,
+                borrowedMintB
+        );
+    }
+
+    private ΩSolanaAddressΩ readSolanaAddress(BufferedReader reader) throws IOException {
+        ΩSolanaAddressΩ sa = readLineFromFile(reader);
+        return sa;
+    }
+
+    private ΩRaydiumLiquidityPoolIdΩ readRaydiumPoolId(BufferedReader reader) throws IOException {
+        ΩRaydiumLiquidityPoolIdΩ rlpid = readLineFromFile(reader);
+        return rlpid;
+    }
+
+    private ΩCurveWidthΩ readCurveWidth(BufferedReader reader) throws IOException {
+        String cwStr = readLineFromFile(reader);
+        ΩCurveWidthΩ cw = new ΩCurveWidthΩ(cwStr);
+        return cw;
+    }
+
+    private ΩmilliSecondsΩ readIterationInterval(BufferedReader reader) throws IOException {
+        String iterationIntervalStr = readLineFromFile(reader);
+        ΩmilliSecondsΩ millis = Long.parseLong(iterationIntervalStr) * 1000;
+        return millis;
+    }
+
+    private ΩSyrupAmountΩ readSyrupOwnedByEvelyn(BufferedReader reader) throws IOException {
+        String syrupOwnedByEvelynStr = readLineFromFile(reader);
+        CurrencyType ct = WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType();
+        ΩSyrupAmountΩ ma = stringToMoneyAmount(syrupOwnedByEvelynStr, ct);
+        return ma;
+    }
+
+    private static String readLineFromFile(BufferedReader reader) throws IOException {
+        String line;
+
+        while ((line = reader.readLine()) != null) {
+            line = line.trim();
+
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            break;
+        }
+        return line;
+    }
+
+    private MoneyAmount bigDecimalToMoneyAmount(BigDecimal bd, CurrencyType ct) {
+        MoneyAmount ma = new MoneyAmount(bd, ct);
+        return ma;
+    }
+
+    private MoneyAmount stringToMoneyAmount(String str, CurrencyType ct) {
+        ΩAmountΩ a = new ΩAmountΩ(str);
+        MoneyAmount ma = new MoneyAmount(a, ct);
+        return ma;
+    }
+
+    private static final Path PATH_EVELYN_STATE = Path.of("conf/evelyn.conf");
+    private static final Path PATH_POSITIONS = Path.of("conf/positions.conf");
+
+    private final Raydium raydium;
+
+    private ΩmilliSecondsΩ iterationInterval;
+    private ΩSyrupAmountΩ syrupOwnedByEvelyn;
+    private ΩSolanaAddressΩ solanaAddressForEvelynIOU;
+    private ΩSolanaAddressΩ solanaAddressForEvelynIOUBurner;
+    private ΩRaydiumLiquidityPoolIdΩ raydiumPoolId;
+    private ΩCurveWidthΩ curveWidth;
+    private Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> liquidityPositions;
+}

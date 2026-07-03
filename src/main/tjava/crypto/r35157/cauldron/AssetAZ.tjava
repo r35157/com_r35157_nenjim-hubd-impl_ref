@@ -1,0 +1,23 @@
+package crypto.r35157.cauldron;
+
+import javafx.application.Application;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Scene;
+import javafx.stage.Stage;
+
+import java.io.IOException;
+
+public class AssetAZ extends Application {
+    @Override
+    public void start(Stage stage) throws IOException {
+        FXMLLoader fxmlLoader = new FXMLLoader(AssetAZ.class.getResource("Structure.fxml"));
+        Scene scene = new Scene(fxmlLoader.load(), 1200, 980);
+        stage.setTitle("AssetAZ");
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    public static void main(String[] args) {
+        launch();
+    }
+}

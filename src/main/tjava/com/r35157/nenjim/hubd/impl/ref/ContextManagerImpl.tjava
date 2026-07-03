@@ -1,0 +1,29 @@
+package com.r35157.nenjim.hubd.impl.ref;
+
+import com.r35157.nenjim.hubd.ctx.Context;
+import com.r35157.nenjim.hubd.ctx.ContextManager;
+
+import java.util.Set;
+
+public class ContextManagerImpl implements ContextManager {
+    public ContextManagerImpl() {
+        this.defaultContext = new Context();
+    }
+
+    @Override
+    public Context getDefault() {
+        return defaultContext;
+    }
+
+    @Override
+    public Context get(ΩContextIdΩ contextId) {
+        return null;
+    }
+
+    @Override
+    public Set<ΩContextIdΩ> getList() {
+        return Set.of();
+    }
+
+    private Context defaultContext;
+}

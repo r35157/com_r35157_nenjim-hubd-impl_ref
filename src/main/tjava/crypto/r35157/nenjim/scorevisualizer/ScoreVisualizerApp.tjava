@@ -1,0 +1,209 @@
+package crypto.r35157.nenjim.scorevisualizer;
+
+import crypto.r35157.cauldron.afets.PositionType;
+import crypto.r35157.cauldron.afets.ScoreCalculator;
+import crypto.r35157.cauldron.afets.ScoreCalculatorImpl;
+import crypto.r35157.cauldron.afets.ScoreCalculatorInput;
+import javafx.application.Application;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
+import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+public class ScoreVisualizerApp extends Application {
+    public ScoreCalculator scoreCalculator = new ScoreCalculatorImpl();
+
+    @Override
+    public void start(Stage stage) {
+        // CHART (top)
+        NumberAxis xAxis = new NumberAxis();
+        xAxis.setLabel("Point");
+        NumberAxis yAxis = new NumberAxis();
+        // xAxis name set dynamically later
+
+        LineChart<Number, Number> chart = new LineChart<>(xAxis, yAxis);
+        chart.setTitle("Evelyn Score Visualization");
+        chart.setLegendVisible(false);
+
+        XYChart.Series<Number, Number> scoreSeries = new XYChart.Series<>();
+        chart.getData().add(scoreSeries);
+
+        // CONTROLS (bottom)
+        GridPane controls = new GridPane();
+        controls.setHgap(10);
+        controls.setVgap(8);
+        controls.setPadding(new Insets(10, 10, 10, 10));
+
+        Label pointsLabel = new Label("Points");
+        TextField pointsField = new TextField("30");
+
+        Label currentTokenBaseNotationPriceLabel = new Label("CurrentTokenBaseNotationPrice");
+        TextField currentTokenBaseNotationPriceFrom = new TextField("0.01");
+        TextField currentTokenBaseNotationPriceTo = new TextField("0.1");
+
+        Label futureTokenBaseNotationPriceLabel = new Label("FutureTokenBaseNotationPrice");
+        TextField futureTokenBaseNotationPriceFrom = new TextField("0.1");
+        TextField futureTokenBaseNotationPriceTo = new TextField("2.0");
+
+        Label currentTokenNotationPriceLabel = new Label("CurrentTokenNotationPrice");
+        TextField currentTokenNotationPriceFrom = new TextField("0.01");
+        TextField currentTokenNotationPriceTo = new TextField("0.1");
+
+        Label amountNotationalToSpendLabel = new Label("AmountNotationalToSpend");
+        TextField amountNotationalToSpendFrom = new TextField("0");
+        TextField amountNotationalToSpendTo = new TextField("100");
+
+        Label totalNumberOfPositionsLabel = new Label("TotalNumberOfPositions");
+        TextField totalNumberOfPositionsFrom = new TextField("0.01");
+        TextField totalNumberOfPositionsTo = new TextField("2.0");
+
+        Label contractSizeLabel = new Label("ContractSize");
+        TextField contractSizeFrom = new TextField("1.0");
+        TextField contractSizeTo = new TextField("2.0");
+
+        Label leverageLabel = new Label("Leverage");
+        TextField leverageFrom = new TextField("1.0");
+        TextField leverageTo = new TextField("2.0");
+
+        Label averagePositionValueLabel = new Label("AveragePositionValue");
+        TextField averagePositionValueFrom = new TextField("1.0");
+        TextField averagePositionValueTo = new TextField("2.0");
+
+        Label tradeTypeLabel = new Label("TradeType");
+        ComboBox<PositionType> tradeTypeCombo = new ComboBox<>();
+        tradeTypeCombo.getItems().addAll(PositionType.marginLong, PositionType.marginShort);
+        tradeTypeCombo.setValue(PositionType.marginLong);
+
+        Label seriesLabel = new Label("DataSeries");
+        ComboBox<String> seriesCombo = new ComboBox<>();
+        seriesCombo.getItems().addAll(
+                "Score",
+                currentTokenBaseNotationPriceLabel.getText(),
+                futureTokenBaseNotationPriceLabel.getText(),
+                currentTokenNotationPriceLabel.getText(),
+                amountNotationalToSpendLabel.getText(),
+                totalNumberOfPositionsLabel.getText(),
+                contractSizeLabel.getText(),
+                leverageLabel.getText(),
+                averagePositionValueLabel.getText()
+        );
+
+        Button updateBtn = new Button("Update Graph");
+
+        int row = 0;
+        controls.add(seriesLabel, 0, row); controls.add(seriesCombo, 1, row); controls.add(updateBtn, 2, row++);
+        controls.add(pointsLabel, 0, row); controls.add(pointsField, 1, row++);
+        controls.add(currentTokenBaseNotationPriceLabel, 0, row); controls.add(currentTokenBaseNotationPriceFrom, 1, row); controls.add(currentTokenBaseNotationPriceTo, 2, row++);
+        controls.add(futureTokenBaseNotationPriceLabel, 0, row); controls.add(futureTokenBaseNotationPriceFrom, 1, row); controls.add(futureTokenBaseNotationPriceTo, 2, row++);
+        controls.add(currentTokenNotationPriceLabel, 0, row); controls.add(currentTokenNotationPriceFrom, 1, row); controls.add(currentTokenNotationPriceTo, 2, row++);
+        controls.add(amountNotationalToSpendLabel, 0, row); controls.add(amountNotationalToSpendFrom, 1, row); controls.add(amountNotationalToSpendTo, 2, row++);
+        controls.add(totalNumberOfPositionsLabel, 0, row); controls.add(totalNumberOfPositionsFrom, 1, row); controls.add(totalNumberOfPositionsTo, 2, row++);
+        controls.add(contractSizeLabel, 0, row); controls.add(contractSizeFrom, 1, row); controls.add(contractSizeTo, 2, row++);
+        controls.add(leverageLabel, 0, row); controls.add(leverageFrom, 1, row); controls.add(leverageTo, 2, row++);
+        controls.add(averagePositionValueLabel, 0, row); controls.add(averagePositionValueFrom, 1, row); controls.add(averagePositionValueTo, 2, row++);
+        controls.add(tradeTypeLabel, 0, row); controls.add(tradeTypeCombo, 1, row++);
+
+        // Layout: VBox (graph on top, controls below)
+        VBox root = new VBox(chart, controls);
+
+        // Action: Update Graph
+        updateBtn.setOnAction(e -> {
+            yAxis.setLabel(seriesCombo.getValue());
+            scoreSeries.getData().clear();
+
+            try {
+                int points = Integer.parseInt(pointsField.getText().trim());
+                if (points < 2) { points = 2; } // At least two points
+
+                BigDecimal currentTokenBaseNotationPriceFromVal  = new BigDecimal(currentTokenBaseNotationPriceFrom.getText().trim());
+                BigDecimal currentTokenBaseNotationPriceToVal    = new BigDecimal(currentTokenBaseNotationPriceTo.getText().trim());
+                BigDecimal futureTokenBaseNotationPriceFromVal   = new BigDecimal(futureTokenBaseNotationPriceFrom.getText().trim());
+                BigDecimal futureTokenBaseNotationPriceToVal     = new BigDecimal(futureTokenBaseNotationPriceTo.getText().trim());
+                BigDecimal currentTokenNotationPriceFromVal      = new BigDecimal(currentTokenNotationPriceFrom.getText().trim());
+                BigDecimal currentTokenNotationPriceToVal        = new BigDecimal(currentTokenNotationPriceTo.getText().trim());
+                BigDecimal amountNotationalToSpendFromVal        = new BigDecimal(amountNotationalToSpendFrom.getText().trim());
+                BigDecimal amountNotationalToSpendToVal          = new BigDecimal(amountNotationalToSpendTo.getText().trim());
+                BigDecimal totalNumberOfPositionsFromVal         = new BigDecimal(totalNumberOfPositionsFrom.getText().trim());
+                BigDecimal totalNumberOfPositionsToVal           = new BigDecimal(totalNumberOfPositionsTo.getText().trim());
+                BigDecimal contractSizeFromVal                   = new BigDecimal(contractSizeFrom.getText().trim());
+                BigDecimal contractSizeToVal                     = new BigDecimal(contractSizeTo.getText().trim());
+                BigDecimal leverageFromVal                       = new BigDecimal(leverageFrom.getText().trim());
+                BigDecimal leverageToVal                         = new BigDecimal(leverageTo.getText().trim());
+                BigDecimal averagePositionValueFromVal           = new BigDecimal(averagePositionValueFrom.getText().trim());
+                BigDecimal averagePositionValueToVal             = new BigDecimal(averagePositionValueTo.getText().trim());
+
+                PositionType type = tradeTypeCombo.getValue();
+
+                for (int i = 0; i < points; i++) {
+                    BigDecimal ratio = (points == 1)
+                            ? BigDecimal.ZERO
+                            : new BigDecimal(i).divide(new BigDecimal(points - 1), 10, RoundingMode.HALF_UP);
+
+                    BigDecimal currentTokenBaseNotationPriceVal = interpolate(currentTokenBaseNotationPriceFromVal, currentTokenBaseNotationPriceToVal, ratio);
+                    BigDecimal futureTokenBaseNotationPriceVal  = interpolate(futureTokenBaseNotationPriceFromVal, futureTokenBaseNotationPriceToVal, ratio);
+                    BigDecimal currentTokenNotationPriceVal  = interpolate(currentTokenNotationPriceFromVal, currentTokenNotationPriceToVal, ratio);
+                    BigDecimal amountNotationalToSpendVal  = interpolate(amountNotationalToSpendFromVal, amountNotationalToSpendToVal, ratio);
+                    BigDecimal totalNumberOfPositionsVal = interpolate(totalNumberOfPositionsFromVal, totalNumberOfPositionsToVal, ratio);
+                    BigDecimal contractSizeVal = interpolate(contractSizeFromVal, contractSizeToVal, ratio);
+                    BigDecimal leverageVal = interpolate(leverageFromVal, leverageToVal, ratio);
+                    BigDecimal averagePositionValueVal = interpolate(averagePositionValueFromVal, averagePositionValueToVal, ratio);
+
+                    try {
+                        double point = switch(seriesCombo.getValue()) {
+                            case "CurrentTokenBaseNotationPrice" -> currentTokenBaseNotationPriceVal.doubleValue();
+                            case "FutureTokenBaseNotationPrice" -> futureTokenBaseNotationPriceVal.doubleValue();
+                            case "CurrentTokenNotationPrice" -> currentTokenNotationPriceVal.doubleValue();
+                            case "AmountNotationalToSpend" -> amountNotationalToSpendVal.doubleValue();
+                            case "TotalNumberOfPositions" -> totalNumberOfPositionsVal.doubleValue();
+                            case "ContractSize" -> contractSizeVal.doubleValue();
+                            case "Leverage" -> leverageVal.doubleValue();
+                            case "AveragePositionValue" -> averagePositionValueVal.doubleValue();
+                            case "Score" -> {
+                                ScoreCalculatorInput input = new ScoreCalculatorInput(
+                                    currentTokenBaseNotationPriceVal,
+                                    futureTokenBaseNotationPriceVal,
+                                    currentTokenNotationPriceVal,
+                                    amountNotationalToSpendVal,
+                                    totalNumberOfPositionsVal.intValue(),
+                                    contractSizeVal,
+                                    leverageVal,
+                                    type,
+                                    averagePositionValueVal);
+                                yield scoreCalculator.calculateScore(input).doubleValue();
+                            }
+                            default -> throw new IllegalStateException("Unexpected value: " + seriesCombo.getValue());
+                        };
+                        scoreSeries.getData().add(new XYChart.Data<>(i + 1, point));
+                    } catch (Exception ex) {
+                        // Skip points with invalid input (e.g., divide by zero)
+                    }
+                }
+            } catch (Exception ex) {
+                // You could show a dialog here if desired
+                ex.printStackTrace();
+            }
+        });
+
+        // Window setup
+        stage.setScene(new Scene(root, 900, 800));
+        stage.setTitle("Evelyn Score Visualizer");
+        stage.show();
+    }
+
+    // Helper for linear interpolation between from and to
+    private static BigDecimal interpolate(BigDecimal from, BigDecimal to, BigDecimal ratio) {
+        return from.add(to.subtract(from).multiply(ratio));
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

@@ -1,0 +1,141 @@
+package crypto.r35157.cauldron.afets;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.collections4.MapUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class MEXCSpotPlugin {
+    public MEXCSpotPlugin(String accessKey, String secretKey) {
+        this.accessKey = accessKey;
+        this.secretKey = secretKey;
+    }
+
+    public String getPositions() throws IOException, InterruptedException {
+        HttpClient client = HttpClient.newHttpClient();
+
+        // For a GET request, if there are query parameters, add them to a map.
+        // In this example, we assume there are no extra query parameters.
+        Map<String, String> queryParams = new HashMap<>();
+        // If needed, add parameters:
+        // queryParams.put("param1", "value1");
+
+        // Create the query string (if there are any parameters)
+        String requestParam = MEXCSpotPlugin.getRequestParamString(queryParams);
+
+        // Build the complete URL (append query parameters if not empty)
+        String fullUrl = API_OPENPOSITIONS;
+        if (!requestParam.isEmpty()) {
+            fullUrl += "?" + requestParam;
+        }
+
+        // Create a request timestamp
+        String reqTime = String.valueOf(System.currentTimeMillis());
+
+        // Create a SignVo for generating the signature.
+        // For GET requests, the requestParam string is the query string (sorted, URL-encoded).
+        MEXCSpotPlugin.SignVo signVo = new MEXCSpotPlugin.SignVo(reqTime, accessKey, secretKey, requestParam);
+        String signature = MEXCSpotPlugin.sign(signVo);
+
+        // Build the HttpRequest with the required headers
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(fullUrl))
+                .header("Content-Type", "application/json")
+                .header("ApiKey", accessKey)
+                .header("Request-Time", reqTime)
+                .header("Signature", signature)
+                .GET()
+                .build();
+
+        // Send the request and get the response
+        HttpResponse<String> httpResp = client.send(request, HttpResponse.BodyHandlers.ofString());
+        String responseJson = httpResp.body();
+
+        return responseJson;
+    }
+
+    /**
+     * Gets the get request parameter string
+     *
+     * @param param get/delete Request parameters map
+     */
+    public static String getRequestParamString(Map<String, String> param) {
+        if (MapUtils.isEmpty(param)) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(1024);
+        SortedMap<String, String> map = new TreeMap<>(param);
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            String key = entry.getKey();
+            String value = StringUtils.isBlank(entry.getValue()) ? "" : entry.getValue();
+            sb.append(key).append('=').append(urlEncode(value)).append('&');
+        }
+        sb.deleteCharAt(sb.length() - 1);
+        return sb.toString();
+    }
+
+    public static String urlEncode(String s) {
+        try {
+            return URLEncoder.encode(s, "UTF-8").replaceAll("\\+", "%20");
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalArgumentException("UTF-8 encoding not supported!");
+        }
+    }
+
+    public static String sign(SignVo signVo) {
+        String requestParam = (signVo.requestParam == null) ? "" : signVo.requestParam;
+
+        String str = signVo.accessKey + signVo.reqTime + requestParam;
+        return actualSignature(str, signVo.secretKey);
+    }
+
+    public static String actualSignature(String inputStr, String key) {
+        Mac hmacSha256;
+        try {
+            hmacSha256 = Mac.getInstance("HmacSHA256");
+            SecretKeySpec secKey =
+                    new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+            hmacSha256.init(secKey);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("No such algorithm: " + e.getMessage());
+        } catch (InvalidKeyException e) {
+            throw new RuntimeException("Invalid key: " + e.getMessage());
+        }
+        byte[] hash = hmacSha256.doFinal(inputStr.getBytes(StandardCharsets.UTF_8));
+        return Hex.encodeHexString(hash);
+    }
+
+    public record SignVo(
+        String reqTime,
+        String accessKey,
+        String secretKey,
+        String requestParam // Get the request parameters are sorted in dictionary order, with & concatenated strings, POST should be a JSON string
+    ) {}
+
+    private static final Logger log = LoggerFactory.getLogger(MEXCSpotPlugin.class);
+
+    private static final String API_BASEURL = "https://contract.mexc.com/api/v1/";
+    private static final String API_PRIVATGEURL = API_BASEURL + "private/";
+    private static final String API_OPENPOSITIONS = API_PRIVATGEURL + "position/open_positions";
+
+    private final String accessKey;
+    private final String secretKey;
+}

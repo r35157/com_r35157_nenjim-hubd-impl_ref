@@ -1,0 +1,107 @@
+package com.r35157.nenjim.kicker.impl.ref;
+
+//import com.r35157.nenjim.hubd.Context;
+import com.r35157.nenjim.kicker.NenjimKicker;
+import com.r35157.nenjim.kicker.NenjimProcess;
+//import org.apache.logging.log4j.LogManager;
+//import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public final class NenjimKickerImpl implements NenjimKicker {
+
+    public NenjimKickerImpl() throws InterruptedException {
+        lock = new Object();
+        running = 0;
+        processes = new ConcurrentHashMap<>();
+        processThreads = new ConcurrentHashMap<>();
+        nextProcessId = new AtomicInteger(1);
+
+        startProcess("com.r35157.nenjim.kicker.impl.ref.Dummy");
+
+        //log.info("Waiting for all processes to finish!");
+        awaitAllProcessesFinished();
+        //log.info("Kicker successfully shutdown!");
+    }
+
+    @Override
+    public void startProcess(@NotNull String fqInterfaceName) {
+        ClassLoader loader = ClassLoader.getSystemClassLoader();
+        int processId = nextProcessId.getAndIncrement();
+
+        final NenjimProcess proc;
+        final String procName;
+
+        try {
+            Class<?> clazz = loader.loadClass(fqInterfaceName);
+
+            if (!NenjimProcess.class.isAssignableFrom(clazz)) {
+                throw new IllegalArgumentException("'" + fqInterfaceName + "' does NOT implement NenjimProcess");
+            }
+
+            proc = (NenjimProcess) clazz.getDeclaredConstructor().newInstance();
+            procName = proc.getName();
+        } catch (Throwable e) {
+            //log.error("Failed to create process '{}' (#{}).", fqInterfaceName, processId, e);
+            return;
+        }
+
+        processes.put(processId, proc);
+
+        //Context context = new Context(); log.warn("TODO: Set the Context here when we have one!");
+        //proc.setContext(context);
+        //proc.setHub(null);  log.warn("TODO: Set the HUB here when we have one!");
+
+        synchronized (lock) {
+            running++;
+        }
+
+        Thread t = Thread.ofVirtual()
+                .name(procName)
+                .start(() -> {
+                    try {
+                        //log.info("Starting process '{}' (#{})...", procName, processId);
+                        proc.run();
+                    } catch (Throwable e) {
+                        //log.error("Process '{}' (#{}) crashed!", procName, processId, e);
+                    } finally {
+                        processThreads.remove(processId);
+                        processes.remove(processId);
+                        synchronized (lock) {
+                            running--;
+                            lock.notifyAll();
+                        }
+                    }
+                });
+
+        processThreads.put(processId, t);
+    }
+
+    @Override
+    public @NotNull HashMap<Integer, NenjimProcess> getRunningProcesses() {
+        return new HashMap<>(processes);
+    }
+
+    @Override
+    public void noop() {
+    }
+
+    public void awaitAllProcessesFinished() throws InterruptedException {
+        synchronized (lock) {
+            while (running > 0) {
+                lock.wait();
+            }
+        }
+    }
+
+    //private static final Logger log = LogManager.getLogger(NenjimKickerImpl.class);
+
+    private int running;
+    private final Object lock;
+    private final ConcurrentHashMap<Integer, NenjimProcess> processes;
+    private final ConcurrentHashMap<Integer, Thread> processThreads;
+    private final AtomicInteger nextProcessId;
+}

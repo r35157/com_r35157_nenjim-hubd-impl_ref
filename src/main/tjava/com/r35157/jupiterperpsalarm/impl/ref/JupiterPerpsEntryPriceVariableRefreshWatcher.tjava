@@ -1,0 +1,92 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.nio.file.*;
+import java.util.Objects;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.FileSystems;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+
+public final class JupiterPerpsEntryPriceVariableRefreshWatcher {
+
+    public JupiterPerpsEntryPriceVariableRefreshWatcher(
+            Path confDirectory,
+            JupiterPerpsEntryPriceVariableRefresher refresher
+    ) {
+        this.confDirectory = Objects.requireNonNull(confDirectory, "confDirectory");
+        this.refresher = Objects.requireNonNull(refresher, "refresher");
+    }
+
+    public void start() {
+        Thread thread = new Thread(
+                this::run,
+                "jupiter-perps-entry-price-variable-refresh-watcher"
+        );
+
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void run() {
+        try (WatchService watchService = FileSystems.getDefault().newWatchService()) {
+
+            confDirectory.register(
+                    watchService,
+                    StandardWatchEventKinds.ENTRY_CREATE
+            );
+
+            System.out.println(
+                    "Jupiter Perps entry price variable refresh watcher started for directory: "
+                            + confDirectory
+            );
+            while (true) {
+                WatchKey key = watchService.take();
+
+                for (WatchEvent<?> event : key.pollEvents()) {
+                    Path path = (Path) event.context();
+
+                    if (!REFRESH_TRIGGER_FILE_NAME.equals(path.getFileName().toString())) {
+                        continue;
+                    }
+
+                    Path triggerFile = confDirectory.resolve(path);
+
+                    System.out.println("Refresh trigger file detected: " + triggerFile);
+
+                    try {
+                        refresher.refresh();
+                    } finally {
+                        Files.deleteIfExists(triggerFile);
+                    }
+                }
+
+                if (!key.reset()) {
+                    System.err.println(
+                            "Jupiter Perps entry price variable refresh watcher stopped: watch key is no longer valid"
+                    );
+                    return;
+                }
+            }
+        } catch (IOException exception) {
+            System.err.println(
+                    "Could not start Jupiter Perps entry price variable refresh watcher: "
+                            + exception.getMessage()
+            );
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+
+            System.err.println(
+                    "Jupiter Perps entry price variable refresh watcher interrupted"
+            );
+        }
+    }
+
+    private static final String REFRESH_TRIGGER_FILE_NAME =
+            "jupiter-perps-alarm-var.refresh";
+
+    private final Path confDirectory;
+    private final JupiterPerpsEntryPriceVariableRefresher refresher;
+}

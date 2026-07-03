@@ -1,0 +1,274 @@
+package crypto.r35157.cauldron.afets;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class MEXCFuturesPlugin {
+    public MEXCFuturesPlugin(String webKey, String userAgent) {
+        this.httpClient = HttpClient.newHttpClient();
+        this.gson = new GsonBuilder().create();
+
+        baseHeaders = new HashMap<>();
+        baseHeaders.put("User-Agent", userAgent);
+
+        setWebKey(webKey);
+    }
+
+    public void setWebKey(String webKey) {
+        if(!webKey.equals(this.webKey)) {
+            if(this.webKey == null) {
+                log.debug("Setting WebKey!");
+            } else {
+                log.info("WebKey change detected - updating!");
+            }
+
+            this.webKey = webKey;
+            baseHeaders.put("Authorization", webKey);
+            baseHeaders.put("Cookie", "u_id=" + webKey);
+        } else {
+            log.debug("WebKey unchanged - skipping update!");
+        }
+    }
+
+    // Place order (market and limit)
+    public String placeOrder(Object obj) throws IOException, InterruptedException {
+        return sendPost("/order/create", obj, true);
+    }
+
+    // Get orders trigger
+    public ServiceResponse getOrdersTrigger() throws IOException, InterruptedException {
+        // No payload provided in the Python code example.
+        return sendGet("/planorder/list/orders?states=1", null, false);
+    }
+
+    // Get open positions
+    public ServiceResponse getOpenPositions() throws IOException, InterruptedException {
+        return sendGet("/position/open_positions", null, false);
+    }
+
+    public ServiceResponse getLeverage(String symbol) throws IOException, InterruptedException {
+        return sendGet("/position/leverage?symbol=" + symbol, null, false);
+    }
+
+    public ServiceResponse getAccountDetails(String symbol) throws IOException, InterruptedException {
+        return sendGet("/account/asset/" + symbol, null, false);
+    }
+
+    // Close order trigger – note: Python wraps obj in a list.
+    public String closeOrderTrigger(Object obj) throws IOException, InterruptedException {
+        Object payload = List.of(obj);
+        return sendPost("/planorder/cancel", payload, true);
+    }
+
+    // Close all orders trigger (no payload)
+    public String closeAllOrdersTrigger() throws IOException, InterruptedException {
+        Map<String, Object> payload = new HashMap<>();
+        return sendPost("/planorder/cancel_all", payload, true);
+    }
+
+    // Open order trigger (for plan orders)
+    public String openOrderTrigger(Object obj) throws IOException, InterruptedException {
+        return sendPost("/planorder/place/v2", obj, true);
+    }
+
+    // Get open orders limit
+    public ServiceResponse getOpenOrdersLimit() throws IOException, InterruptedException {
+        return sendGet("/order/list/open_orders", null, false);
+    }
+
+    // Add Stop Loss / Take Profit for limit orders
+    public String addSTTPForLimit(Object obj) throws IOException, InterruptedException {
+        return sendPost("/stoporder/change_price", obj, true);
+    }
+
+    // Close all limits
+    public String closeAllLimits() throws IOException, InterruptedException {
+        Map<String, Object> payload = new HashMap<>();
+        return sendPost("/order/cancel_all", payload, true);
+    }
+
+    public String trade(MEXCPositionSide side, int numOfContracts, String symbol) throws Exception {
+        return trade(side, numOfContracts, symbol, null);
+    }
+
+    //MEXCPositionSide sideId = (side == PositionType.marginLong)
+    //        ? MEXCPositionSide.OpenLong
+    //        : MEXCPositionSide.OpenShort;
+
+    public String trade(MEXCPositionSide side, int numOfContracts, String symbol, Integer leverage) throws Exception {
+        int vol = numOfContracts;   // Number of contracts to trade
+        MEXCOpenType openType = MEXCOpenType.Cross;
+        MEXCType type = MEXCType.MarketOrders;
+        MEXCOrderType orderType = MEXCOrderType.MarketOrders;
+
+        // Example order object (for place order)
+        Map<String, Object> orderObj = new HashMap<>();
+        orderObj.put("symbol", symbol);
+        orderObj.put("side", "" + side.getValue());
+        orderObj.put("openType", "" + openType.getValue());
+        orderObj.put("type", "" + type.getValue());
+        orderObj.put("orderType", "" + orderType.getValue());
+        orderObj.put("vol", vol);
+
+        if(leverage != null) {
+            orderObj.put("leverage", leverage);
+        }
+
+        //orderObj.put("price", 2);
+        orderObj.put("priceProtect", "0");
+
+        // Call open_order_trigger with a sample object similar to obj3 in Python
+        //Map<String, Object> openOrderObj = new HashMap<>();
+        //openOrderObj.put("executeCycle", 3);
+        //openOrderObj.put("leverage", 100);
+        //openOrderObj.put("openType", 1);
+        //openOrderObj.put("orderType", 1);
+        //openOrderObj.put("positionMode", 1);
+        //openOrderObj.put("price", "30");
+        //openOrderObj.put("priceProtect", "0");
+        //openOrderObj.put("side", 1);
+        //openOrderObj.put("symbol", "TONCOIN_USDT");
+        //openOrderObj.put("trend", 1);
+        //openOrderObj.put("triggerPrice", "10");
+        //openOrderObj.put("triggerType", 1);
+        //openOrderObj.put("vol", 1);
+
+
+        String openOrderResponse = placeOrder(orderObj);
+
+        return openOrderResponse;
+    }
+
+    private static String md5(String value) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] hashBytes = md.digest(value.getBytes(StandardCharsets.UTF_8));
+            // Convert to hex string
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hashBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new RuntimeException("MD5 algorithm not found", ex);
+        }
+    }
+
+    private Map<String, String> mexcCrypto(Object obj) {
+        // Current time in ms as string.
+        String dateNow = String.valueOf(Instant.now().toEpochMilli());
+        // Compute g = md5(key + dateNow) and take substring starting at index 7.
+        String g = md5(webKey + dateNow).substring(7);
+        // Convert the object to JSON with no extra spaces.
+        // Gson's default toJson produces compact JSON.
+        String s = gson.toJson(obj);
+        // sign = md5(dateNow + s + g)
+        String sign = md5(dateNow + s + g);
+        Map<String, String> result = new HashMap<>();
+        result.put("time", dateNow);
+        result.put("sign", sign);
+        return result;
+    }
+
+    private String sendPost(String endpoint, Object payload, boolean signRequest) throws IOException, InterruptedException {
+        String url = BASE_URL + endpoint;
+        String jsonPayload = gson.toJson(payload);
+        Map<String, String> headers = new HashMap<>(baseHeaders);
+        headers.put("Content-type", "application/json");
+
+        if (signRequest) {
+            Map<String, String> signature = mexcCrypto(payload);
+            headers.put("x-mxc-sign", signature.get("sign"));
+            headers.put("x-mxc-nonce", signature.get("time"));
+        }
+
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload));
+        headers.forEach(builder::header);
+
+        HttpRequest request = builder.build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        String responseTxt = response.body();
+        return responseTxt;
+    }
+
+    private ServiceResponse sendGet(String endpoint, Object payload, boolean signRequest) throws IOException, InterruptedException {
+        // For GET, if a payload is provided, assume it is converted to query parameters.
+        String url = BASE_URL + endpoint;
+        if (payload != null) {
+            // Assuming payload is a Map<String, Object>
+            @SuppressWarnings("unchecked")
+            Map<String, Object> paramMap = (Map<String, Object>) payload;
+            if (!paramMap.isEmpty()) {
+                String query = buildQueryString(paramMap);
+                url += "?" + query;
+            }
+        }
+        Map<String, String> headers = new HashMap<>(baseHeaders);
+        headers.put("Content-type", "application/json");
+
+        if (signRequest && payload != null) {
+            Map<String, String> signature = mexcCrypto(payload);
+            headers.put("x-mxc-sign", signature.get("sign"));
+            headers.put("x-mxc-nonce", signature.get("time"));
+        }
+
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET();
+        headers.forEach(builder::header);
+
+        HttpRequest request = builder.build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        ServiceResponse sr = new ServiceResponse(response.statusCode(), response.body());
+        return sr;
+    }
+
+    private String buildQueryString(Map<String, Object> params) {
+        StringBuilder sb = new StringBuilder();
+        params.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    if (sb.length() > 0) sb.append("&");
+                    sb.append(urlEncode(entry.getKey()))
+                            .append("=")
+                            .append(urlEncode(entry.getValue().toString()));
+                });
+        return sb.toString();
+    }
+
+    private String urlEncode(String s) {
+        try {
+            return URLEncoder.encode(s, StandardCharsets.UTF_8.toString())
+                    .replaceAll("\\+", "%20");
+        } catch (Exception e) {
+            throw new RuntimeException("UTF-8 encoding not supported", e);
+        }
+    }
+
+    private static final String BASE_URL = "https://futures.mexc.com/api/v1/private";
+
+    private static final Logger log = LoggerFactory.getLogger(MEXCFuturesPlugin.class);
+
+    private String webKey;
+    private final Map<String, String> baseHeaders;
+    private final HttpClient httpClient;
+    private final Gson gson;
+}

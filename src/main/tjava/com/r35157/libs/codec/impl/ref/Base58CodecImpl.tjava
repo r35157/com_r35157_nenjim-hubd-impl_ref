@@ -1,0 +1,70 @@
+package com.r35157.libs.codec.impl.ref;
+
+import com.r35157.libs.codec.Base58Codec;
+
+public class Base58CodecImpl implements Base58Codec {
+
+    public String encode(byte[] input) {
+        if (input.length == 0) {
+            return "";
+        }
+
+        byte[] copy = input.clone();
+
+        int zeros = 0;
+        while (zeros < copy.length && copy[zeros] == 0) {
+            zeros++;
+        }
+
+        char[] encoded = new char[copy.length * 2];
+        int outputStart = encoded.length;
+
+        int inputStart = zeros;
+        while (inputStart < copy.length) {
+            int remainder = divmod58(
+                    copy,
+                    inputStart
+            );
+
+            if (copy[inputStart] == 0) {
+                inputStart++;
+            }
+
+            encoded[--outputStart] = ALPHABET[remainder];
+        }
+
+        while (outputStart < encoded.length && encoded[outputStart] == ENCODED_ZERO) {
+            outputStart++;
+        }
+
+        while (zeros-- > 0) {
+            encoded[--outputStart] = ENCODED_ZERO;
+        }
+
+        return new String(
+                encoded,
+                outputStart,
+                encoded.length - outputStart
+        );
+    }
+
+    private static int divmod58(byte[] number, int startAt) {
+        int remainder = 0;
+
+        for (int i = startAt; i < number.length; i++) {
+            int digit = number[i] & 0xff;
+            int temp = remainder * 256 + digit;
+
+            number[i] = (byte) (temp / 58);
+            remainder = temp % 58;
+        }
+
+        return remainder;
+    }
+
+    private static final char[] ALPHABET =
+            "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".toCharArray();
+
+    private static final char ENCODED_ZERO =
+            ALPHABET[0];
+}

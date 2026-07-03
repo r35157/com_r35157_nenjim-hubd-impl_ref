@@ -1,0 +1,10 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+public record FundingFeeStatus(
+        List<String> feeWarnings,   // TODO: Well... Presentation here is not too nice :-/
+        BigDecimal totalFeesToPay,
+        BigDecimal totalFeesToReceive
+) {}

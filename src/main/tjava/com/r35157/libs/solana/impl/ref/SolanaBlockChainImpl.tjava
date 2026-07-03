@@ -1,0 +1,741 @@
+package com.r35157.libs.solana.impl.ref;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.r35157.libs.solana.*;
+import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
+import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
+import com.r35157.libs.valuetypes.basic.CurrencyType;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import static com.r35157.libs.solana.SolanaConstants.RPC_URL;
+
+public class SolanaBlockChainImpl implements SolanaBlockChain {
+
+    public SolanaBlockChainImpl() {
+        this.httpClient = HttpClient.newHttpClient();
+        this.objectMapper = new ObjectMapper();
+    }
+
+    @Override
+    public ΩSolanaAmountΩ getBalanceInSolana(ΩSolanaAddressΩ address) throws IOException, InterruptedException {
+        ΩlamportsΩ lamport = getBalanceInLamport(address);
+        ΩAmountΩ bd = ΩAmountΩ.valueOf(lamport).divide(LAMPORTS_PER_SOL);
+        CurrencyType type = WellKnownCurrencyTypes.SOLANA.getCurrencyType();
+        ΩSolanaAmountΩ sa = new ΩSolanaAmountΩ(bd, type);
+
+        return sa;
+    }
+
+    @Override
+    public ΩlamportsΩ getBalanceInLamport(ΩSolanaAddressΩ address) throws IOException, InterruptedException {
+        String jsonBody = """
+                {
+                  "jsonrpc":"2.0",
+                  "id":1,
+                  "method":"getBalance",
+                  "params":[
+                    "%s",
+                    {
+                      "commitment":"finalized"
+                    }
+                  ]
+                }
+                """.formatted(address);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RPC_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException("Unexpected HTTP status: " + response.statusCode() + ", body: " + response.body());
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+
+        JsonNode errorNode = root.get("error");
+        if (errorNode != null) {
+            throw new IOException("RPC error: " + errorNode.toPrettyString());
+        }
+
+        JsonNode valueNode = root.path("result").path("value");
+        if (valueNode.isMissingNode() || !valueNode.isNumber()) {
+            throw new IOException("Could not read balance from response: " + response.body());
+        }
+
+        return valueNode.longValue();
+    }
+
+    @Override
+    public Map<ΩSPLMintAddressΩ, SPLTokenHolding> getSPLTokenHoldings(
+            ΩSolanaAddressΩ ownerAddress,
+            SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException {
+
+        String body = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "getTokenAccountsByOwner",
+                  "params": [
+                    "%s",
+                    {
+                      "programId": "%s"
+                    },
+                    {
+                      "encoding": "jsonParsed"
+                    }
+                  ]
+                }
+                """.formatted(ownerAddress, splProgram.getAddress());
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RPC_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException("RPC call failed: HTTP " + response.statusCode() + "\n" + response.body());
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+
+        if (root.has("error")) {
+            throw new IOException("Solana RPC error: " + root.get("error").toPrettyString());
+        }
+
+        Map<String, SPLTokenHolding> result = new HashMap<>();
+
+        JsonNode accounts = root.path("result").path("value");
+
+        for (JsonNode account : accounts) {
+            String tokenAccount = account.path("pubkey").asText();
+
+            JsonNode parsedInfo = account
+                    .path("account")
+                    .path("data")
+                    .path("parsed")
+                    .path("info");
+
+            String mint = parsedInfo.path("mint").asText();
+            JsonNode tokenAmount = parsedInfo.path("tokenAmount");
+            String rawAmount = tokenAmount.path("amount").asText();
+            int decimals = tokenAmount.path("decimals").asInt();
+            String uiAmountString = tokenAmount.path("uiAmountString").asText();
+            BigDecimal uiAmount = new BigDecimal(uiAmountString);
+
+            result.put(mint, new SPLTokenHolding(
+                    tokenAccount,
+                    mint,
+                    uiAmount,
+                    rawAmount,
+                    decimals,
+                    splProgram.getAddress()
+            ));
+        }
+
+        return result;
+    }
+
+    @Override
+    public Set<ΩSolanaNFTAddressΩ> getSolanaNFTCandidateAddresses(
+            ΩSolanaAddressΩ ownerAddress,
+            SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException {
+        Map<ΩSPLMintAddressΩ, SPLTokenHolding> tokenHoldings =
+                getSPLTokenHoldings(ownerAddress, splProgram);
+
+        Set<ΩSolanaNFTAddressΩ> nftCandidateAddresses = new HashSet<>();
+
+        for (SPLTokenHolding tokenHolding : tokenHoldings.values()) {
+            if (isSolanaNFTCandidate(tokenHolding)) {
+                nftCandidateAddresses.add(tokenHolding.mintAddress());
+            }
+        }
+
+        return Set.copyOf(nftCandidateAddresses);
+    }
+
+    @Override
+    public SolanaProgramDerivedAddress findProgramAddress(
+            ΩSolanaProgramIdΩ programId,
+            List<SolanaProgramAddressSeed> seeds
+    ) {
+        List<byte[]> seedBytes = toSeedBytes(seeds);
+
+        return findProgramAddressFromSeedBytes(programId, seedBytes);
+    }
+
+    @Override
+    public SolanaAccountInfo getAccountInfo(
+            ΩSolanaAddressΩ accountAddress
+    ) throws IOException, InterruptedException {
+        String jsonBody = """
+            {
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "getAccountInfo",
+              "params": [
+                "%s",
+                {
+                  "commitment": "finalized",
+                  "encoding": "base64"
+                }
+              ]
+            }
+            """.formatted(accountAddress);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RPC_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException("RPC call failed: HTTP " + response.statusCode() + "\n" + response.body());
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+
+        if (root.has("error")) {
+            throw new IOException("Solana RPC error: " + root.get("error").toPrettyString());
+        }
+
+        JsonNode value = root.path("result").path("value");
+
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+
+        JsonNode ownerNode = value.path("owner");
+        if (ownerNode.isMissingNode() || !ownerNode.isTextual()) {
+            throw new IOException("getAccountInfo response did not contain textual owner field!");
+        }
+
+        JsonNode dataNode = value.path("data");
+        if (!dataNode.isArray() || dataNode.isEmpty() || !dataNode.get(0).isTextual()) {
+            throw new IOException("getAccountInfo response did not contain base64 data!");
+        }
+
+        return new SolanaAccountInfo(
+                accountAddress,
+                ownerNode.asText(),
+                dataNode.get(0).asText()
+        );
+    }
+
+    @Override
+    public ΩSolanaAddressΩ encodeSolanaAddress(byte[] addressBytes) {
+        if (addressBytes.length != 32) {
+            throw new IllegalArgumentException(
+                    "Solana address must be 32 bytes, but was " + addressBytes.length
+            );
+        }
+
+        return base58Encode(addressBytes);
+    }
+
+    @Override
+    public SPLTokenSupply getSPLTokenSupply(
+            ΩSPLMintAddressΩ mintAddress,
+            SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException {
+        String jsonBody = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "getTokenSupply",
+                  "params": [
+                    "%s",
+                    {
+                      "commitment": "finalized"
+                    }
+                  ]
+                }
+                """.formatted(mintAddress);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RPC_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException("RPC call failed: HTTP " + response.statusCode() + " " + response.body());
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+
+        if (root.has("error")) {
+            throw new IOException("Solana RPC error: " + root.get("error").toPrettyString());
+        }
+
+        JsonNode value = root.path("result").path("value");
+
+        if (value.isMissingNode() || value.isNull()) {
+            throw new IOException("getTokenSupply response did not contain a value for mint: " + mintAddress);
+        }
+
+        JsonNode rawAmountNode = value.path("amount");
+        if (rawAmountNode.isMissingNode() || !rawAmountNode.isTextual()) {
+            throw new IOException("getTokenSupply response did not contain textual amount field!");
+        }
+
+        JsonNode decimalsNode = value.path("decimals");
+        if (decimalsNode.isMissingNode() || !decimalsNode.isNumber()) {
+            throw new IOException("getTokenSupply response did not contain numeric decimals field!");
+        }
+
+        JsonNode uiAmountStringNode = value.path("uiAmountString");
+        if (uiAmountStringNode.isMissingNode() || !uiAmountStringNode.isTextual()) {
+            throw new IOException("getTokenSupply response did not contain textual uiAmountString field!");
+        }
+
+        ΩRawAmountΩ rawAmount = rawAmountNode.asText();
+        ΩamountDecimalsΩ decimals = decimalsNode.asInt();
+        ΩAmountΩ uiAmount = new BigDecimal(uiAmountStringNode.asText());
+
+        return new SPLTokenSupply(
+                mintAddress,
+                uiAmount,
+                rawAmount,
+                decimals,
+                splProgram.getAddress()
+        );
+    }
+
+    @Override
+    public Set<SolanaAccountInfo> getProgramAccounts(
+            ΩSolanaProgramIdΩ programId,
+            Set<SolanaProgramAccountMemcmpFilter> filters
+    ) throws IOException, InterruptedException {
+        String jsonBody = createGetProgramAccountsBody(programId, filters);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RPC_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException("RPC call failed: HTTP " + response.statusCode() + "\n" + response.body());
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+
+        if (root.has("error")) {
+            throw new IOException("Solana RPC error: " + root.get("error").toPrettyString());
+        }
+
+        JsonNode result = root.path("result");
+
+        if (!result.isArray()) {
+            throw new IOException("getProgramAccounts response did not contain result array!");
+        }
+
+        Set<SolanaAccountInfo> accountInfos = new HashSet<>();
+
+        for (JsonNode accountNode : result) {
+            JsonNode pubkeyNode = accountNode.path("pubkey");
+            JsonNode account = accountNode.path("account");
+
+            if (!pubkeyNode.isTextual()) {
+                throw new IOException("getProgramAccounts response contained account without textual pubkey!");
+            }
+
+            JsonNode ownerNode = account.path("owner");
+            if (!ownerNode.isTextual()) {
+                throw new IOException("getProgramAccounts response contained account without textual owner!");
+            }
+
+            JsonNode dataNode = account.path("data");
+            if (!dataNode.isArray() || dataNode.isEmpty() || !dataNode.get(0).isTextual()) {
+                throw new IOException("getProgramAccounts response contained account without base64 data!");
+            }
+
+            accountInfos.add(new SolanaAccountInfo(
+                    pubkeyNode.asText(),
+                    ownerNode.asText(),
+                    dataNode.get(0).asText()
+            ));
+        }
+
+        return Set.copyOf(accountInfos);
+    }
+
+    private String createGetProgramAccountsBody(
+            ΩSolanaProgramIdΩ programId,
+            Set<SolanaProgramAccountMemcmpFilter> filters
+    ) throws IOException {
+        StringBuilder filtersJson = new StringBuilder();
+
+        boolean first = true;
+        for (SolanaProgramAccountMemcmpFilter filter : filters) {
+            if (!first) {
+                filtersJson.append(",");
+            }
+
+            filtersJson.append("""
+                {
+                    "memcmp": {
+                        "offset": %d,
+                        "bytes": "%s"
+                    }
+                }
+                """.formatted(
+                    filter.offset(),
+                    filter.bytes()
+            ));
+
+            first = false;
+        }
+
+        return """
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getProgramAccounts",
+                "params": [
+                    "%s",
+                    {
+                        "commitment": "finalized",
+                        "encoding": "base64",
+                        "filters": [
+                            %s
+                        ]
+                    }
+                ]
+            }
+            """.formatted(programId, filtersJson);
+    }
+
+    private synchronized HttpResponse<String> sendThrottled(HttpRequest request) throws IOException, InterruptedException {
+        waitBeforeRemoteCall();
+
+        try {
+            return httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+        } finally {
+            previousRemoteCallTime = System.currentTimeMillis();
+        }
+    }
+
+    private void waitBeforeRemoteCall() throws InterruptedException {
+        long now = System.currentTimeMillis();
+        long elapsed = now - previousRemoteCallTime;
+
+        if (elapsed < MINIMUM_REMOTE_CALL_INTERVAL) {
+            ΩmilliSecondsΩ sleepTime = MINIMUM_REMOTE_CALL_INTERVAL - elapsed;
+            //System.out.println("Throttling Solana request for " + sleepTime + "ms...");
+            Thread.sleep(sleepTime);
+            //System.out.println("Ready");
+        }
+    }
+
+    private boolean isSolanaNFTCandidate(SPLTokenHolding tokenHolding) {
+        // TODO This only checks the owner's token holding.
+        // A token with zero decimals and an owner balance of one is not guaranteed
+        // to be a real NFT, because the mint's total supply may still be greater than one.
+        // A future implementation should verify the mint supply, for example by using
+        // Solana getTokenSupply, before treating the result as a confirmed NFT.
+        return tokenHolding.decimals() == 0
+                && "1".equals(tokenHolding.rawAmount());
+    }
+
+    private byte[] createProgramAddressBytes(
+            ΩSolanaProgramIdΩ programId,
+            List<byte[]> seeds
+    ) {
+        if (seeds.size() > 16) {
+            throw new IllegalArgumentException("A Solana program address can have at most 16 seeds.");
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            for (byte[] seed : seeds) {
+                if (seed.length > 32) {
+                    throw new IllegalArgumentException("A Solana program address seed can be at most 32 bytes.");
+                }
+
+                digest.update(seed);
+            }
+
+            digest.update(base58Decode(programId));
+            digest.update(PROGRAM_DERIVED_ADDRESS_MARKER);
+
+            return digest.digest();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available.", e);
+        }
+    }
+
+    private boolean isOnEd25519Curve(byte[] encodedPoint) {
+        if (encodedPoint.length != 32) {
+            throw new IllegalArgumentException("Ed25519 encoded point must be 32 bytes.");
+        }
+
+        byte[] yBytes = encodedPoint.clone();
+
+        int signBit = (yBytes[31] & 0x80) >>> 7;
+        yBytes[31] &= 0x7F;
+
+        BigInteger y = littleEndianToBigInteger(yBytes);
+
+        if (y.compareTo(ED25519_P) >= 0) {
+            return false;
+        }
+
+        BigInteger ySquared = y.multiply(y).mod(ED25519_P);
+
+        BigInteger numerator = ySquared
+                .subtract(BigInteger.ONE)
+                .mod(ED25519_P);
+
+        BigInteger denominator = ED25519_D
+                .multiply(ySquared)
+                .add(BigInteger.ONE)
+                .mod(ED25519_P);
+
+        if (denominator.equals(BigInteger.ZERO)) {
+            return false;
+        }
+
+        BigInteger xSquared = numerator
+                .multiply(denominator.modInverse(ED25519_P))
+                .mod(ED25519_P);
+
+        if (xSquared.equals(BigInteger.ZERO)) {
+            return signBit == 0;
+        }
+
+        return isQuadraticResidue(xSquared);
+    }
+
+    private boolean isQuadraticResidue(BigInteger value) {
+        return value.modPow(
+                ED25519_P.subtract(BigInteger.ONE).shiftRight(1),
+                ED25519_P
+        ).equals(BigInteger.ONE);
+    }
+
+    private BigInteger littleEndianToBigInteger(byte[] littleEndianBytes) {
+        byte[] bigEndianBytes = new byte[littleEndianBytes.length + 1];
+
+        for (int i = 0; i < littleEndianBytes.length; i++) {
+            bigEndianBytes[bigEndianBytes.length - 1 - i] = littleEndianBytes[i];
+        }
+
+        return new BigInteger(bigEndianBytes);
+    }
+
+    private static String base58Encode(byte[] inputBytes) {
+        if (inputBytes.length == 0) {
+            return "";
+        }
+
+        byte[] input = Arrays.copyOf(inputBytes, inputBytes.length);
+
+        int zeros = 0;
+        while (zeros < input.length && input[zeros] == 0) {
+            zeros++;
+        }
+
+        char[] encoded = new char[input.length * 2];
+        int outputStart = encoded.length;
+
+        int inputStart = zeros;
+        while (inputStart < input.length) {
+            int mod = divmod(input, inputStart, 256, 58);
+
+            if (input[inputStart] == 0) {
+                inputStart++;
+            }
+
+            encoded[--outputStart] = BASE58_ALPHABET[mod];
+        }
+
+        while (outputStart < encoded.length && encoded[outputStart] == BASE58_ALPHABET[0]) {
+            outputStart++;
+        }
+
+        while (zeros-- > 0) {
+            encoded[--outputStart] = BASE58_ALPHABET[0];
+        }
+
+        return new String(encoded, outputStart, encoded.length - outputStart);
+    }
+
+    private static byte[] base58Decode(String input) {
+        if (input.isEmpty()) {
+            return new byte[0];
+        }
+
+        byte[] input58 = new byte[input.length()];
+
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+
+            if (c >= 128 || BASE58_INDEXES[c] < 0) {
+                throw new IllegalArgumentException("Invalid Base58 character: " + c);
+            }
+
+            input58[i] = (byte) BASE58_INDEXES[c];
+        }
+
+        int zeros = 0;
+        while (zeros < input58.length && input58[zeros] == 0) {
+            zeros++;
+        }
+
+        byte[] decoded = new byte[input.length()];
+        int outputStart = decoded.length;
+
+        int inputStart = zeros;
+        while (inputStart < input58.length) {
+            int mod = divmod(input58, inputStart, 58, 256);
+
+            if (input58[inputStart] == 0) {
+                inputStart++;
+            }
+
+            decoded[--outputStart] = (byte) mod;
+        }
+
+        while (outputStart < decoded.length && decoded[outputStart] == 0) {
+            outputStart++;
+        }
+
+        return Arrays.copyOfRange(decoded, outputStart - zeros, decoded.length);
+    }
+
+    private static int divmod(byte[] number, int firstDigit, int base, int divisor) {
+        int remainder = 0;
+
+        for (int i = firstDigit; i < number.length; i++) {
+            int digit = number[i] & 0xFF;
+            int temporary = remainder * base + digit;
+
+            number[i] = (byte) (temporary / divisor);
+            remainder = temporary % divisor;
+        }
+
+        return remainder;
+    }
+
+    private List<byte[]> toSeedBytes(List<SolanaProgramAddressSeed> seeds) {
+        List<byte[]> seedBytes = new ArrayList<>();
+
+        for (SolanaProgramAddressSeed seed : seeds) {
+            seedBytes.add(toSeedBytes(seed));
+        }
+
+        return seedBytes;
+    }
+
+    private byte[] toSeedBytes(SolanaProgramAddressSeed seed) {
+        return switch (seed.kind()) {
+            case UTF8 -> seed.value().getBytes(StandardCharsets.UTF_8);
+
+            case SOLANA_ADDRESS -> {
+                byte[] addressBytes = base58Decode(seed.value());
+
+                if (addressBytes.length != 32) {
+                    throw new IllegalArgumentException(
+                            "Solana address seed must decode to 32 bytes, but was " + addressBytes.length
+                    );
+                }
+
+                yield addressBytes;
+            }
+        };
+    }
+
+    private SolanaProgramDerivedAddress findProgramAddressFromSeedBytes(
+            ΩSolanaProgramIdΩ programId,
+            List<byte[]> seedBytes
+    ) {
+        if (seedBytes.size() > 15) {
+            throw new IllegalArgumentException(
+                    "findProgramAddress(...) can have at most 15 caller-provided seeds because the bump is added as the final seed."
+            );
+        }
+
+        for (int bump = 255; bump >= 0; bump--) {
+            List<byte[]> seedBytesWithBump = new ArrayList<>(seedBytes);
+            seedBytesWithBump.add(new byte[] { (byte) bump });
+
+            byte[] candidateAddress = createProgramAddressBytes(
+                    programId,
+                    seedBytesWithBump
+            );
+
+            if (!isOnEd25519Curve(candidateAddress)) {
+                return new SolanaProgramDerivedAddress(
+                        base58Encode(candidateAddress),
+                        bump
+                );
+            }
+        }
+
+        throw new IllegalArgumentException("Could not find valid program derived address.");
+    }
+
+    private static int[] createBase58Indexes() {
+        int[] indexes = new int[128];
+        Arrays.fill(indexes, -1);
+
+        for (int i = 0; i < BASE58_ALPHABET.length; i++) {
+            indexes[BASE58_ALPHABET[i]] = i;
+        }
+
+        return indexes;
+    }
+
+    private static final ΩAmountΩ LAMPORTS_PER_SOL = new BigDecimal("1000000000");
+    private static final ΩmilliSecondsΩ MINIMUM_REMOTE_CALL_INTERVAL = 5000L;
+    private static final byte[] PROGRAM_DERIVED_ADDRESS_MARKER = "ProgramDerivedAddress".getBytes(StandardCharsets.UTF_8);
+    private static final String BASE58_ALPHABET_STRING = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    private static final char[] BASE58_ALPHABET = BASE58_ALPHABET_STRING.toCharArray();
+    private static final int[] BASE58_INDEXES = createBase58Indexes();
+    private static final BigInteger ED25519_P = BigInteger.ONE.shiftLeft(255).subtract(BigInteger.valueOf(19));
+    private static final BigInteger ED25519_D =
+            BigInteger.valueOf(-121665)
+                    .multiply(BigInteger.valueOf(121666).modInverse(ED25519_P))
+                    .mod(ED25519_P);
+
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private ΩmilliSecondsΩ previousRemoteCallTime = 0L;
+}

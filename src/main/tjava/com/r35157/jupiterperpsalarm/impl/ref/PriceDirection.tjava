@@ -1,0 +1,20 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+
+public enum PriceDirection {
+    ABOVE {
+        @Override
+        public boolean reached(BigDecimal price, BigDecimal target) {
+            return price.compareTo(target) >= 0;
+        }
+    },
+    BELOW {
+        @Override
+        public boolean reached(BigDecimal price, BigDecimal target) {
+            return price.compareTo(target) <= 0;
+        }
+    };
+
+    public abstract boolean reached(BigDecimal price, BigDecimal target);
+}

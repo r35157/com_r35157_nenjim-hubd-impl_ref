@@ -1,0 +1,8 @@
+package crypto.r35157.cauldron.afets;
+
+public enum PositionSideAction {
+    OpenLong,
+    CloseLong,
+    OpenShort,
+    CloseShort
+}

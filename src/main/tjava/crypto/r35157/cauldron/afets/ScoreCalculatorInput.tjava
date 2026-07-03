@@ -1,0 +1,57 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+/**
+ * A data transfer object that encapsulates the input parameters required for score calculation. This class provides
+ * all the necessary data points that different implementations of a ScoreCalculator may use to compute a score.
+ * Users of this class can represent various aspects of a trading position, such as pricing,
+ * leverage, position type, and contract specifications.
+ */
+public class ScoreCalculatorInput {
+    /**
+     * Input parameters for the score calculation. Different implementations of ScoreCalculator can choose which of
+     * them to use or leave out of the score calculation.
+     *
+     * @param currentTokenBaseNotationPrice   Current average entry notation price per token (before trade)
+     * @param futureTokenBaseNotationPrice    New average entry notation price per token (after trade)
+     * @param currentTokenNotationPrice       Current notation price per token (before trade)
+     * @param amountNotionalToSpend           Notional amount to spend (not margin amount)
+     * @param totalNumberOfPositions          The total number of positions of this type (longs or shorts)
+     * @param contractSize                    Number of tokens per contract (can be fractional, e.g., 0.1)
+     * @param leverage                        How much leverage is used - set this to ONE if leverage is not used.
+     * @param type                            Position type (long or short)
+     * @param averagePositionValue            The average notation value size (= totalValue / totalNumberOfPositions)
+     */
+    public ScoreCalculatorInput(
+        BigDecimal currentTokenBaseNotationPrice,
+        BigDecimal futureTokenBaseNotationPrice,
+        BigDecimal currentTokenNotationPrice,
+        BigDecimal amountNotionalToSpend,
+        int totalNumberOfPositions,
+        BigDecimal contractSize,
+        BigDecimal leverage,
+        PositionType type,
+        BigDecimal averagePositionValue
+    ) {
+        this.currentTokenNotationPrice = currentTokenNotationPrice;
+        this.futureTokenBaseNotationPrice = futureTokenBaseNotationPrice;
+        this.currentTokenBaseNotationPrice = currentTokenBaseNotationPrice;
+        this.amountNotionalToSpend = amountNotionalToSpend;
+        this.totalNumberOfPositions = totalNumberOfPositions;
+        this.contractSize = contractSize;
+        this.leverage = leverage;
+        this.type = type;
+        this.averagePositionValue = averagePositionValue;
+    }
+
+    public BigDecimal currentTokenBaseNotationPrice;
+    public BigDecimal futureTokenBaseNotationPrice;
+    public BigDecimal currentTokenNotationPrice;
+    public BigDecimal amountNotionalToSpend;
+    public int totalNumberOfPositions;
+    public BigDecimal contractSize;
+    public BigDecimal leverage;
+    public PositionType type;
+    public BigDecimal averagePositionValue;
+}

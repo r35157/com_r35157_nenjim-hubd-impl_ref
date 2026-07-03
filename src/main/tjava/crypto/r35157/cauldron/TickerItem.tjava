@@ -1,0 +1,11 @@
+package crypto.r35157.cauldron;
+
+public record TickerItem(
+        long timestamp,
+        String humanReadableTimestamp,
+        String source,
+        String base,
+        String quote,
+        double price
+) {
+}

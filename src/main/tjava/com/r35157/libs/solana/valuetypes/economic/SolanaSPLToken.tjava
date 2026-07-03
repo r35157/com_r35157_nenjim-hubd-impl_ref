@@ -1,0 +1,21 @@
+package com.r35157.libs.solana.valuetypes.economic;
+
+import com.r35157.libs.valuetypes.basic.CurrencyType;
+
+/**
+ * Represents an SPL token known to the Solana integration.
+ *
+ * <p>The currency type describes the economic identity of the token, while the
+ * mint address identifies the SPL token mint on Solana. The token address is the
+ * Solana address associated with the token in this model.</p>
+ *
+ * @param currencyType the currency type represented by this SPL token
+ * @param mintAddress the SPL mint address of the token
+ * @param tokenAddress the Solana address associated with the token
+ */
+public record SolanaSPLToken (
+        CurrencyType currencyType,
+        ΩSPLMintAddressΩ mintAddress,
+        ΩSolanaAddressΩ tokenAddress
+) {
+}

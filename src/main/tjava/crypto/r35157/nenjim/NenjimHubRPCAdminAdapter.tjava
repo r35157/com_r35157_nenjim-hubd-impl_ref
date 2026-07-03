@@ -1,0 +1,24 @@
+package crypto.r35157.nenjim;
+
+public class NenjimHubRPCAdminAdapter implements NenjimProcess {
+    @Override
+    public void run() throws Exception {
+    }
+
+
+    @Override
+    public void setNenjimProcessContext(NenjimContext context) {
+        this.nenjimContext = context;
+    }
+
+    @Override
+    public void setNenjimHub(NenjimHub hub) {
+    }
+
+    @Override
+    public String getProcessName() {
+        return "NenjimHub RPC Admin Adapter";
+    }
+
+    private NenjimContext nenjimContext;
+}

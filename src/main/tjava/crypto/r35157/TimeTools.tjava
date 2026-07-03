@@ -1,0 +1,322 @@
+package crypto.r35157;
+
+import java.time.Duration;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.List;
+
+public class TimeTools {
+    public static String formatLaterTime(long millis) {
+        LocalTime now = LocalTime.now();
+        Duration duration = Duration.ofMillis(millis);
+        LocalTime futureTime = now.plus(duration);
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+        String timeStr = futureTime.format(formatter);
+
+        return timeStr;
+    }
+
+    /**
+     * Converts a time string into milliseconds.
+     * Supported units:
+     *   y = year (average Gregorian year = 365.2425 days)
+     *   M = month (average Gregorian month = 30.436875 days)
+     *   w = week (7 days)
+     *   d = day
+     *   h = hour
+     *   m = minute
+     *   s = second
+     *
+     * Note: The conversion for years and months is approximate.
+     *
+     * @param timeString the input time string (e.g., "1w3d" or "1h40m")
+     * @return the total time in milliseconds
+     * @throws IllegalArgumentException if an unsupported unit is encountered
+     */
+    public static long parseTimeToMillis(String timeString) {
+        long millis = 0L;
+        // Regular expression to match sequences like "1y", "3d", "40m", etc.
+        Pattern pattern = Pattern.compile("(\\d+)([yMwdhms])");
+        Matcher matcher = pattern.matcher(timeString);
+
+        // Base conversion factors:
+        final long millisPerSecond = 1000L;
+        final long millisPerMinute = millisPerSecond * 60;
+        final long millisPerHour   = millisPerMinute * 60;
+        final long millisPerDay    = millisPerHour * 24;
+        final long millisPerWeek   = millisPerDay * 7;
+        // Average values for Gregorian calendar
+        final double millisPerYear  = 365.2425 * millisPerDay;
+        final double millisPerMonth = millisPerYear / 12;
+
+        while (matcher.find()) {
+            long value = Long.parseLong(matcher.group(1));
+            String unit = matcher.group(2);
+
+            switch(unit) {
+                case "y":
+                    millis += (long)(value * millisPerYear);
+                    break;
+                case "M":
+                    millis += (long)(value * millisPerMonth);
+                    break;
+                case "w":
+                    millis += value * millisPerWeek;
+                    break;
+                case "d":
+                    millis += value * millisPerDay;
+                    break;
+                case "h":
+                    millis += value * millisPerHour;
+                    break;
+                case "m":
+                    millis += value * millisPerMinute;
+                    break;
+                case "s":
+                    millis += value * millisPerSecond;
+                    break;
+                default:
+                    throw new IllegalArgumentException("Invalid time unit: " + unit);
+            }
+        }
+
+        return millis;
+    }
+
+    /**
+     * Formats a duration (in milliseconds) using up to maxElements most-significant parts.
+     * Rounding is applied to the last displayed element. If rounding occurs or any lower parts
+     * are dropped, the output is prefixed with "≈".
+     *
+     * Examples:
+     *   formatTimeFromMillis(691200000L, 1) returns "8 days"
+     *   formatTimeFromMillis(691200001L, 1) returns "≈8 days"
+     *   formatTimeFromMillis(691200001L, 2) returns "8 days and 1 millisecond"
+     *   formatTimeFromMillis(183856012L) returns "2 days, 3 hours, 4 minutes, 16 seconds, 12 milliseconds"
+     *   formatTimeFromMillis(183856012L, 1) returns "≈2 days"
+     *   formatTimeFromMillis(183856012L, 3) returns "≈2 days, 3 hours, 4 minutes"
+     *   formatTimeFromMillis(285000L, 2) returns "4 minutes and 45 seconds"
+     *   formatTimeFromMillis(285000L, 1) returns "≈5 minutes"
+     *
+     * Years and months are included if the duration is long enough.
+     *
+     * @param totalMs the total duration in milliseconds.
+     * @param maxElements maximum number of time parts to show (must be >= 1)
+     * @return the formatted time string.
+     */
+    public static String formatTimeFromMillis(long totalMs, int maxElements) {
+        if (maxElements < 1) {
+            throw new IllegalArgumentException("maxElements must be at least 1");
+        }
+
+        // Compute each unit in order.
+        long years = (long)(totalMs / MILLIS_PER_YEAR);
+        long remainder = totalMs - (long)(years * MILLIS_PER_YEAR);
+
+        long months = (long)(remainder / MILLIS_PER_MONTH);
+        remainder -= (long)(months * MILLIS_PER_MONTH);
+
+        long days = remainder / MILLIS_PER_DAY;
+        remainder %= MILLIS_PER_DAY;
+        long hours = remainder / MILLIS_PER_HOUR;
+        remainder %= MILLIS_PER_HOUR;
+        long minutes = remainder / MILLIS_PER_MINUTE;
+        remainder %= MILLIS_PER_MINUTE;
+        long seconds = remainder / MILLIS_PER_SECOND;
+        long milliseconds = remainder % MILLIS_PER_SECOND;
+
+        // Breakdown values in order: years, months, days, hours, minutes, seconds, milliseconds.
+        long[] values = new long[] { years, months, days, hours, minutes, seconds, milliseconds };
+        double[] factors = new double[] { MILLIS_PER_YEAR, MILLIS_PER_MONTH, MILLIS_PER_DAY,
+                MILLIS_PER_HOUR, MILLIS_PER_MINUTE, MILLIS_PER_SECOND, 1 };
+
+        // Determine the first nonzero unit (if all zero, use the smallest unit).
+        int startIndex = 0;
+        while (startIndex < NUM_UNITS && values[startIndex] == 0) {
+            startIndex++;
+        }
+        if (startIndex == NUM_UNITS) {
+            startIndex = NUM_UNITS - 1;
+        }
+
+        // Build a list of nonzero components starting from startIndex.
+        List<Component> components = new ArrayList<>();
+        for (int i = startIndex; i < NUM_UNITS; i++) {
+            if (values[i] != 0) {
+                components.add(new Component(i, values[i]));
+            }
+        }
+        // Ensure at least one component is present.
+        if (components.isEmpty()) {
+            components.add(new Component(NUM_UNITS - 1, 0));
+        }
+
+        // If the caller wants to show all components (or more than available), join them exactly.
+        if (maxElements >= components.size()) {
+            return joinComponents(components, false);
+        }
+
+        // Otherwise, show (maxElements - 1) components exactly, and the last one rounded.
+        List<Component> resultComponents = new ArrayList<>();
+        for (int i = 0; i < maxElements - 1; i++) {
+            resultComponents.add(components.get(i));
+        }
+        int lastUnitIndex = components.get(maxElements - 1).unitIndex;
+
+        // Sum the contribution (in ms) of all units more significant than the last displayed unit.
+        double msAccounted = 0;
+        for (int i = startIndex; i < lastUnitIndex; i++) {
+            msAccounted += values[i] * factors[i];
+        }
+
+        // Compute the remaining ms for the last unit.
+        double valueExact = (totalMs - msAccounted) / factors[lastUnitIndex];
+        long roundedValue = Math.round(valueExact);
+
+        // Mark approximation if any lower parts were dropped or if rounding changed the exact value.
+        boolean approx = (components.size() > maxElements) || (Math.abs(valueExact - Math.floor(valueExact)) > 1e-9);
+        resultComponents.add(new Component(lastUnitIndex, roundedValue));
+
+        return joinComponents(resultComponents, approx);
+    }
+
+    /**
+     * Overload that returns the full breakdown (all nonzero parts).
+     */
+    public static String formatTimeFromMillis(long totalMs) {
+        return formatTimeFromMillis(totalMs, NUM_UNITS);
+    }
+
+    /**
+     * Overloaded method that converts the entire duration into a single unit (as specified by the enum).
+     * For example:
+     *   formatTimeFromMillis(400L * MILLIS_PER_DAY, TimeUnit.HOURS) returns "9600 hours"
+     *   formatTimeFromMillis(400L * MILLIS_PER_DAY - 1, TimeUnit.HOURS) returns "≈9600 hours"
+     *
+     * @param totalMs the total duration in milliseconds.
+     * @param unit the target time unit.
+     * @return the formatted string representing the duration in the given unit.
+     */
+    public static String formatTimeFromMillis(long totalMs, TimeUnit unit) {
+        double factor;
+        switch(unit) {
+            case YEARS:
+                factor = MILLIS_PER_YEAR;
+                break;
+            case MONTHS:
+                factor = MILLIS_PER_MONTH;
+                break;
+            case DAYS:
+                factor = MILLIS_PER_DAY;
+                break;
+            case HOURS:
+                factor = MILLIS_PER_HOUR;
+                break;
+            case MINUTES:
+                factor = MILLIS_PER_MINUTE;
+                break;
+            case SECONDS:
+                factor = MILLIS_PER_SECOND;
+                break;
+            case MILLISECONDS:
+                factor = 1;
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported time unit: " + unit);
+        }
+        double exactValue = totalMs / factor;
+        long roundedValue = Math.round(exactValue);
+        boolean approx = (Math.abs(exactValue - roundedValue) > 1e-9);
+        return (approx ? "≈" : "") + unit.format(roundedValue);
+    }
+
+    // Joins the list of components into a single string.
+    // If approx is true, the string is prefixed with "≈".
+    private static String joinComponents(List<Component> comps, boolean approx) {
+        List<String> parts = new ArrayList<>();
+        for (Component comp : comps) {
+            parts.add(comp.value + " " + unitName(comp.unitIndex, comp.value));
+        }
+        String result;
+        if (parts.size() == 1) {
+            result = parts.get(0);
+        } else if (parts.size() == 2) {
+            result = parts.get(0) + " and " + parts.get(1);
+        } else {
+            result = String.join(", ", parts);
+        }
+        return approx ? "≈" + result : result;
+    }
+
+    // Returns the proper singular or plural name for each unit based on its index.
+    private static String unitName(int unitIndex, long value) {
+        String result = switch (unitIndex) {
+            case 0 -> value == 1 ? "year" : "years";
+            case 1 -> value == 1 ? "month" : "months";
+            case 2 -> value == 1 ? "day" : "days";
+            case 3 -> value == 1 ? "hour" : "hours";
+            case 4 -> value == 1 ? "minute" : "minutes";
+            case 5 -> value == 1 ? "second" : "seconds";
+            case 6 -> value == 1 ? "millisecond" : "milliseconds";
+            default -> "";
+        };
+        return result;
+    }
+
+    private static class Component {
+        int unitIndex;
+        long value;
+        Component(int unitIndex, long value) {
+            this.unitIndex = unitIndex;
+            this.value = value;
+        }
+    }
+
+    /**
+     * Enum representing time units with singular and plural names.
+     */
+    enum TimeUnit {
+        YEARS("year", "years"),
+        MONTHS("month", "months"),
+        DAYS("day", "days"),
+        HOURS("hour", "hours"),
+        MINUTES("minute", "minutes"),
+        SECONDS("second", "seconds"),
+        MILLISECONDS("millisecond", "milliseconds");
+
+        private final String singular;
+        private final String plural;
+
+        TimeUnit(String singular, String plural) {
+            this.singular = singular;
+            this.plural = plural;
+        }
+
+        /**
+         * Formats the value with the appropriate singular or plural name.
+         * @param value the numeric value
+         * @return a formatted string, e.g. "1 day" or "5 days"
+         */
+        public String format(long value) {
+            return value + " " + (value == 1 ? singular : plural);
+        }
+    }
+
+    // Base units (using long for fixed units).
+    private static final long MILLIS_PER_SECOND = 1000L;
+    private static final long MILLIS_PER_MINUTE = MILLIS_PER_SECOND * 60;
+    private static final long MILLIS_PER_HOUR   = MILLIS_PER_MINUTE * 60;
+    private static final long MILLIS_PER_DAY    = MILLIS_PER_HOUR * 24;
+
+    // Approximate values for months and years (as doubles).
+    private static final double MILLIS_PER_YEAR  = 365.2425 * MILLIS_PER_DAY;
+    private static final double MILLIS_PER_MONTH = MILLIS_PER_YEAR / 12;
+
+    // The order of units from most-significant to least:
+    // 0: years, 1: months, 2: days, 3: hours, 4: minutes, 5: seconds, 6: milliseconds.
+    private static final int NUM_UNITS = 7;
+}

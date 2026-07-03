@@ -1,0 +1,11 @@
+package com.r35157.libs.notification.impl.discord;
+
+import com.r35157.libs.notification.NotificationMessage;
+
+public record DiscordMessage(String text) implements NotificationMessage {
+    public DiscordMessage {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Discord message cannot be blank");
+        }
+    }
+}

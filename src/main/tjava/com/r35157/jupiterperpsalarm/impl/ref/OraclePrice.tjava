@@ -1,0 +1,16 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.Instant;
+
+public record OraclePrice(
+        JupiterPerpsAsset asset,
+        BigInteger rawPrice,
+        int exponent,
+        BigDecimal priceUsd,
+        Instant oracleTime,
+        long slot,
+        String source
+) {
+}

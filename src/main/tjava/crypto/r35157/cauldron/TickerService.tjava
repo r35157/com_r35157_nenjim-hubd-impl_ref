@@ -1,0 +1,167 @@
+package crypto.r35157.cauldron;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.util.logging.*;
+import java.io.IOException;
+import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpExchange;
+//import org.json.JSONObject;
+
+public class TickerService {
+
+    public static void main(String[] args) throws Exception {
+        configureLogging();
+
+        logger.info("Initializing TickerService:");
+        logger.info("   Starting embedded SQLLite...");
+        configureDatabase();
+
+        logger.info("   Validating schema...");
+        validateSchema();
+
+        logger.info("   Starting HTTP Service on port 8123...");
+        configureHTTPService();
+
+        logger.info("Ready to service!");
+    }
+
+    private static void validateSchema() throws SQLException {
+        boolean exist = doTableExist(dbConnection, "ticks");
+        if(exist == false) {
+            createTable(dbConnection);
+        }
+    }
+
+    private static boolean doTableExist(Connection dbConnection, String tableName) throws SQLException {
+        String sql = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
+
+        PreparedStatement pstmt = dbConnection.prepareStatement(sql);
+        pstmt.setString(1, tableName);
+        ResultSet rs = pstmt.executeQuery();
+
+        return rs.next();
+    }
+
+    private static void configureLogging() {
+        try {
+            Formatter logFormatter = new CustomLogFormatter();
+
+            // Remove the default console handler
+            Logger rootLogger = Logger.getLogger("");
+            rootLogger.removeHandler(rootLogger.getHandlers()[0]);
+
+            // Add a custom console handler
+            ConsoleHandler consoleHandler = new ConsoleHandler();
+            consoleHandler.setLevel(Level.ALL);
+            consoleHandler.setFormatter(logFormatter);
+            rootLogger.addHandler(consoleHandler);
+
+            // Add a file handler
+            FileHandler fileHandler = new FileHandler("TickerService.log", true);
+            fileHandler.setLevel(Level.ALL);
+            fileHandler.setFormatter(logFormatter);
+            rootLogger.addHandler(fileHandler);
+
+        } catch (IOException e) {
+            logger.severe("Failed to set up logging: " + e.getMessage());
+        }
+    }
+
+    private static void configureDatabase() throws SQLException {
+        dbConnection = DriverManager.getConnection(DB_URL);
+    }
+
+    private static void createTable(Connection dbConnection)  throws SQLException {
+        String sql = "CREATE TABLE ticks (" +
+                "epoch INTEGER NOT NULL," +
+                "baseAssetId TEXT NOT NULL," +
+                "quoteAssetId TEXT NOT NULL," +
+                "price REAL NOT NULL," +
+                "PRIMARY KEY (epoch, baseAssetId, quoteAssetId)" +
+                ");";
+
+        Statement stmt = dbConnection.createStatement();
+        stmt.execute(sql);
+    }
+
+    private static void insertStockPrice(Connection conn, String symbol, double price) throws SQLException {
+        String sql = "INSERT INTO stock_prices(symbol, price) VALUES(?, ?)";
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, symbol);
+            pstmt.setDouble(2, price);
+            pstmt.executeUpdate();
+        }
+    }
+
+    private static void retrieveStockPrices(Connection conn, String symbol) {
+        String sql = "SELECT id, symbol, price, timestamp FROM stock_prices WHERE symbol = ?";
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, symbol);
+            ResultSet rs = pstmt.executeQuery();
+
+            while (rs.next()) {
+                System.out.println(rs.getInt("id") +  "\t" +
+                        rs.getString("symbol") + "\t" +
+                        rs.getDouble("price") + "\t" +
+                        rs.getString("timestamp"));
+            }
+        } catch (SQLException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void configureHTTPService() throws Exception{
+        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), BACKLOG);
+        server.createContext("/ticker", new MyHandler());
+        server.setExecutor(null); // Creates a default executor
+        server.start();
+    }
+
+    static class CustomLogFormatter extends Formatter {
+        @Override
+        public String format(LogRecord record) {
+            return String.format("%1$s [%2$s] %3$s%n",
+                    record.getLevel().getName(),
+                    record.getLoggerName(),
+                    record.getMessage());
+        }
+    }
+
+    static class MyHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            // TODO: Reenable when import is fixed
+            /*
+            JSONObject json = new JSONObject();
+            json.put("message", "Hello, World!");
+            String response = json.toString();
+
+            exchange.getResponseHeaders().set("Content-type", RESPONSE_MIMETYPE);
+            exchange.sendResponseHeaders(HTTP_OK, response.length());
+            OutputStream os = exchange.getResponseBody();
+            os.write(response.getBytes());
+
+            os.close();
+            */
+        }
+    }
+
+    private static final Logger logger = Logger.getLogger(TickerService.class.getName());
+    private static Connection dbConnection;
+
+    private static final int PORT = 8123;
+    private static final int BACKLOG = 10;
+    private static final String RESPONSE_MIMETYPE = "application/json";
+    private static final int HTTP_OK = 200;
+    private static final String DB_URL = "jdbc:sqlite:ticker.db";
+}

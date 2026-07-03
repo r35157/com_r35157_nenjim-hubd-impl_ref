@@ -1,0 +1,43 @@
+package com.r35157.libs.valuetypes.basic;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Objects;
+
+public record Range<T extends Comparable<T>>(
+        T from,
+        boolean fromIncluding,
+        T to,
+        boolean toIncluding
+) {
+    public Range {
+        Objects.requireNonNull(from, "from");
+        Objects.requireNonNull(to, "to");
+
+        if (from.compareTo(to) > 0) {
+            throw new IllegalArgumentException("Range from-value must not be greater than to-value.");
+        }
+    }
+
+    public boolean contains(T value) {
+        Objects.requireNonNull(value, "value");
+
+        int fromComparison = value.compareTo(from);
+        int toComparison = value.compareTo(to);
+
+        boolean afterFrom = fromIncluding
+                ? fromComparison >= 0
+                : fromComparison > 0;
+
+        boolean beforeTo = toIncluding
+                ? toComparison <= 0
+                : toComparison < 0;
+
+        return afterFrom && beforeTo;
+    }
+
+    @Override
+    public @NotNull String toString() {
+        return (fromIncluding() ? "[" : "(") + from + "," + to + (toIncluding() ? "]" : ")");
+    }
+}

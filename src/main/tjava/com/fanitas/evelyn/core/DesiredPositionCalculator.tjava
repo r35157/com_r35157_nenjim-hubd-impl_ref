@@ -1,0 +1,29 @@
+package com.fanitas.evelyn.core;
+
+import com.r35157.libs.basic.Pair;
+import com.r35157.libs.valuetypes.basic.AssetPrice;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+
+import java.math.BigDecimal;
+import java.util.HashMap;
+
+public interface DesiredPositionCalculator {
+
+    HashMap<ΩRaydiumLiquidityPoolPositionNftIdΩ, Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ>> calculateRebalancingProposal(
+            ΩSyrupPriceΩ currentPrice,
+            ΩSolanaAmountΩ totalReadyAmountMintA,
+            ΩSyrupAmountΩ totalReadyAmountMintB
+    );
+
+    Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> calculateTotalDistributedSums();
+
+    Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> calculateLockedSums(ΩSyrupPriceΩ currentPrice);
+
+    Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> calculateRedistributableSums(
+            ΩSyrupPriceΩ currentPrice,
+            ΩSolanaAmountΩ inactiveInAccountMintA,
+            ΩSolanaAmountΩ reservedForBurnMintA,
+            ΩSyrupAmountΩ inactiveInAccountMintB,
+            ΩSyrupAmountΩ reservedForBurnMintB
+    );
+}

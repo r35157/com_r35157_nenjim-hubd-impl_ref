@@ -1,0 +1,20 @@
+package crypto.r35157.cauldron.afets;
+
+import crypto.r35157.cauldron.afets.gami.GlobalAssetMetadataIndexItem;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.math.BigDecimal;
+
+public record Position(
+        boolean quarantined,
+        @NotNull GlobalAssetMetadataIndexItem gamiId,
+        @NotNull PositionType type,
+        long startTime,
+        @Nullable BigDecimal basePrice,
+        @Nullable BigDecimal balance,
+        @Nullable Integer leverage,
+        int numberOfDecimalsInTrade,
+        @Nullable BigDecimal tokensPerContract,
+        @Nullable BigDecimal maxTotal
+) {}

@@ -1,0 +1,116 @@
+package crypto.r35157.nenjim;
+
+import crypto.r35157.RingBuffer;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.HashMap;
+import java.util.List;
+
+public class NenjimHubSocketAdminAdapter implements NenjimProcess {
+    public NenjimHubSocketAdminAdapter() {
+        this.portNumber = SOCKET_ADMIN_PORT;
+    }
+
+    @Override
+    public void run() throws Exception {
+        try (ServerSocket server = new ServerSocket(portNumber)) {
+            System.out.println("NenjimHub Socket Admin Client ready and listening on port: " + portNumber);
+            while (true) {
+                try (
+                        Socket client = server.accept();
+                        BufferedReader in = new BufferedReader(
+                                new InputStreamReader(client.getInputStream()));
+                        PrintWriter out = new PrintWriter(
+                                client.getOutputStream(), true)   // autoFlush = true
+                ) {
+                    boolean doContinue = true;
+                    System.out.println("Connection received from: "
+                            + client.getRemoteSocketAddress());
+
+                    out.println("NenjimHub 0.1 r35157_reference_implementation 0.0.0.1");
+                    out.println("OK");
+                    out.flush();
+
+                    while (doContinue) {
+                        String line = in.readLine();
+                        if (line.trim().isEmpty()) {
+                            out.println("OK");
+                        } else {
+                            long start = System.currentTimeMillis();
+                            String command = line.split(" ")[0].toUpperCase();
+
+                            switch (command) {
+                                case "START":
+                                    String fqInterfaceName = line.split(" ")[1];
+                                    nenjimHub.startProcess(fqInterfaceName);
+                                    break;
+
+                                case "PS":
+                                    HashMap<Integer, NenjimProcess> processesMap = nenjimHub.getRunningProcesses();
+                                    for(int processId : processesMap.keySet()) {
+                                        NenjimProcess process = processesMap.get(processId);
+                                        out.println(
+                                                processId
+                                                + " '" + process.getProcessName() + "'"
+                                                + " " + process.getClass().getName()
+                                                );
+                                    }
+                                    break;
+
+                                case "NOOP":
+                                    nenjimHub.noop();
+                                    break;
+
+                                case "QUIT":
+                                    doContinue = false;
+                                    System.out.println("Connection closed by client");
+                                    break;
+
+                                case "HELP":
+                                    out.println("START <fqInterfaceName> - Start a new process using the given fully qualified interface name");
+                                    out.println("PS - Show running processes");
+                                    out.println("NOOP - No Operation");
+                                    out.println("QUIT - Quit the session");
+                                    out.println("HELP - This list of commands");
+                                    break;
+
+                                default:
+                                    out.println("Error: 400 - Unknown command");
+                                    break;
+                            }
+
+                            out.println("OK (" + (System.currentTimeMillis() - start) + "ms)");
+                        }
+                    }
+                }
+                System.out.println("Session ended!");
+            }
+        }
+    }
+
+    @Override
+    public void setNenjimProcessContext(NenjimContext context) {
+        this.nenjimContext = context;
+    }
+
+    @Override
+    public void setNenjimHub(NenjimHub nenjimHub) {
+        this.nenjimHub = nenjimHub;
+    }
+
+    @Override
+    public String getProcessName() {
+        return "NenjimHub Socket Admin Adapter";
+    }
+
+    private static final int SOCKET_ADMIN_PORT = 38010;
+    private static final int RING_BUFFER_CAPACITY = 25;
+
+    private NenjimContext nenjimContext;
+    private NenjimHub nenjimHub;
+    private final int portNumber;
+}

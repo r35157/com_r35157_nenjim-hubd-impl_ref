@@ -1,0 +1,32 @@
+package com.fanitas.evelyn.raydium;
+
+import com.r35157.libs.valuetypes.basic.AssetPrice;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import com.r35157.libs.valuetypes.basic.Range;
+import org.jetbrains.annotations.NotNull;
+
+/**
+ * Represents a concentrated liquidity position in a Raydium liquidity pool.
+ *
+ * <p>A concentrated liquidity position is represented on Solana by a position NFT.
+ * The NFT identifies the individual position, while the pool id identifies the
+ * Raydium concentrated liquidity pool that the position belongs to.</p>
+ *
+ * <p>The position is only active within its configured price range. The two mint
+ * amounts represent the token amounts associated with the position at the time
+ * the position data was fetched or calculated.</p>
+ *
+ * @param poolId the Raydium concentrated liquidity pool id
+ * @param nftId the Raydium liquidity pool position NFT id identifying this position
+ * @param priceRange the price range where this concentrated liquidity position is active
+ * @param accountingInfo the amount added to and borrowed from the position
+ */
+public record RaydiumLiquidityPoolPositionConcentrated(
+        @NotNull ΩRaydiumLiquidityPoolConcentratedIdΩ poolId,
+        @NotNull ΩRaydiumLiquidityPoolPositionNftIdΩ nftId,
+        @NotNull Range<AssetPrice> priceRange,
+        @NotNull MoneyAmount amountMintA,
+        @NotNull MoneyAmount amountMintB,
+        @NotNull RaydiumLiquidityPoolPositionAccounting accountingInfo
+) {
+}

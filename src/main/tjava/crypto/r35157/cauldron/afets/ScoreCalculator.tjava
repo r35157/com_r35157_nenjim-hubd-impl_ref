@@ -1,0 +1,16 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+public interface ScoreCalculator {
+    /**
+     * Calculates a trade score based on the parameter inputs. Different implementations can use
+     * different strategies to arrive at a score.
+     * The only importance is that scores are later used to compare against each other, so scores
+     * from different implementations cannot be expected to work.
+     *
+     * @param input A collection of different values that can be helpful for the score calculation.
+     * @return The implementation-specific score
+     */
+    BigDecimal calculateScore(ScoreCalculatorInput input);
+}

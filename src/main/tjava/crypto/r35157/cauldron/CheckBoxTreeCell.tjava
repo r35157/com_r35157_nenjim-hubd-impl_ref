@@ -1,0 +1,27 @@
+package crypto.r35157.cauldron;
+
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.TreeCell;
+
+public class CheckBoxTreeCell extends TreeCell<String> {
+    private CheckBox checkBox;
+
+    public CheckBoxTreeCell() {
+        checkBox = new CheckBox();
+        checkBox.setDisable(true);  // Disable the checkbox so it only changes when the item is selected
+        setGraphic(checkBox);
+    }
+
+    @Override
+    public void updateItem(String item, boolean empty) {
+        super.updateItem(item, empty);
+
+        if (empty) {
+            setText(null);
+            setGraphic(null);
+        } else {
+            setText(item);
+            setGraphic(checkBox);
+        }
+    }
+}

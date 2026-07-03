@@ -1,0 +1,21 @@
+package com.r35157.libs.random;
+
+/**
+ * This interface provides a way to generate random integers.
+ */
+public interface RandomValueGeneratorInt {
+    /**
+     * Returns a random integer in the full range (min -2<sup>31</sup>. to max 2<sup>31</sup>-1)
+     *
+     * @return a random integer in full range
+     */
+    int getSomeInt();
+
+    /**
+     * Returns a random integer in the range provided by the parameters. Both parameters are included in the range and
+     * {@code minInclusive} must be less than {@code maxInclusive}.
+     *
+     * @return a random integer in the provided range
+     */
+    int getSomeInt(int minInclusive, int maxInclusive);
+}

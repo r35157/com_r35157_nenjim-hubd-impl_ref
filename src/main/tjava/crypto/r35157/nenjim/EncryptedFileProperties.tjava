@@ -1,0 +1,60 @@
+package crypto.r35157.nenjim;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.util.*;
+
+public class EncryptedFileProperties implements ImmutableProperties {
+    public EncryptedFileProperties(String encFilePath, String password) throws IOException {
+        this.encFilePath = encFilePath;
+        this.password = password;
+        refresh();
+    }
+
+    @Override
+    public String getProperty(String key) {
+        return secretsMap.get(key);
+    }
+
+    @Override
+    public void refresh() throws IOException {
+        log.info("Refreshing encrypted secrets file (" + encFilePath + ")...");
+        // TODO: This is not too pretty as the execution results in some warnings which will also get included in the map!
+        ProcessBuilder pb = new ProcessBuilder(
+                "openssl", "enc", "-d", "-aes-256-cbc", "-in", encFilePath, "-pass", "pass:" + password
+        );
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(":", 2);
+                if (parts.length == 2) {
+                    secretsMap.put(parts[0].trim(), parts[1].trim());
+                }
+            }
+        }
+
+        try {
+            process.waitFor();
+        } catch (Exception e) {
+            log.error("ERROR refreshing secrets file: " + e.getMessage());
+            throw new IOException(e);
+        }
+
+        log.info("Finished refreshing secrets file! Found " + secretsMap.size() + " entries.");
+    }
+
+    @Override
+    public int getSize() {
+        return secretsMap.size();
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(EncryptedFileProperties.class);
+    private Map<String, String> secretsMap = new HashMap<>();
+    private String encFilePath;
+    private String password;
+}

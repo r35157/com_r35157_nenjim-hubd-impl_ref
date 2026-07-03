@@ -1,0 +1,8 @@
+package com.r35157.nenjim.hubd.module;
+
+import org.jetbrains.annotations.NotNull;
+
+public record Dependency(
+        @NotNull ΩJournalIdΩ dependencyId
+) {
+}

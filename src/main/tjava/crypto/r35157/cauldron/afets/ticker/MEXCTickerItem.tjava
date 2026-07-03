@@ -1,0 +1,11 @@
+package crypto.r35157.cauldron.afets.ticker;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.math.BigDecimal;
+
+public record MEXCTickerItem(
+        @NotNull String symbol,
+        @NotNull BigDecimal lastPrice,
+        long timestamp
+) {}

@@ -1,0 +1,208 @@
+package crypto.r35157.cauldron.afets;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import crypto.r35157.cauldron.afets.contractdetails.ContractDetailsItem;
+import crypto.r35157.cauldron.afets.contractdetails.MEXCContractDetails;
+import crypto.r35157.cauldron.afets.gami.GlobalAssetMetadataIndex;
+import crypto.r35157.cauldron.afets.gami.GlobalAssetMetadataIndexItem;
+import crypto.r35157.cauldron.afets.ticker.PositionItem;
+import crypto.r35157.cauldron.afets.ticker.PositionResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
+
+import static crypto.r35157.cauldron.afets.PositionType.marginLong;
+import static crypto.r35157.cauldron.afets.PositionType.marginShort;
+
+public class Portfolio {
+    public Portfolio(
+            PushNotifier pushNotifier,
+            String positionsFilename,
+            GlobalAssetMetadataIndex gami,
+            MEXCSpotPlugin mexcSpotPlugin,
+            MEXCContractDetails contractDetails
+    ) {
+        this.pushNotifier = pushNotifier;
+        this.positionsFilename = positionsFilename;
+        this.gami = gami;
+        this.mexcSpotPlugin = mexcSpotPlugin;
+        this.contractDetails = contractDetails;
+
+        gson = new GsonBuilder().create();
+    }
+
+    public List<Position> getPositions() {
+        return positions;
+    }
+
+    public void updateAll() throws Exception {
+        List<PositionItem> mexcPositionList;
+
+        // TODO: Super ugly - will fix later
+        while(true) {
+            String mexcPositionJson = mexcSpotPlugin.getPositions();
+            PositionResponse posResponse = gson.fromJson(mexcPositionJson, PositionResponse.class);
+            mexcPositionList = posResponse.data();
+
+            if(mexcPositionList != null && !mexcPositionList.isEmpty()) {
+                // Everything is OK - break out!
+                break;
+            }
+
+            String errorMsg = "ERROR: mexcPositionList is null or empty (retry in 1 minute): " + mexcPositionJson;
+            log.error(errorMsg);
+            pushNotification(errorMsg);
+
+            Thread.sleep(60 * 1000);
+        }
+
+        Map<String, PositionItem> mexcPositionMap = new HashMap<>();
+        for (PositionItem item : mexcPositionList) {    // THIS CAN THROW AN NPE
+            int positionType = item.positionType();
+            String typeStr = positionType == 1 ? "long" : "short";
+            String key = item.symbol() + "/" + typeStr;
+            if(mexcPositionMap.containsKey(key)) {
+                log.error("ERROR: " + key + " already in MEXC map! Skipping!");
+                continue;
+            }
+
+            mexcPositionMap.put(key, item);
+        }
+
+        Map<String, Position> localPositionMap = new HashMap<>();
+        List<String> lines = Files.readAllLines(Paths.get(positionsFilename));
+
+        for(String origLine : lines) {
+            String line = origLine.trim();
+
+            // Skip if the line is empty or is a full comment line.
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+
+            // Remove any trailing comment from the line (everything after a '#' character).
+            int commentIndex = line.indexOf('#');
+            if (commentIndex != -1) {
+                line = line.substring(0, commentIndex).trim();
+            }
+            // Skip the line if nothing is left.
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            // Split the line on one or more whitespace characters.
+            String[] parts = line.split("\\s+");
+
+            if (parts.length != 6) {
+                log.error("ERROR: Unparseable line in '" + positionsFilename + "' (" + origLine + ")");
+                continue;
+            }
+
+            // The file format is:
+            // Name, Type, StartTime, GAMIId, NumberOfDecimalsInTrade and MaxTotal
+
+            boolean quarantined = false;
+
+            int index = 0;
+            String name = parts[index];     // Unused here - just for identification in file
+            String typeStr = parts[++index];
+            long startTime = Long.parseLong(parts[++index]);
+            String gamiIdStr = parts[++index];
+            int numberOfDecimalsInTrade = Integer.parseInt(parts[++index]);
+            BigDecimal maxTotal = new BigDecimal(parts[++index]);
+
+            UUID gamiId = UUID.fromString(gamiIdStr);
+            GlobalAssetMetadataIndexItem gamiIdItem = gami.getById(gamiId);
+            PositionType type = ("long".equalsIgnoreCase(typeStr)) ? marginLong : marginShort;
+
+            Position position = new Position(
+                    quarantined,
+                    gamiIdItem,
+                    type,
+                    startTime,
+                    null,
+                    null,
+                    null,
+                    numberOfDecimalsInTrade,
+                    null,
+                    maxTotal
+            );
+
+            String key = position.gamiId().symbolMEXC() + "/" + position.type();
+
+            if(localPositionMap.containsKey(key)) {
+                log.error("ERROR: " + key + " seems to be defined twice in 'Positions.json' - Skipping duplicate one!");
+                continue;
+            }
+
+            localPositionMap.put(key, position);
+        }
+
+        // Map the two piles of garbage together
+        positions = new ArrayList<>();
+        for (Position localPos : localPositionMap.values()) {
+            String symbol = localPos.gamiId().symbolMEXC();
+
+            String key = symbol + "/" + localPos.type();
+            PositionItem mexcPos = mexcPositionMap.get(key);
+
+            if(mexcPos == null) {
+                log.warn("   WARNING: Cannot find position '" + key + "' from 'Position.json' on MEXC - skipping!");
+                continue;
+            }
+
+            ContractDetailsItem contractDetailsItem = contractDetails.getContractDetails(symbol);
+            BigDecimal contractSize = contractDetailsItem.contractSize();
+
+            BigDecimal basePrice = new BigDecimal(mexcPos.holdAvgPriceFullyScale());
+            BigDecimal numOfContracts = new BigDecimal(mexcPos.holdVol());
+            BigDecimal balance = numOfContracts.multiply(contractSize);
+
+            Position mergedPos = new Position(
+                    localPos.quarantined(),
+                    localPos.gamiId(),
+                    localPos.type(),
+                    localPos.startTime(),
+                    basePrice,
+                    balance,
+                    mexcPos.leverage(),
+                    localPos.numberOfDecimalsInTrade(),
+                    contractSize,
+                    localPos.maxTotal()
+            );
+
+            positions.add(mergedPos);
+        }
+
+        // Check for rogue position (positions that exist in MEXC but is not controlled by Evelyn)
+        for(String key : mexcPositionMap.keySet()) {
+            if(localPositionMap.containsKey(key) == false) {
+                log.warn("   WARNING: " + key + " is NOT controlled by Evelyn - Skipping!");
+            }
+        }
+
+        int a = 0;
+    }
+
+    private void pushNotification(String message) {
+        if(pushNotifier != null) {
+            pushNotifier.push(message);
+        }
+    }
+
+    private final GlobalAssetMetadataIndex gami;
+    private final MEXCSpotPlugin mexcSpotPlugin;
+    private final MEXCContractDetails contractDetails;
+    private final Gson gson;
+    private final String positionsFilename;
+    private final PushNotifier pushNotifier;
+
+    private static final Logger log = LoggerFactory.getLogger(Portfolio.class);
+
+    private List<Position> positions;
+}

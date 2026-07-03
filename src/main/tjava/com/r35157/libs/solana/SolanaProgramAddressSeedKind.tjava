@@ -1,0 +1,21 @@
+package com.r35157.libs.solana;
+
+/**
+ * Defines how a Solana program address seed should be converted to bytes.
+ *
+ * <p>Program derived addresses are calculated from byte seeds. This enum allows
+ * callers to describe the meaning of a seed without doing the byte conversion
+ * themselves.</p>
+ */
+public enum SolanaProgramAddressSeedKind {
+    /**
+     * A seed that should be encoded as UTF-8 text.
+     */
+    UTF8,
+
+    /**
+     * A seed that represents a Solana address and should be decoded from its
+     * textual Solana address representation to raw address bytes.
+     */
+    SOLANA_ADDRESS
+}

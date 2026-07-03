@@ -1,0 +1,27 @@
+package crypto.r35157.assetaz.hub;
+
+import crypto.r35157.nenjim.NenjimContext;
+import crypto.r35157.nenjim.NenjimHub;
+import crypto.r35157.nenjim.NenjimProcess;
+
+public class AssetAZHub implements NenjimProcess {
+    @Override
+    public void run() throws Exception {
+    }
+
+    @Override
+    public void setNenjimProcessContext(NenjimContext context) {
+        this.nenjimContext = context;
+    }
+
+    @Override
+    public void setNenjimHub(NenjimHub hub) {
+    }
+
+    @Override
+    public String getProcessName() {
+        return "AssetAZ Hub";
+    }
+
+    private NenjimContext nenjimContext;
+}

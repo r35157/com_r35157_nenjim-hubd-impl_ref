@@ -1,0 +1,18 @@
+# Iteration interval in seconds
+3600
+
+# SYRUP owned by Evelyn
+# = 1270,19474 + 85,22 + 27,00540296 + 256,873447 + 83,7839
+1723.07749
+
+# Solana address for Evelyn IOU
+vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf
+
+# Solana address for Evelyn IOU Burner
+5kjVTc1rebYHg56NyTxSSN1XMKqT2E81eWiaSx1CmzmV
+
+# Raydium Pool Id
+CndJzCXspuk39cwGAA43h3EtHJeHVZ81syt5bTh9dG3E
+
+# Curve width in percent in both directions
+0.05

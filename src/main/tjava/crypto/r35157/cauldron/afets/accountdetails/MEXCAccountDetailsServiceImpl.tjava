@@ -1,0 +1,39 @@
+package crypto.r35157.cauldron.afets.accountdetails;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.ToNumberPolicy;
+import crypto.r35157.cauldron.afets.InvalidAPIKeyException;
+import crypto.r35157.cauldron.afets.MEXCFuturesPlugin;
+import crypto.r35157.cauldron.afets.ServiceResponse;
+import org.jetbrains.annotations.NotNull;
+
+public class MEXCAccountDetailsServiceImpl implements MEXCAccountDetailsService {
+    public MEXCAccountDetailsServiceImpl(MEXCFuturesPlugin mexFuturesPlugin, String symbol) {
+        this.mexFuturesPlugin = mexFuturesPlugin;
+        this.symbol = symbol;
+
+        gson = new GsonBuilder()
+                .setObjectToNumberStrategy(ToNumberPolicy.BIG_DECIMAL)
+                .create();
+    }
+
+    public @NotNull AccountDetails getDetails() throws InvalidAPIKeyException, Exception {
+        ServiceResponse response = mexFuturesPlugin.getAccountDetails(symbol);
+        int code = response.code();
+
+        if(code == 200) {
+            String json = response.body();
+            AccountDetailsResponse adr = gson.fromJson(json, AccountDetailsResponse.class);
+            return adr.data();
+        } else if(code == 401) {
+            throw new InvalidAPIKeyException("API key invalid!");
+        } else {
+            throw new Exception("Error getting account details (Error code: " + code + "): " + response.body());
+        }
+    }
+
+    private final MEXCFuturesPlugin mexFuturesPlugin;
+    private final Gson gson;
+    private final String symbol;
+}

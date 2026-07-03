@@ -1,0 +1,18 @@
+package com.r35157.libs.valuetypes.basic;
+
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SOLANA;
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SYRUPUSDC;
+
+public enum WellKnownTradingPairs {
+    SOL_SYRUPUSDC(new TradingPair(SOLANA.getCurrencyType(), SYRUPUSDC.getCurrencyType()));
+
+    WellKnownTradingPairs(TradingPair tradingPair) {
+        this.tradingPair = tradingPair;
+    }
+
+    public TradingPair getTradingPair() {
+        return tradingPair;
+    }
+
+    private final TradingPair tradingPair;
+}

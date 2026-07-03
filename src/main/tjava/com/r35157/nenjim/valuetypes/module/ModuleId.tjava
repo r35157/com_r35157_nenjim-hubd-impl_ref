@@ -1,0 +1,12 @@
+package com.r35157.nenjim.valuetypes.module;
+
+//import com.r35157.libs.valuetypes.basic.Id;
+import org.jetbrains.annotations.NotNull;
+
+public record ModuleId(
+    @NotNull String value
+) { //implements Id {
+    public static ModuleId of(String moduleId) {
+        return new ModuleId(moduleId);
+    }
+}

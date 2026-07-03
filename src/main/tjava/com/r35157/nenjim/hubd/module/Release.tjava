@@ -1,0 +1,14 @@
+package com.r35157.nenjim.hubd.module;
+
+import com.r35157.libs.valuetypes.basic.SemanticVersion;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Date;
+import java.util.Set;
+
+public record Release(
+        @NotNull SemanticVersion version,
+        @NotNull Date releaseDate,
+        @NotNull ΩChecksumΩ checksum,
+        @NotNull Set<Dependency> dependencies
+) {}

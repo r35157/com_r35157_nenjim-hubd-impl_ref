@@ -1,0 +1,314 @@
+package crypto.r35157.cauldron;
+
+import javafx.application.Platform;
+import javafx.collections.ObservableList;
+import javafx.fxml.FXML;
+import javafx.scene.chart.CategoryAxis;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.StackedAreaChart;
+import javafx.scene.chart.XYChart;
+import javafx.scene.control.TreeCell;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
+import javafx.util.Callback;
+
+import java.text.NumberFormat;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.*;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static crypto.r35157.cauldron.FormatterUtils.formatAmount;
+import static crypto.r35157.cauldron.FormatterUtils.formatPercentage;
+import static crypto.r35157.cauldron.Ticker.getTickerItems;
+import static crypto.r35157.cauldron.TimeUtils.ONE_DAY;
+import static crypto.r35157.cauldron.TimeUtils.formatter_hhmm;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static java.util.concurrent.TimeUnit.MINUTES;
+
+public class NetworthChartController {
+
+    private void startChartUpdater() {
+        ScheduledExecutorService executorService = newSingleThreadScheduledExecutor();
+        Runnable task = this::updateUI;
+        executorService.scheduleAtFixedRate(task, 0, POLL_INTERVAL, POLL_TIMEUNIT);
+    }
+
+    /* This synchronized as both the scheduler and manual UI changes can result in the UI gets updated */
+    private synchronized void updateUI() {
+        long currentTimeStamp = System.currentTimeMillis();
+        List<TickerItem> tickerItems_solana;
+        List<TickerItem> tickerItems_ethereum;
+        List<TickerItem> tickerItems_bitcoincash;
+        List<TickerItem> tickerItems_monero;
+        List<TickerItem> tickerItems_usdc;
+        List<TickerItem> tickerItems_bitcoin;
+
+        try {
+            tickerItems_solana = getTickerItems(ASSETID_SOLANA, currentTimeStamp - displayPeriod, currentTimeStamp);
+            tickerItems_ethereum = getTickerItems(ASSETID_ETHEREUM, currentTimeStamp - displayPeriod, currentTimeStamp);
+            tickerItems_bitcoincash = getTickerItems(ASSETID_BITCOINCASH, currentTimeStamp - displayPeriod, currentTimeStamp);
+            tickerItems_monero = getTickerItems(ASSETID_MONERO, currentTimeStamp - displayPeriod, currentTimeStamp);
+            tickerItems_usdc = getTickerItems(ASSETID_USDC, currentTimeStamp - displayPeriod, currentTimeStamp);
+            tickerItems_bitcoin = getTickerItems(ASSETID_BITCOIN, currentTimeStamp - displayPeriod, currentTimeStamp);
+        } catch(Exception e) {
+            e.printStackTrace();
+            tickerItems_solana = Collections.emptyList();
+            tickerItems_ethereum = Collections.emptyList();
+            tickerItems_bitcoincash = Collections.emptyList();
+            tickerItems_monero = Collections.emptyList();
+            tickerItems_usdc = Collections.emptyList();
+            tickerItems_bitcoin = Collections.emptyList();
+        }
+
+        if (!tickerItems_solana.isEmpty()) {
+            double latestSOLPrice = getLastPrice(tickerItems_solana);
+//            double latestETHPrice = getLastPrice(tickerItems_ethereum);
+//            double latestBCHPrice = getLastPrice(tickerItems_bitcoincash);
+//            double latestXMRPrice = getLastPrice(tickerItems_monero);
+//            double latestUSDCPrice = getLastPrice(tickerItems_usdc);
+//            double latestBTCPrice = getLastPrice(tickerItems_bitcoin);
+
+//            Number price_sol = prices.get("solana");
+//            Number price_btc = prices.get("bitcoin");
+//            Number price_ethereum = prices.get("ethereum");
+//            Number price_bitcoincash = prices.get("bitcoin-cash");
+//            Number price_usdollarcoin = prices.get("usd-coin");
+//            Number price_monero = prices.get("monero");
+//            Number price_fiatdkk = 1.0d;
+
+            //Number value_skyld_maria = balance_liability_maria.doubleValue() * price_btc.doubleValue();
+            //Number value_skyld_emil = balance_liability_emil.doubleValue() * price_monero.doubleValue();
+            //Number value_skyld_sofie = balance_liability_sofie.doubleValue() * price_monero.doubleValue();
+            Number value_sol = balance_solana.doubleValue() * latestSOLPrice;
+            //Number value_btc = balance_bitcoin.doubleValue() * price_btc.doubleValue();
+            //Number value_ethereum = balance_ethereum.doubleValue() * price_ethereum.doubleValue();
+            //Number value_bitcoincash = balance_bitcoincash.doubleValue() * price_bitcoincash.doubleValue();
+            //Number value_usdollarcoin = balance_usdollarcoin.doubleValue() * price_usdollarcoin.doubleValue();
+            //Number value_monero = balance_monero.doubleValue() * price_monero.doubleValue();
+            //Number value_fiatdkk = balance_fiatdkk.doubleValue() * price_fiatdkk.doubleValue();
+
+            Number totalValue =
+            //        value_skyld_maria.doubleValue()
+            //                + value_skyld_emil.doubleValue()
+            //                + value_skyld_sofie.doubleValue()
+                                value_sol.doubleValue();
+            //                + value_btc.doubleValue()
+            //                + value_ethereum.doubleValue()
+            //                + value_bitcoincash.doubleValue()
+            //                + value_usdollarcoin.doubleValue()
+            //                + value_monero.doubleValue()
+            //                + value_fiatdkk.doubleValue();
+
+            boolean addChangeDetailsToTitle = !series_asset_fiatdkk.getData().isEmpty();
+            final String title = calculateTitle(totalValue.doubleValue(), addChangeDetailsToTitle);
+            final List<TickerItem> finalTickerItems_solana = tickerItems_solana;
+
+            Platform.runLater(() -> {
+                // Add Solana
+                for(TickerItem tickerItem : finalTickerItems_solana) {
+                    timeStampForLastValueOnChart = tickerItem.timestamp();
+                    Instant instant = Instant.ofEpochMilli(timeStampForLastValueOnChart);
+                    LocalDateTime ts = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+                    String tsTxt = ts.format(formatter_hhmm);
+                    Number val =  balance_solana.doubleValue() * tickerItem.price();
+                    seriesData_asset_solana.add(new XYChart.Data<>(tsTxt, val));
+                }
+
+                chart.setTitle(title);
+            });
+        }
+    }
+
+    private String calculateTitle(double totalValue, boolean addChangeDetails) {
+        String title = "Networth: " + formatAmount(totalValue) + " DKK";
+
+        if(addChangeDetails) {
+            double historicTotal = calculateInitialNetworthTotal();
+            double change = totalValue - historicTotal;
+            title += " (";
+            title += (change > 0) ? "+" : "";
+            title += formatAmount(change) + " DKK, ";
+
+            double pct = change / historicTotal;
+            title += (pct > 0) ? "+" : "";
+            title += formatPercentage(pct) + ")";
+        }
+
+        return title;
+    }
+
+    private double calculateInitialNetworthTotal() {
+        double total =
+                series_liability_maria.getData().getFirst().getYValue().doubleValue()
+                        + series_liability_emil.getData().getFirst().getYValue().doubleValue()
+                        + series_liability_sofie.getData().getFirst().getYValue().doubleValue()
+                        + series_asset_solana.getData().getFirst().getYValue().doubleValue()
+                        + series_asset_bitcoin.getData().getFirst().getYValue().doubleValue()
+                        + series_asset_ethereum.getData().getFirst().getYValue().doubleValue()
+                        + series_asset_bitcoincash.getData().getFirst().getYValue().doubleValue()
+                        + series_asset_usdollarcoin.getData().getFirst().getYValue().doubleValue()
+                        + series_asset_monero.getData().getFirst().getYValue().doubleValue()
+                        + series_asset_fiatdkk.getData().getFirst().getYValue().doubleValue();
+
+        return total;
+    }
+
+    private double getLastPrice(List<TickerItem> tickerItems) {
+        double price = 0;
+        TickerItem item = tickerItems.getLast();
+        if(item != null) {
+            price = item.price();
+        }
+        return price;
+    }
+
+    @FXML
+    private void initialize() {
+        treeView_accounts.setShowRoot(false);
+        TreeItem<String> rootItem = new TreeItem<>();
+        rootItem.setExpanded(true);
+
+        TreeItem<String> item1 = new TreeItem<>("Assets");
+        TreeItem<String> item2 = new TreeItem<>("Liabilities");
+
+        rootItem.getChildren().addAll(item1, item2);
+
+        treeView_accounts.setRoot(rootItem);
+        treeView_accounts.setCellFactory(new Callback<TreeView<String>, TreeCell<String>>() {
+            @Override
+            public TreeCell<String> call(TreeView<String> param) {
+                return new CheckBoxTreeCell();
+            }
+        });
+
+        chart.setCreateSymbols(false);
+
+        axisY.setUpperBound(50000);
+        axisY.setLowerBound(-15000);
+        axisY.setTickUnit(5000);
+        axisY.setLabel("DKK");
+        axisY.setTickLabelFormatter(new NumberAxis.DefaultFormatter(axisY) {
+            private final NumberFormat formatter;
+
+            {
+                // Create a custom locale for Denmark
+                Locale danishLocale = new Locale("da", "DK");
+                formatter = NumberFormat.getInstance(danishLocale);
+                formatter.setMinimumFractionDigits(2);
+                formatter.setMaximumFractionDigits(2);
+            }
+
+            @Override
+            public String toString(Number object) {
+                return formatter.format(object);
+            }
+        });
+        axisY.setAutoRanging(false);
+
+        series_asset_solana = new XYChart.Series<>();
+        series_asset_solana.setName("Solana");
+        series_asset_bitcoin = new XYChart.Series<>();
+        series_asset_bitcoin.setName("Bitcoin");
+        series_asset_ethereum = new XYChart.Series<>();
+        series_asset_ethereum.setName("Ethereum");
+        series_asset_bitcoincash = new XYChart.Series<>();
+        series_asset_bitcoincash.setName("Bitcoin Cash");
+        series_asset_usdollarcoin = new XYChart.Series<>();
+        series_asset_usdollarcoin.setName("USD Coin");
+        series_asset_monero = new XYChart.Series<>();
+        series_asset_monero.setName("Monero");
+        series_asset_fiatdkk = new XYChart.Series<>();
+        series_asset_fiatdkk.setName("Fiat DKK");
+        series_liability_maria = new XYChart.Series<>();
+        series_liability_maria.setName("Skyld til Maria");
+        series_liability_emil = new XYChart.Series<>();
+        series_liability_emil.setName("Skyld til Emil");
+        series_liability_sofie = new XYChart.Series<>();
+        series_liability_sofie.setName("Skyld til Sofie");
+
+        seriesData_asset_solana = series_asset_solana.getData();
+
+        ObservableList<XYChart.Series<String, Number>> chartData = chart.getData();
+
+        chartData.addAll(
+                //series_liability_maria,
+                //series_liability_emil,
+                //series_liability_sofie,
+                series_asset_solana
+                //series_asset_fiatdkk,
+                //series_asset_bitcoin,
+                //series_asset_ethereum,
+                //series_asset_bitcoincash,
+                //series_asset_usdollarcoin,
+                //series_asset_monero
+        );
+
+        this.displayPeriod = ONE_DAY;
+        this.timeStampForLastValueOnChart = 0L;
+
+        startChartUpdater();
+    }
+
+    @FXML
+    private TreeView<String> treeView_accounts;
+
+    @FXML
+    private StackedAreaChart<String, Number> chart;
+
+    @FXML
+    private CategoryAxis axisX;
+
+    @FXML
+    private NumberAxis axisY;
+
+    private static final TimeUnit POLL_TIMEUNIT = MINUTES;
+    private static final int POLL_INTERVAL = 15;
+
+    private XYChart.Series<String, Number> series_asset_solana;
+    private XYChart.Series<String, Number> series_asset_bitcoin;
+    private XYChart.Series<String, Number> series_asset_ethereum;
+    private XYChart.Series<String, Number> series_asset_bitcoincash;
+    private XYChart.Series<String, Number> series_asset_usdollarcoin;
+    private XYChart.Series<String, Number> series_asset_monero;
+    private XYChart.Series<String, Number> series_asset_fiatdkk;
+    private XYChart.Series<String, Number> series_liability_maria;
+    private XYChart.Series<String, Number> series_liability_sofie;
+    private XYChart.Series<String, Number> series_liability_emil;
+
+    private ObservableList<XYChart.Data<String, Number>> seriesData_asset_solana;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_asset_bitcoin;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_asset_ethereum;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_asset_bitcoincash;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_asset_usdollarcoin;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_asset_monero;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_asset_fiatdkk;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_liability_maria;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_liability_sofie;
+    private ObservableList<XYChart.Data<String, Number>> seriesData_liability_emil;
+
+    private final Number balance_solana = 43.415906951d;
+    private final Number balance_bitcoin = 0.00016755d;
+    private final Number balance_ethereum = 0.00233255d;
+    private final Number balance_bitcoincash = 0.0069836d;
+    private final Number balance_usdollarcoin = 0.931486d;
+    private final Number balance_monero = 0.00213335d;
+    private final Number balance_fiatdkk = 14000d;
+
+    private final Number balance_liability_maria = -0.00887165;
+    private final Number balance_liability_sofie = -3.57;
+    private final Number balance_liability_emil = -5.78;
+
+    private final String ASSETID_SOLANA = "solana";
+    private final String ASSETID_ETHEREUM = "ethereum";
+    private final String ASSETID_BITCOINCASH = "bitcoin-cash";
+    private final String ASSETID_MONERO = "monero";
+    private final String ASSETID_USDC = "usd-coin";
+    private final String ASSETID_BITCOIN = "bitcoin";
+    private final String ASSETID_DKK = "fiatdkk";
+
+    private long displayPeriod;
+    private long timeStampForLastValueOnChart;
+}

@@ -1,0 +1,17 @@
+package crypto.r35157.cauldron.afets;
+
+public enum PositionType {
+    marginLong("long"),
+    marginShort("short");
+
+    PositionType(String humanReadableName) {
+        this.humanReadableName = humanReadableName;
+    }
+
+    @Override
+    public String toString() {
+        return humanReadableName;
+    }
+
+    private final String humanReadableName;
+}

@@ -1,0 +1,9 @@
+package crypto.r35157.cauldron.afets.contractdetails;
+
+import java.util.List;
+
+public record ContractDetailsResponse(
+        boolean success,
+        int code,
+        List<ContractDetailsItem> data
+) { }

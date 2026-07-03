@@ -1,0 +1,290 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.jupiterperpsalarm.AlarmSeverity;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+
+public final class AlarmConfigurationParser {
+
+    public static AlarmConfiguration parse(Path path) throws IOException {
+        List<String> lines = Files.readAllLines(path);
+        List<PriceAlarmDefinition> alarms = new ArrayList<>();
+        Map<String, String> constants = new LinkedHashMap<>();
+
+        for (int lineNumber = 1; lineNumber <= lines.size(); lineNumber++) {
+            String line = lines.get(lineNumber - 1);
+            String trimmed = line.trim();
+
+            if(trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue;
+            }
+
+            try {
+                if(isConstantDefinition(trimmed)) {
+                    parseConstantDefinition(constants, line);
+                } else {
+                    alarms.add(parseLine(line));
+                }
+            } catch (RuntimeException exception) {
+                throw new IllegalArgumentException(
+                        path + ":" + lineNumber + ": " + exception.getMessage(),
+                        exception
+                );
+            }
+        }
+
+        if (alarms.isEmpty()) {
+            throw new IllegalArgumentException("No alarms found in " + path);
+        }
+
+        return new AlarmConfiguration(alarms, constants);
+    }
+
+    static PriceAlarmDefinition parseLine(String line) {
+        Cursor cursor = new Cursor(line);
+
+        int id = Integer.parseInt(cursor.nextToken("id"));
+
+        JupiterPerpsAsset asset = JupiterPerpsAsset.valueOf(
+                cursor.nextToken("asset").toUpperCase(Locale.ROOT)
+        );
+
+        PriceDirection direction = PriceDirection.valueOf(
+                cursor.nextToken("direction").toUpperCase(Locale.ROOT)
+        );
+
+        String targetExpression = cursor.nextToken("target");
+
+        TriggerConfiguration triggerConfiguration = parseTrigger(
+                cursor.nextToken("trigger")
+        );
+
+        AlarmSeverity severity = AlarmSeverity.valueOf(
+                cursor.nextToken("severity").toUpperCase()
+        );
+
+        String note = cursor.nextQuotedString("note");
+
+        cursor.skipWhitespace();
+        if (!cursor.atEnd() && cursor.current() != '#') {
+            throw new IllegalArgumentException(
+                    "Unexpected text after note: " + cursor.remaining()
+            );
+        }
+
+        return new PriceAlarmDefinition(
+                id,
+                asset,
+                direction,
+                targetExpression,
+                triggerConfiguration.trigger(),
+                triggerConfiguration.gracePeriod(),
+                severity,
+                note
+        );
+    }
+
+    private static TriggerConfiguration parseTrigger(String triggerText) {
+        String normalized = triggerText.toUpperCase(Locale.ROOT);
+
+        if (normalized.equals("ONETIME")) {
+            return new TriggerConfiguration(AlarmTrigger.ONETIME, 0);
+        }
+
+        if (normalized.equals("PERSISTENT")) {
+            return new TriggerConfiguration(AlarmTrigger.PERSISTENT, 0);
+        }
+
+        if (normalized.startsWith("PERSISTENT:")) {
+            String graceText = normalized.substring("PERSISTENT:".length());
+
+            if (graceText.isEmpty()) {
+                throw new IllegalArgumentException("Missing persistent grace period: " + triggerText);
+            }
+
+            ΩsecondsΩ gracePeriodSeconds;
+            try {
+                gracePeriodSeconds = Integer.parseInt(graceText);
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException(
+                        "Invalid persistent grace period: " + triggerText,
+                        exception
+                );
+            }
+
+            if (gracePeriodSeconds < 0) {
+                throw new IllegalArgumentException(
+                        "Persistent grace period cannot be negative: " + triggerText
+                );
+            }
+
+            return new TriggerConfiguration(AlarmTrigger.PERSISTENT, gracePeriodSeconds);
+        }
+
+        if (normalized.startsWith("ONETIME:")) {
+            throw new IllegalArgumentException("ONETIME cannot have a grace period: " + triggerText);
+        }
+
+        throw new IllegalArgumentException("Unknown trigger: " + triggerText);
+    }
+
+    private static final class Cursor {
+        private Cursor(String line) {
+            this.line = line;
+        }
+
+        private String nextToken(String fieldName) {
+            skipWhitespace();
+            if (atEnd()) {
+                throw new IllegalArgumentException("Missing " + fieldName);
+            }
+
+            int start = position;
+            while (!atEnd() && !Character.isWhitespace(current())) {
+                position++;
+            }
+            return line.substring(start, position);
+        }
+
+        private String nextQuotedString(String fieldName) {
+            skipWhitespace();
+            if (atEnd() || current() != '"') {
+                throw new IllegalArgumentException(
+                        "Missing quoted " + fieldName + "; expected \"...\""
+                );
+            }
+            position++;
+
+            StringBuilder result = new StringBuilder();
+            boolean escaped = false;
+
+            while (!atEnd()) {
+                char character = current();
+                position++;
+
+                if (escaped) {
+                    result.append(switch (character) {
+                        case 'n' -> '\n';
+                        case 'r' -> '\r';
+                        case 't' -> '\t';
+                        case '"' -> '"';
+                        case '\\' -> '\\';
+                        default -> character;
+                    });
+                    escaped = false;
+                    continue;
+                }
+
+                if (character == '\\') {
+                    escaped = true;
+                    continue;
+                }
+
+                if (character == '"') {
+                    return result.toString();
+                }
+
+                result.append(character);
+            }
+
+            throw new IllegalArgumentException("Unterminated quoted " + fieldName);
+        }
+
+        private void skipWhitespace() {
+            while (!atEnd() && Character.isWhitespace(current())) {
+                position++;
+            }
+        }
+
+        private boolean atEnd() {
+            return position >= line.length();
+        }
+
+        private char current() {
+            return line.charAt(position);
+        }
+
+        private String remaining() {
+            return line.substring(position);
+        }
+
+        private final String line;
+        private int position;
+    }
+
+    private static boolean isConstantDefinition(String trimmedLine) {
+        return trimmedLine.startsWith("{{");
+    }
+
+    private static void parseConstantDefinition(
+            Map<String, String> constants,
+            String line
+    ) {
+        Cursor cursor = new Cursor(line);
+
+        String name = cursor.nextToken("constant name");
+        String value = cursor.nextToken("constant value");
+
+        cursor.skipWhitespace();
+        if (!cursor.atEnd() && cursor.current() != '#') {
+            throw new IllegalArgumentException(
+                    "Unexpected text after constant value: " + cursor.remaining()
+            );
+        }
+
+        validateConstantName(name);
+
+        constants.put(parseVariableName(name), value);
+    }
+
+    private static String parseVariableName(String variableName) {
+        if (!variableName.startsWith("{{") || !variableName.endsWith("}}")) {
+            throw new IllegalArgumentException("Invalid variable name: " + variableName);
+        }
+
+        String parsedVariableName = variableName.substring(2, variableName.length() - 2);
+
+        if (parsedVariableName.isBlank()) {
+            throw new IllegalArgumentException("Variable name cannot be blank: " + variableName);
+        }
+
+        return parsedVariableName;
+    }
+
+    private static String replaceConstants(
+            String line,
+            Map<String, String> constants
+    ) {
+        String result = line;
+
+        for (Map.Entry<String, String> entry : constants.entrySet()) {
+            result = result.replace(entry.getKey(), entry.getValue());
+        }
+
+        if (result.contains("{{") || result.contains("}}")) {
+            throw new IllegalArgumentException(
+                    "Unknown or malformed constant in line: " + line
+            );
+        }
+
+        return result;
+    }
+
+    private static void validateConstantName(String name) {
+        if (!name.matches("\\{\\{[A-Z0-9_]+}}")) {
+            throw new IllegalArgumentException("Invalid constant name: " + name);
+        }
+    }
+
+    private record TriggerConfiguration(
+            AlarmTrigger trigger,
+            ΩsecondsΩ gracePeriod
+    ) {
+    }
+
+    private AlarmConfigurationParser() {
+    }
+}

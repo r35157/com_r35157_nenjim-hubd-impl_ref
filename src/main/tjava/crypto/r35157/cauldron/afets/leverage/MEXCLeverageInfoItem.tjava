@@ -1,0 +1,15 @@
+package crypto.r35157.cauldron.afets.leverage;
+
+import java.math.BigDecimal;
+
+public record MEXCLeverageInfoItem(
+    int level,
+    int maxVol,
+    BigDecimal mmr,
+    BigDecimal imr,
+    int positionType,
+    int openType,
+    int leverage,
+    boolean limitBySys,
+    BigDecimal currentMmr
+) {}

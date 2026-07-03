@@ -1,0 +1,14 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+public record FutureBasePrices(
+    Position position,
+    PositionType type,
+    BigDecimal quantityAbleToBuy,
+    BigDecimal contractsAbleToBuy,
+    BigDecimal futureBasePrice,
+    BigDecimal rawScore,
+    BigDecimal adjustedScore,
+    BigDecimal currentPrice
+) {}

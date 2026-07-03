@@ -1,0 +1,54 @@
+package com.r35157.libs.random.impl.ref;
+
+import com.r35157.libs.random.RandomValueGeneratorInt;
+import com.r35157.libs.random.RandomValueGeneratorString;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Objects;
+
+public class RandomValueGeneratorStringImpl implements RandomValueGeneratorString {
+    public RandomValueGeneratorStringImpl(@NotNull RandomValueGeneratorInt rvgi) {
+        Objects.requireNonNull(rvgi, "Cannot initialize with <null> RandomValueGeneratorInt!");
+        this.rvgi = rvgi;
+    }
+
+    public @NotNull String getSomeStringAlphaNumericOnly(int length) throws IllegalArgumentException {
+        if(length < 0) {
+            throw new IllegalArgumentException("Cannot generate random Strings of size " + length + "!");
+        }
+
+        //             ASCII        Range size
+        // Numeric     48-57        10
+        // Alpha upper 65-90        26
+        // Alpha lower 97-122       26
+        int totalNumberOfCandidates = 10 + 26 + 26;
+
+        StringBuilder buffer = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            int randomInt = rvgi.getSomeInt(0, totalNumberOfCandidates - 1);
+            int asciiIndex = convertRandomIndexToASCIIIndex(randomInt);
+
+            buffer.append((char) asciiIndex);
+        }
+
+        return buffer.toString();
+    }
+
+    private static int convertRandomIndexToASCIIIndex(int randomIndex) {
+        // RandomIndex    0...         ...9  - 10...             ...35 - 36...             ... 61
+        // ASCII values: 48...<numeric>...57 - 65...<alpha upper>...90 - 97...<alpha lower>...122
+        int asciiIndex;
+
+        if(randomIndex >= 36) {
+            asciiIndex = 97 + (randomIndex - 36);
+        } else if(randomIndex >= 10) {
+            asciiIndex = 65 + (randomIndex - 10);
+        } else {
+            asciiIndex = 48 + randomIndex;
+        }
+
+        return asciiIndex;
+    }
+
+    private RandomValueGeneratorInt rvgi;
+}

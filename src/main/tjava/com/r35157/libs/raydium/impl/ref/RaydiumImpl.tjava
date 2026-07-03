@@ -1,0 +1,962 @@
+package com.r35157.libs.raydium.impl.ref;
+
+import com.r35157.libs.valuetypes.basic.WellKnownTradingPairs;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.r35157.libs.raydium.Raydium;
+import com.r35157.libs.raydium.RaydiumConcentratedPositionState;
+import com.r35157.libs.raydium.RaydiumConcentratedPoolInfo;
+import com.r35157.libs.raydium.RaydiumConcentratedPoolState;
+import com.r35157.libs.raydium.RaydiumLiquidityPoolTokenAmounts;
+import com.r35157.libs.solana.SPLTokenHolding;
+import com.r35157.libs.solana.SPLTokenSupply;
+import com.r35157.libs.solana.SolanaAccountInfo;
+import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaProgramAddressSeed;
+import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
+import com.r35157.libs.valuetypes.basic.*;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.RoundingMode;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.Base64;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.SPL_TOKEN_PROGRAM;
+import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.TOKEN_2022_PROGRAM;
+
+public class RaydiumImpl implements Raydium {
+
+    public RaydiumImpl(SolanaBlockChain solanaBlockChain) {
+        this.solanaBlockChain = solanaBlockChain;
+        this.httpClient = HttpClient.newHttpClient();
+        this.objectMapper = new ObjectMapper();
+    }
+
+    @Override
+    public AssetPrice fetchPoolPrice(ΩRaydiumLiquidityPoolIdΩ raydiumLiquidityPoolId) throws IOException, InterruptedException {
+        ΩRestEndpointΩ endpoint = createPoolInfoByIdEndpoint(raydiumLiquidityPoolId);
+
+        JsonNode root = fetchJson(endpoint);
+
+        JsonNode firstPool = getFirstPoolNode(root);
+        JsonNode priceNode = firstPool.path("price");
+
+        if (priceNode.isMissingNode() || !priceNode.isNumber()) {
+            throw new IOException("Could NOT find field 'price' in JSON!");
+        }
+
+        // TODO: Find out how not to hardcode the trading pair here
+        TradingPair tp = WellKnownTradingPairs.SOL_SYRUPUSDC.getTradingPair();
+        ΩPriceΩ p = new ΩPriceΩ(priceNode.toString());
+        AssetPrice ap = new AssetPrice(p, tp);
+
+        return ap;
+    }
+
+    @Override
+    public Set<ΩRaydiumLiquidityPoolIdΩ> fetchLiquidityPoolIds(ΩSolanaAddressΩ ownerAddress) throws IOException, InterruptedException {
+        Set<ΩRaydiumLiquidityPoolIdΩ> liquidityPoolIds = new HashSet<>();
+
+        liquidityPoolIds.addAll(fetchStandardLiquidityPoolIds(ownerAddress));
+        liquidityPoolIds.addAll(fetchConcentratedLiquidityPoolIds(ownerAddress));
+
+        return Set.copyOf(liquidityPoolIds);
+    }
+
+    @Override
+    public Set<ΩRaydiumLiquidityPoolPositionNftIdΩ> fetchConcentratedPositionNftIds(
+            ΩSolanaAddressΩ ownerAddress
+    ) throws IOException, InterruptedException {
+        Set<ΩSolanaNFTAddressΩ> candidates;
+        Set<ΩSolanaNFTAddressΩ> allCandidates = new HashSet<>();
+
+        System.out.println("Searching for legacy NFTs...");
+        candidates = solanaBlockChain.getSolanaNFTCandidateAddresses(ownerAddress, SPL_TOKEN_PROGRAM);
+        System.out.println("Found " + candidates.size() + " legacy NFTs");
+        allCandidates.addAll(candidates);
+
+        System.out.println("Searching for token_2022 NFTs...");
+        candidates = solanaBlockChain.getSolanaNFTCandidateAddresses(ownerAddress, TOKEN_2022_PROGRAM);
+        System.out.println("Found " + candidates.size() + " token_2022 NFTs");
+        allCandidates.addAll(candidates);
+
+        Set<ΩRaydiumLiquidityPoolPositionNftIdΩ> ids = filterCandidatePositionNftIds(allCandidates);
+        return ids;
+    }
+
+    @Override
+    public RaydiumLiquidityPoolTokenAmounts fetchStandardLiquidityPoolTokenAmounts(
+            ΩRaydiumLiquidityPoolStandardIdΩ poolId
+    ) throws IOException, InterruptedException {
+        RaydiumStandardPoolInfo poolInfo = fetchStandardPoolInfo(poolId);
+
+        RaydiumLiquidityPoolTokenAmounts amounts = new RaydiumLiquidityPoolTokenAmounts(
+                poolInfo.poolId(),
+                poolInfo.mintA(),
+                poolInfo.amountA(),
+                poolInfo.mintB(),
+                poolInfo.amountB()
+        );
+        return amounts;
+    }
+
+    @Override
+    public RaydiumLiquidityPoolTokenAmounts fetchStandardLiquidityPoolPositionTokenAmounts(
+            ΩSolanaAddressΩ ownerAddress,
+            ΩRaydiumLiquidityPoolStandardIdΩ poolId
+    ) throws IOException, InterruptedException {
+        RaydiumStandardPoolInfo poolInfo = fetchStandardPoolInfo(poolId);
+
+        SPLTokenHolding ownerLpTokenHolding = fetchOwnerLpTokenHolding(
+                ownerAddress,
+                poolInfo.lpMint()
+        );
+
+        SPLTokenSupply lpTokenSupply = solanaBlockChain.getSPLTokenSupply(
+                poolInfo.lpMint(),
+                SPL_TOKEN_PROGRAM
+        );
+
+        ΩAmountΩ ownerLpAmount = ownerLpTokenHolding.uiAmount();
+        ΩAmountΩ ownerShare = ownerLpAmount.divide(
+                lpTokenSupply.uiAmount(),
+                MathContext.DECIMAL128
+        );
+
+        // TODO: This is a pool-share estimate, not an exact Raydium withdraw preview.
+        // The calculation uses Raydium REST pool amounts and Solana LP mint supply:
+        //
+        //     ownerShare  = ownerLpAmount / lpMintSupply
+        //     ownerAmount = poolAmount * ownerShare
+        //
+        // This matches the simple LP-share model, but it may not match the Raydium UI's
+        // remove-liquidity preview exactly.
+        //
+        // Observed example:
+        //     poolId: 8os8bnXoy5voKv3uBPPuVGyqWZGJaa2RRri5RbLUwPCY
+        //     LP amount owned: 0.077459898
+        //     LP mint supply: 0.077459898
+        //     calculated: 2.1594651 EVE / 31.867153 USDT
+        //     Raydium UI 100% withdraw preview: 2.1062559 EVE / 31.55046 USDT
+        //
+        // Likely reason:
+        //     The REST mintAmountA/mintAmountB values do not necessarily represent the
+        //     exact withdrawable vault amounts. Raydium's on-chain CPMM pool state has
+        //     fee buckets such as protocol fees, fund fees and creator fees. A precise
+        //     withdraw-preview calculation probably needs to decode the on-chain pool
+        //     state, fetch vault balances and subtract non-withdrawable fee amounts.
+        //
+        // Future fix:
+        //     Decode the on-chain CPMM pool state, fetch the token vault balances,
+        //     subtract protocol/fund/creator fee buckets, and calculate the owner's
+        //     share from those withdrawable balances instead of from REST mintAmountA
+        //     and mintAmountB.
+        ΩAmountΩ ownerAmountA = poolInfo.amountA().multiply(ownerShare);
+        ΩAmountΩ ownerAmountB = poolInfo.amountB().multiply(ownerShare);
+
+        RaydiumLiquidityPoolTokenAmounts amounts = new RaydiumLiquidityPoolTokenAmounts(
+                poolInfo.poolId(),
+                poolInfo.mintA(),
+                ownerAmountA,
+                poolInfo.mintB(),
+                ownerAmountB
+        );
+        return amounts;
+    }
+
+    @Override
+    public RaydiumConcentratedPositionState fetchConcentratedPositionState(
+            ΩRaydiumLiquidityPoolPositionNftIdΩ positionNftId
+    ) throws IOException, InterruptedException {
+        SolanaAccountInfo positionAccountInfo = fetchRaydiumPositionAccountInfo(positionNftId);
+        byte[] accountData = decodeBase64AccountData(positionAccountInfo);
+
+        byte[] poolIdBytes = extractConcentratedLiquidityPoolIdBytes(accountData);
+        ΩRaydiumLiquidityPoolConcentratedIdΩ poolId = solanaBlockChain.encodeSolanaAddress(poolIdBytes);
+
+        ΩraydiumLiquidityTickIndexΩ tickLowerIndex = extractConcentratedLiquidityTickIndex(
+                accountData,
+                RAYDIUM_POSITION_ACCOUNT_TICK_LOWER_INDEX_OFFSET,
+                "tickLowerIndex"
+        );
+
+        ΩraydiumLiquidityTickIndexΩ tickUpperIndex = extractConcentratedLiquidityTickIndex(
+                accountData,
+                RAYDIUM_POSITION_ACCOUNT_TICK_UPPER_INDEX_OFFSET,
+                "tickUpperIndex"
+        );
+
+        ΩRaydiumLiquidityΩ liquidity = extractConcentratedLiquidity(accountData);
+
+        RaydiumConcentratedPositionState state = new RaydiumConcentratedPositionState(
+                positionNftId,
+                poolId,
+                tickLowerIndex,
+                tickUpperIndex,
+                liquidity
+        );
+        return state;
+    }
+
+    @Override
+    public RaydiumConcentratedPoolInfo fetchConcentratedPoolInfo(
+            ΩRaydiumLiquidityPoolConcentratedIdΩ poolId
+    ) throws IOException, InterruptedException {
+        ΩRestEndpointΩ endpoint = createPoolInfoByIdEndpoint(poolId);
+
+        JsonNode root = fetchJson(endpoint);
+        JsonNode firstPool = getFirstPoolNode(root);
+
+        ΩSPLMintAddressΩ mintA = extractMintAddress(firstPool, "mintA");
+        ΩamountDecimalsΩ mintADecimals = extractMintDecimals(firstPool, "mintA");
+        ΩSPLMintAddressΩ mintB = extractMintAddress(firstPool, "mintB");
+        ΩamountDecimalsΩ mintBDecimals = extractMintDecimals(firstPool, "mintB");
+        ΩPriceΩ priceEstimate = extractPriceEstimate(firstPool);
+
+        RaydiumConcentratedPoolInfo poolInfo = new RaydiumConcentratedPoolInfo(
+                poolId,
+                mintA,
+                mintADecimals,
+                mintB,
+                mintBDecimals,
+                priceEstimate
+        );
+        return poolInfo;
+    }
+
+    @Override
+    public RaydiumConcentratedPoolState fetchConcentratedPoolState(
+            ΩRaydiumLiquidityPoolConcentratedIdΩ poolId
+    ) throws IOException, InterruptedException {
+        SolanaAccountInfo poolAccountInfo = fetchRaydiumPoolAccountInfo(poolId);
+        byte[] accountData = decodeBase64AccountData(poolAccountInfo);
+
+        ΩRaydiumLiquidityΩ liquidity = extractConcentratedPoolLiquidity(accountData);
+        ΩRaydiumSqrtPriceX64Ω sqrtPriceX64 = extractConcentratedPoolSqrtPriceX64(accountData);
+        ΩraydiumLiquidityTickIndexΩ tickCurrent = extractConcentratedLiquidityTickIndex(
+                accountData,
+                RAYDIUM_POOL_STATE_TICK_CURRENT_OFFSET,
+                "tickCurrent"
+        );
+
+        RaydiumConcentratedPoolState state = new RaydiumConcentratedPoolState(
+                poolId,
+                liquidity,
+                sqrtPriceX64,
+                tickCurrent
+        );
+        return state;
+    }
+
+    @Override
+    public Range<AssetPrice> calculateConcentratedPositionPriceRange(
+            RaydiumConcentratedPositionState positionState,
+            RaydiumConcentratedPoolInfo poolInfo,
+            int decimalPlaces
+    ) {
+        TradingPair tp = WellKnownTradingPairs.SOL_SYRUPUSDC.getTradingPair();
+
+        ΩPriceΩ priceFrom = calculatePriceFromTick(
+                positionState.tickLowerIndex(),
+                poolInfo,
+                decimalPlaces
+        );
+        AssetPrice apFrom = new AssetPrice(priceFrom, tp);
+
+        ΩPriceΩ priceTo = calculatePriceFromTick(
+                positionState.tickUpperIndex(),
+                poolInfo,
+                decimalPlaces
+        );
+        AssetPrice apTo = new AssetPrice(priceTo, tp);
+
+        Range<AssetPrice> range = new Range<>(apFrom, true, apTo, false);
+        return range;
+    }
+
+    @Override
+    public RaydiumLiquidityPoolTokenAmounts calculateConcentratedPositionTokenAmounts(
+            RaydiumConcentratedPositionState positionState,
+            RaydiumConcentratedPoolInfo poolInfo,
+            RaydiumConcentratedPoolState poolState
+    ) {
+        RaydiumLiquidityPoolTokenAmounts amounts = calculateConcentratedPositionTokenAmounts(
+                positionState,
+                poolInfo,
+                calculateCurrentSqrtRawPrice(poolState)
+        );
+        return amounts;
+    }
+
+    private RaydiumLiquidityPoolTokenAmounts calculateConcentratedPositionTokenAmounts(
+            RaydiumConcentratedPositionState positionState,
+            RaydiumConcentratedPoolInfo poolInfo,
+            ΩRaydiumSqrtPriceΩ sqrtPriceCurrent
+    ) {
+        ΩRaydiumSqrtPriceΩ sqrtPriceLower = calculateSqrtRawPriceFromTick(positionState.tickLowerIndex());
+        ΩRaydiumSqrtPriceΩ sqrtPriceUpper = calculateSqrtRawPriceFromTick(positionState.tickUpperIndex());
+        BigDecimal liquidity = new BigDecimal(positionState.liquidity());
+
+        BigDecimal rawAmountA;
+        BigDecimal rawAmountB;
+
+        if (sqrtPriceCurrent.compareTo(sqrtPriceLower) <= 0) {
+            rawAmountA = calculateAmountAForLiquidity(liquidity, sqrtPriceLower, sqrtPriceUpper);
+            rawAmountB = BigDecimal.ZERO;
+        } else if (sqrtPriceCurrent.compareTo(sqrtPriceUpper) >= 0) {
+            rawAmountA = BigDecimal.ZERO;
+            rawAmountB = calculateAmountBForLiquidity(liquidity, sqrtPriceLower, sqrtPriceUpper);
+        } else {
+            rawAmountA = calculateAmountAForLiquidity(liquidity, sqrtPriceCurrent, sqrtPriceUpper);
+            rawAmountB = calculateAmountBForLiquidity(liquidity, sqrtPriceLower, sqrtPriceCurrent);
+        }
+
+        ΩAmountΩ amountA = convertRawTokenAmountToUiAmount(
+                rawAmountA,
+                poolInfo.mintADecimals()
+        );
+
+        ΩAmountΩ amountB = convertRawTokenAmountToUiAmount(
+                rawAmountB,
+                poolInfo.mintBDecimals()
+        );
+
+        RaydiumLiquidityPoolTokenAmounts amounts = new RaydiumLiquidityPoolTokenAmounts(
+                poolInfo.poolId(),
+                poolInfo.mintA(),
+                amountA,
+                poolInfo.mintB(),
+                amountB
+        );
+        return amounts;
+    }
+
+    private ΩRaydiumSqrtPriceΩ calculateCurrentSqrtRawPrice(RaydiumConcentratedPoolState poolState) {
+        ΩRaydiumSqrtPriceΩ p = new BigDecimal(poolState.sqrtPriceX64()).divide(
+                RAYDIUM_Q64_FACTOR,
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+        return p;
+    }
+
+    private ΩRaydiumSqrtPriceΩ calculateSqrtRawPriceFromTick(ΩraydiumLiquidityTickIndexΩ tickIndex) {
+        BigDecimal rawPrice = pow(RAYDIUM_TICK_BASE, tickIndex);
+        BigDecimal result = rawPrice.sqrt(RAYDIUM_PRICE_MATH_CONTEXT);
+        return result;
+    }
+
+    private BigDecimal calculateAmountAForLiquidity(
+            BigDecimal liquidity,
+            ΩRaydiumSqrtPriceΩ sqrtPriceLower,
+            ΩRaydiumSqrtPriceΩ sqrtPriceUpper
+    ) {
+        BigDecimal numerator = liquidity.multiply(
+                sqrtPriceUpper.subtract(sqrtPriceLower, RAYDIUM_PRICE_MATH_CONTEXT),
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+
+        BigDecimal denominator = sqrtPriceUpper.multiply(
+                sqrtPriceLower,
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+
+        BigDecimal result = numerator.divide(
+                denominator,
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+        return result;
+    }
+
+    private BigDecimal calculateAmountBForLiquidity(
+            BigDecimal liquidity,
+            ΩRaydiumSqrtPriceΩ sqrtPriceLower,
+            ΩRaydiumSqrtPriceΩ sqrtPriceUpper
+    ) {
+        BigDecimal result = liquidity.multiply(
+                sqrtPriceUpper.subtract(sqrtPriceLower, RAYDIUM_PRICE_MATH_CONTEXT),
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+        return result;
+    }
+
+    private ΩAmountΩ convertRawTokenAmountToUiAmount(
+            BigDecimal rawAmount,
+            ΩamountDecimalsΩ decimals
+    ) {
+        BigDecimal decimalFactor = pow(BigDecimal.TEN, decimals);
+
+        ΩAmountΩ a = rawAmount.divide(
+                decimalFactor,
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+
+        a = a.setScale(decimals, RoundingMode.HALF_UP);
+        return a;
+    }
+
+    private ΩPriceΩ calculatePriceFromTick(
+            ΩraydiumLiquidityTickIndexΩ tickIndex,
+            RaydiumConcentratedPoolInfo poolInfo,
+            int decimalPlaces
+    ) {
+        if (decimalPlaces < 0) {
+            throw new IllegalArgumentException("decimalPlaces must not be negative!");
+        }
+
+        BigDecimal rawPrice = pow(RAYDIUM_TICK_BASE, tickIndex);
+        BigDecimal decimalFactor = calculateDecimalFactor(poolInfo);
+
+        ΩPriceΩ p = rawPrice.multiply(
+                decimalFactor,
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+
+        p = p.setScale(
+                decimalPlaces,
+                RoundingMode.HALF_UP
+        );
+
+        return p;
+    }
+
+    private BigDecimal calculateDecimalFactor(RaydiumConcentratedPoolInfo poolInfo) {
+        BigDecimal result = pow(
+                BigDecimal.TEN,
+                poolInfo.mintADecimals() - poolInfo.mintBDecimals()
+        );
+
+        return result;
+    }
+
+    private BigDecimal pow(BigDecimal base, int exponent) {
+        BigDecimal power = base.pow(
+                Math.abs(exponent),
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+
+        if (exponent >= 0) {
+            return power;
+        }
+
+        BigDecimal result = BigDecimal.ONE.divide(
+                power,
+                RAYDIUM_PRICE_MATH_CONTEXT
+        );
+
+        return result;
+    }
+
+    private SPLTokenHolding fetchOwnerLpTokenHolding(
+            ΩSolanaAddressΩ ownerAddress,
+            ΩSPLMintAddressΩ lpMint
+    ) throws IOException, InterruptedException {
+        var tokenHoldings = solanaBlockChain.getSPLTokenHoldings(
+                ownerAddress,
+                SPL_TOKEN_PROGRAM
+        );
+
+        SPLTokenHolding tokenHolding = tokenHoldings.get(lpMint);
+
+        if (tokenHolding == null) {
+            throw new IOException("Owner does not hold LP token mint: " + lpMint);
+        }
+
+        return tokenHolding;
+    }
+
+    private RaydiumStandardPoolInfo fetchStandardPoolInfo(
+            ΩRaydiumLiquidityPoolStandardIdΩ poolId
+    ) throws IOException, InterruptedException {
+        ΩRestEndpointΩ endpoint = createPoolInfoByIdEndpoint(poolId);
+
+        JsonNode root = fetchJson(endpoint);
+        JsonNode firstPool = getFirstPoolNode(root);
+
+        ΩSPLMintAddressΩ mintA = extractMintAddress(firstPool, "mintA");
+        ΩAmountΩ amountA = extractAmount(firstPool, "mintAmountA");
+        ΩSPLMintAddressΩ mintB = extractMintAddress(firstPool, "mintB");
+        ΩAmountΩ amountB = extractAmount(firstPool, "mintAmountB");
+        ΩSPLMintAddressΩ lpMint = extractMintAddress(firstPool, "lpMint");
+        ΩAmountΩ totalLpAmount = extractAmount(firstPool, "lpAmount");
+
+        return new RaydiumStandardPoolInfo(
+                poolId,
+                mintA,
+                amountA,
+                mintB,
+                amountB,
+                lpMint,
+                totalLpAmount
+        );
+    }
+
+    private ΩSPLMintAddressΩ extractMintAddress(JsonNode poolNode, String mintFieldName) throws IOException {
+        JsonNode addressNode = poolNode.path(mintFieldName).path("address");
+
+        if (addressNode.isMissingNode() || !addressNode.isTextual()) {
+            throw new IOException("Could NOT find textual field '" + mintFieldName + ".address' in pool JSON!");
+        }
+
+        return addressNode.asText();
+    }
+
+    private ΩAmountΩ extractAmount(JsonNode poolNode, String amountFieldName) throws IOException {
+        JsonNode amountNode = poolNode.path(amountFieldName);
+
+        if (amountNode.isMissingNode() || !amountNode.isNumber()) {
+            throw new IOException("Could NOT find numeric field '" + amountFieldName + "' in pool JSON!");
+        }
+
+        return new BigDecimal(amountNode.toString());
+    }
+
+    private ΩamountDecimalsΩ extractMintDecimals(JsonNode poolNode, String mintFieldName) throws IOException {
+        JsonNode decimalsNode = poolNode.path(mintFieldName).path("decimals");
+
+        if (decimalsNode.isMissingNode() || !decimalsNode.isNumber()) {
+            throw new IOException("Could NOT find numeric field '" + mintFieldName + ".decimals' in pool JSON!");
+        }
+
+        return decimalsNode.asInt();
+    }
+
+    private ΩPriceΩ extractPriceEstimate(JsonNode poolNode) throws IOException {
+        JsonNode priceNode = poolNode.path("price");
+
+        if (priceNode.isMissingNode() || !priceNode.isNumber()) {
+            throw new IOException("Could NOT find numeric field 'price' in pool JSON!");
+        }
+
+        return new BigDecimal(priceNode.toString());
+    }
+
+    private Set<ΩRaydiumLiquidityPoolStandardIdΩ> fetchStandardLiquidityPoolIds(ΩSolanaAddressΩ ownerAddress) throws IOException, InterruptedException {
+        var tokenHoldings = solanaBlockChain.getSPLTokenHoldings(
+                ownerAddress,
+                SPL_TOKEN_PROGRAM
+        );
+
+        Set<ΩSPLMintAddressΩ> mintAddresses = tokenHoldings.keySet();
+
+        if (mintAddresses.isEmpty()) {
+            return Set.of();
+        }
+
+        ΩRestEndpointΩ endpoint = createPoolInfoByCandidateLpMintsEndpoint(mintAddresses);
+        JsonNode root = fetchJson(endpoint);
+
+        return extractStandardLiquidityPoolIds(root);
+    }
+
+    private Set<ΩRaydiumLiquidityPoolConcentratedIdΩ> fetchConcentratedLiquidityPoolIds(
+            ΩSolanaAddressΩ ownerAddress
+    ) throws IOException, InterruptedException {
+        Set<ΩRaydiumLiquidityPoolPositionNftIdΩ> positionNftIds = fetchConcentratedPositionNftIds(ownerAddress);
+        Set<SolanaAccountInfo> positionAccountInfos = fetchRaydiumPositionAccountInfos(positionNftIds);
+
+        return extractConcentratedLiquidityPoolIds(positionAccountInfos);
+    }
+
+    private Set<ΩRaydiumLiquidityPoolPositionNftIdΩ> filterCandidatePositionNftIds(
+            Set<ΩSolanaNFTAddressΩ> candidatePositionNftIds
+    ) throws IOException, InterruptedException {
+        Set<ΩRaydiumLiquidityPoolPositionNftIdΩ> positionNftIds = new HashSet<>();
+
+        System.out.println("Filtering " + candidatePositionNftIds.size() + " NFTs for Raydium Concentrated pools...");
+        for (ΩSolanaNFTAddressΩ candidatePositionNftId : candidatePositionNftIds) {
+            System.out.print("   " + candidatePositionNftId + " ");
+            SolanaProgramDerivedAddress positionPda = findRaydiumPositionPda(candidatePositionNftId);
+            SolanaAccountInfo accountInfo = solanaBlockChain.getAccountInfo(positionPda.address());
+
+            if (accountInfo == null) {
+                System.out.println("NO");
+                continue;
+            }
+
+            if (RAYDIUM_CLMM_PROGRAM_ID.equals(accountInfo.owner())) {
+                System.out.println("YES");
+                positionNftIds.add(candidatePositionNftId);
+            }
+        }
+
+        return Set.copyOf(positionNftIds);
+    }
+
+    private SolanaProgramDerivedAddress findRaydiumPositionPda(ΩSolanaNFTAddressΩ candidatePositionNftId) {
+        return solanaBlockChain.findProgramAddress(
+                RAYDIUM_CLMM_PROGRAM_ID,
+                List.of(
+                        SolanaProgramAddressSeed.utf8("position"),
+                        SolanaProgramAddressSeed.solanaAddress(candidatePositionNftId)
+                )
+        );
+    }
+
+    private SolanaAccountInfo fetchRaydiumPositionAccountInfo(
+            ΩRaydiumLiquidityPoolPositionNftIdΩ positionNftId
+    ) throws IOException, InterruptedException {
+        SolanaProgramDerivedAddress positionPda = findRaydiumPositionPda(positionNftId);
+
+        SolanaAccountInfo accountInfo = solanaBlockChain.getAccountInfo(positionPda.address());
+
+        if (accountInfo == null) {
+            throw new IOException("Raydium position account was not found for position NFT id: " + positionNftId);
+        }
+
+        if (!RAYDIUM_CLMM_PROGRAM_ID.equals(accountInfo.owner())) {
+            throw new IOException("Raydium position account is not owned by the Raydium CLMM program: " + positionPda.address());
+        }
+
+        return accountInfo;
+    }
+
+    private SolanaAccountInfo fetchRaydiumPoolAccountInfo(
+            ΩRaydiumLiquidityPoolConcentratedIdΩ poolId
+    ) throws IOException, InterruptedException {
+        SolanaAccountInfo accountInfo = solanaBlockChain.getAccountInfo(poolId);
+
+        if (accountInfo == null) {
+            throw new IOException("Raydium concentrated pool account was not found for pool id: " + poolId);
+        }
+
+        if (!RAYDIUM_CLMM_PROGRAM_ID.equals(accountInfo.owner())) {
+            throw new IOException("Raydium concentrated pool account is not owned by the Raydium CLMM program: " + poolId);
+        }
+
+        return accountInfo;
+    }
+
+    private Set<SolanaAccountInfo> fetchRaydiumPositionAccountInfos(
+            Set<ΩRaydiumLiquidityPoolPositionNftIdΩ> positionNftIds
+    ) throws IOException, InterruptedException {
+        Set<SolanaAccountInfo> accountInfos = new HashSet<>();
+
+        for (ΩRaydiumLiquidityPoolPositionNftIdΩ positionNftId : positionNftIds) {
+            accountInfos.add(fetchRaydiumPositionAccountInfo(positionNftId));
+        }
+
+        return Set.copyOf(accountInfos);
+    }
+
+    private Set<ΩRaydiumLiquidityPoolConcentratedIdΩ> extractConcentratedLiquidityPoolIds(
+            Set<SolanaAccountInfo> positionAccountInfos
+    ) throws IOException {
+        Set<ΩRaydiumLiquidityPoolConcentratedIdΩ> liquidityPoolIds = new HashSet<>();
+
+        for (SolanaAccountInfo positionAccountInfo : positionAccountInfos) {
+            byte[] accountData = decodeBase64AccountData(positionAccountInfo);
+
+            byte[] poolIdBytes = extractConcentratedLiquidityPoolIdBytes(accountData);
+            ΩRaydiumLiquidityPoolConcentratedIdΩ liquidityPoolId = solanaBlockChain.encodeSolanaAddress(poolIdBytes);
+
+            liquidityPoolIds.add(liquidityPoolId);
+        }
+
+        return Set.copyOf(liquidityPoolIds);
+    }
+
+    private Set<ΩRaydiumLiquidityPoolStandardIdΩ> extractStandardLiquidityPoolIds(JsonNode root) throws IOException {
+        JsonNode data = root.path("data");
+        if (!data.isArray()) {
+            throw new IOException("Returned JSON do NOT contain a valid data-array!");
+        }
+
+        Set<ΩRaydiumLiquidityPoolStandardIdΩ> liquidityPoolIds = new HashSet<>();
+
+        for (JsonNode poolNode : data) {
+            if (poolNode == null || poolNode.isNull()) {
+                continue;
+            }
+
+            JsonNode idNode = poolNode.path("id");
+
+            if (idNode.isMissingNode() || !idNode.isTextual()) {
+                throw new IOException("Could NOT find textual field 'id' in pool JSON!");
+            }
+
+            liquidityPoolIds.add(idNode.asText());
+        }
+
+        return Set.copyOf(liquidityPoolIds);
+    }
+
+    private ΩRestEndpointΩ createPoolInfoByIdEndpoint(ΩRaydiumLiquidityPoolIdΩ raydiumLiquidityPoolId) {
+        return ΩRestEndpointΩ.create(RAYDIUM_API_V3_BASE_URI + "/pools/info/ids?ids=" + raydiumLiquidityPoolId);
+    }
+
+    private JsonNode fetchJson(ΩRestEndpointΩ restEndpoint) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(restEndpoint)
+                .GET()
+                .header("Accept", "application/json")
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException("HTTP error: " + response.statusCode() + ", body: " + response.body());
+        }
+
+        return objectMapper.readTree(response.body());
+    }
+
+    private synchronized HttpResponse<String> sendThrottled(HttpRequest request) throws IOException, InterruptedException {
+        waitBeforeRemoteCall();
+
+        try {
+            return httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+        } finally {
+            previousRemoteCallTime = System.currentTimeMillis();
+        }
+    }
+
+    private void waitBeforeRemoteCall() throws InterruptedException {
+        long now = System.currentTimeMillis();
+        long elapsed = now - previousRemoteCallTime;
+
+        if (elapsed < MINIMUM_REMOTE_CALL_INTERVAL) {
+            ΩmilliSecondsΩ sleepTime = MINIMUM_REMOTE_CALL_INTERVAL - elapsed;
+            //System.out.println("Throttling Raydium request for " + sleepTime + "ms...");
+            Thread.sleep(sleepTime);
+            //System.out.println("Ready");
+        }
+    }
+
+    private ΩRestEndpointΩ createPoolInfoByCandidateLpMintsEndpoint(Set<ΩSPLMintAddressΩ> candidateLpMintAddresses) {
+        String joinedLpMintAddresses = String.join(
+                ",",
+                candidateLpMintAddresses.stream()
+                        .map(Object::toString)
+                        .toList()
+        );
+
+        return ΩRestEndpointΩ.create(RAYDIUM_API_V3_BASE_URI + "/pools/info/lps?lps=" + joinedLpMintAddresses);
+    }
+
+    private byte[] decodeBase64AccountData(SolanaAccountInfo accountInfo) throws IOException {
+        try {
+            return Base64.getDecoder().decode(accountInfo.dataBase64());
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Could not decode Solana account data as Base64 for account: " + accountInfo.address(), e);
+        }
+    }
+
+    private byte[] extractConcentratedLiquidityPoolIdBytes(byte[] accountData) throws IOException {
+        ensureAccountDataContains(
+                accountData,
+                RAYDIUM_POSITION_ACCOUNT_POOL_ID_OFFSET,
+                SOLANA_ADDRESS_LENGTH,
+                "pool id"
+        );
+
+        byte[] poolIdBytes = new byte[SOLANA_ADDRESS_LENGTH];
+
+        System.arraycopy(
+                accountData,
+                RAYDIUM_POSITION_ACCOUNT_POOL_ID_OFFSET,
+                poolIdBytes,
+                0,
+                SOLANA_ADDRESS_LENGTH
+        );
+
+        return poolIdBytes;
+    }
+
+    private ΩraydiumLiquidityTickIndexΩ extractConcentratedLiquidityTickIndex(
+            byte[] accountData,
+            int offset,
+            String fieldName
+    ) throws IOException {
+        ensureAccountDataContains(
+                accountData,
+                offset,
+                RAYDIUM_POSITION_ACCOUNT_TICK_INDEX_LENGTH,
+                fieldName
+        );
+
+        return (accountData[offset] & 0xFF)
+                | ((accountData[offset + 1] & 0xFF) << 8)
+                | ((accountData[offset + 2] & 0xFF) << 16)
+                | ((accountData[offset + 3] & 0xFF) << 24);
+    }
+
+    private ΩRaydiumLiquidityΩ extractConcentratedLiquidity(byte[] accountData) throws IOException {
+        return extractUnsigned128LittleEndian(
+                accountData,
+                RAYDIUM_POSITION_ACCOUNT_LIQUIDITY_OFFSET,
+                "liquidity"
+        );
+    }
+
+    private ΩRaydiumLiquidityΩ extractConcentratedPoolLiquidity(byte[] accountData) throws IOException {
+        return extractUnsigned128LittleEndian(
+                accountData,
+                RAYDIUM_POOL_STATE_LIQUIDITY_OFFSET,
+                "liquidity"
+        );
+    }
+
+    private ΩRaydiumSqrtPriceX64Ω extractConcentratedPoolSqrtPriceX64(byte[] accountData) throws IOException {
+        return extractUnsigned128LittleEndian(
+                accountData,
+                RAYDIUM_POOL_STATE_SQRT_PRICE_X64_OFFSET,
+                "sqrtPriceX64"
+        );
+    }
+
+    private BigInteger extractUnsigned128LittleEndian(
+            byte[] accountData,
+            int offset,
+            String fieldName
+    ) throws IOException {
+        ensureAccountDataContains(
+                accountData,
+                offset,
+                RAYDIUM_U128_LENGTH,
+                fieldName
+        );
+
+        byte[] bigEndianBytes = new byte[RAYDIUM_U128_LENGTH + 1];
+
+        for (int i = 0; i < RAYDIUM_U128_LENGTH; i++) {
+            bigEndianBytes[bigEndianBytes.length - 1 - i] = accountData[offset + i];
+        }
+
+        return new BigInteger(bigEndianBytes);
+    }
+
+    private void ensureAccountDataContains(
+            byte[] accountData,
+            int offset,
+            int length,
+            String fieldName
+    ) throws IOException {
+        if (accountData.length < offset + length) {
+            throw new IOException("Raydium position account data is too short to contain " + fieldName + ".");
+        }
+    }
+
+    private JsonNode getFirstPoolNode(JsonNode root) throws IOException {
+        JsonNode data = root.path("data");
+
+        if (!data.isArray() || data.isEmpty()) {
+            throw new IOException("Returned JSON do NOT contain a valid data-array!");
+        }
+
+        JsonNode firstPool = data.get(0);
+
+        if (firstPool == null || firstPool.isNull()) {
+            throw new IOException("Returned JSON data-array did NOT contain a pool!");
+        }
+
+        return firstPool;
+    }
+
+    private record RaydiumStandardPoolInfo(
+            ΩRaydiumLiquidityPoolStandardIdΩ poolId,
+            ΩSPLMintAddressΩ mintA,
+            ΩAmountΩ amountA,
+            ΩSPLMintAddressΩ mintB,
+            ΩAmountΩ amountB,
+            ΩSPLMintAddressΩ lpMint,
+            ΩAmountΩ totalLpAmount
+    ) {
+    }
+
+    private static final ΩRestEndpointBaseΩ RAYDIUM_API_V3_BASE_URI = ΩRestEndpointBaseΩ.create("https://api-v3.raydium.io");
+    private static final ΩRaydiumProgramIdΩ RAYDIUM_CLMM_PROGRAM_ID = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
+    private static final ΩmilliSecondsΩ MINIMUM_REMOTE_CALL_INTERVAL = 5000L;
+    private static final BigDecimal RAYDIUM_TICK_BASE = new BigDecimal("1.0001");
+    private static final BigDecimal RAYDIUM_Q64_FACTOR = new BigDecimal(BigInteger.ONE.shiftLeft(64));
+    private static final MathContext RAYDIUM_PRICE_MATH_CONTEXT = MathContext.DECIMAL128;
+
+    /**
+     * Byte layout used when decoding Raydium CLMM PersonalPositionState account data.
+     *
+     * <p>This layout is based on Raydium's on-chain {@code PersonalPositionState}
+     * account. The account starts with the 8-byte Anchor discriminator, followed by
+     * the packed position fields. The fields decoded here are the NFT mint, pool id,
+     * lower/upper tick indexes and position liquidity.</p>
+     *
+     * <pre>
+     * 0   - 8    Anchor discriminator
+     * 8   - 9    bump
+     * 9   - 41   nft_mint
+     * 41  - 73   pool_id
+     * 73  - 77   tick_lower_index       i32 little-endian
+     * 77  - 81   tick_upper_index       i32 little-endian
+     * 81  - 97   liquidity              u128 little-endian
+     * </pre>
+     *
+     * <p>If Raydium changes the on-chain {@code PersonalPositionState} layout, these
+     * offsets must be checked and updated before decoding position state.</p>
+     */
+    private static final int SOLANA_ADDRESS_LENGTH = 32;
+    private static final int RAYDIUM_POSITION_ACCOUNT_DISCRIMINATOR_LENGTH = 8;
+    private static final int RAYDIUM_POSITION_ACCOUNT_BUMP_LENGTH = 1;
+    private static final int RAYDIUM_POSITION_ACCOUNT_NFT_MINT_OFFSET =
+            RAYDIUM_POSITION_ACCOUNT_DISCRIMINATOR_LENGTH + RAYDIUM_POSITION_ACCOUNT_BUMP_LENGTH;
+    private static final int RAYDIUM_POSITION_ACCOUNT_POOL_ID_OFFSET =
+            RAYDIUM_POSITION_ACCOUNT_NFT_MINT_OFFSET + SOLANA_ADDRESS_LENGTH;
+    private static final int RAYDIUM_POSITION_ACCOUNT_TICK_INDEX_LENGTH = 4;
+    private static final int RAYDIUM_POSITION_ACCOUNT_TICK_LOWER_INDEX_OFFSET =
+            RAYDIUM_POSITION_ACCOUNT_POOL_ID_OFFSET + SOLANA_ADDRESS_LENGTH;
+    private static final int RAYDIUM_POSITION_ACCOUNT_TICK_UPPER_INDEX_OFFSET =
+            RAYDIUM_POSITION_ACCOUNT_TICK_LOWER_INDEX_OFFSET + RAYDIUM_POSITION_ACCOUNT_TICK_INDEX_LENGTH;
+    private static final int RAYDIUM_U128_LENGTH = 16;
+    private static final int RAYDIUM_POSITION_ACCOUNT_LIQUIDITY_OFFSET =
+            RAYDIUM_POSITION_ACCOUNT_TICK_UPPER_INDEX_OFFSET + RAYDIUM_POSITION_ACCOUNT_TICK_INDEX_LENGTH;
+
+    /**
+     * Byte layout used when decoding Raydium CLMM PoolState account data.
+     *
+     * <p>This layout is based on Raydium's on-chain {@code PoolState} account.
+     * The account starts with the 8-byte Anchor discriminator, followed by the packed
+     * {@code PoolState} fields. The fields decoded here are pool liquidity,
+     * current square-root price in Q64.64 format, and current tick index.</p>
+     *
+     * <pre>
+     * 0   - 8    Anchor discriminator
+     * 8   - 9    bump
+     * 9   - 41   amm_config
+     * 41  - 73   owner
+     * 73  - 105  token_mint_0
+     * 105 - 137  token_mint_1
+     * 137 - 169  token_vault_0
+     * 169 - 201  token_vault_1
+     * 201 - 233  observation_key
+     * 233 - 234  mint_decimals_0
+     * 234 - 235  mint_decimals_1
+     * 235 - 237  tick_spacing
+     * 237 - 253  liquidity              u128 little-endian
+     * 253 - 269  sqrt_price_x64         u128 little-endian
+     * 269 - 273  tick_current           i32 little-endian
+     * </pre>
+     *
+     * <p>If Raydium changes the on-chain {@code PoolState} layout, these offsets must
+     * be checked and updated before decoding pool state.</p>
+     */
+    private static final int RAYDIUM_POOL_STATE_LIQUIDITY_OFFSET = 237;
+    private static final int RAYDIUM_POOL_STATE_SQRT_PRICE_X64_OFFSET =
+            RAYDIUM_POOL_STATE_LIQUIDITY_OFFSET + RAYDIUM_U128_LENGTH;
+    private static final int RAYDIUM_POOL_STATE_TICK_CURRENT_OFFSET =
+            RAYDIUM_POOL_STATE_SQRT_PRICE_X64_OFFSET + RAYDIUM_U128_LENGTH;
+
+    private final SolanaBlockChain solanaBlockChain;
+    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper;
+
+    private ΩmilliSecondsΩ previousRemoteCallTime = 0L;
+}

@@ -1,0 +1,188 @@
+package crypto.r35157.cauldron.afets.nenjim;
+
+import crypto.r35157.cauldron.afets.*;
+import crypto.r35157.cauldron.afets.accountdetails.MEXCAccountDetailsService;
+import crypto.r35157.cauldron.afets.accountdetails.MEXCAccountDetailsServiceImpl;
+import crypto.r35157.cauldron.afets.accountdetails.RetryingMEXCAccountDetailsServiceDecorator;
+import crypto.r35157.cauldron.afets.contractdetails.MEXCContractDetails;
+import crypto.r35157.cauldron.afets.fundingrate.MEXCFundingRates;
+import crypto.r35157.cauldron.afets.gami.GlobalAssetMetadataIndex;
+import crypto.r35157.cauldron.afets.leverage.MEXCLeverageInfo;
+import crypto.r35157.cauldron.afets.ticker.MEXCTicker;
+import crypto.r35157.nenjim.DockerSwarmSecrets;
+import crypto.r35157.nenjim.ImmutableProperties;
+import crypto.r35157.nenjim.EncryptedFileProperties;
+import crypto.r35157.nenjim.SystemEnvironmentProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+
+public class NenjimObjectRepository {
+    public NenjimObjectRepository() throws Exception {
+        ImmutableProperties sysEnvProperties = new SystemEnvironmentProperties();
+        evelynHomeDir = sysEnvProperties.getProperty("EVELYN_HOME");
+        log.info("Evelyn home directory: " + evelynHomeDir);
+
+        if(evelynHomeDir == null) {
+            log.error("ERROR: EVELYN_HOME environment variable is empty - set it to the directory where the evelyn configuration files are located!");
+            System.exit(1);     // TODO: This is incorrect as it takes down the whole Nenjim system!!!
+        }
+
+        evelynConfigDir = evelynHomeDir + "/conf";
+        evelynGamiFilename = evelynConfigDir + "/GlobalAssetMetadataIndex.conf";
+        evelynConfigFilename = evelynConfigDir + "/Evelyn.conf";
+
+        evelynTmpDir = evelynHomeDir + "/tmp";
+        evelynTimeoutFilename = evelynTmpDir + "/Timeouts.tmp";
+
+        ImmutableProperties dockerSwarmSecrets = new DockerSwarmSecrets();
+        String nenjimMasterPassword = null;
+        try {
+            nenjimMasterPassword = dockerSwarmSecrets.getProperty("nenjim-secrets-password");
+            if(nenjimMasterPassword == null) {
+                log.error("ERROR: Nenjim master password NOT set in Docker Swarm (key: 'nenjim-secrets-password')!");
+                System.exit(1);     // TODO: This is incorrect as it takes down the whole Nenjim system!!!
+            }
+        } catch (IOException e) {
+            log.error("ERROR: " + e.getMessage());
+            System.exit(1);
+        }
+
+        String secretsFile = evelynHomeDir + "/conf/secrets.enc";
+        log.info("Secrets file: " + secretsFile);
+        secrets = new EncryptedFileProperties(secretsFile, nenjimMasterPassword);
+        log.info("Entries in secret file found: " + secrets.getSize());
+
+        String pushOverTokenEvelyn = secrets.getProperty("notifier_pushover_token_evelyn");
+
+        String pushOverUser = secrets.getProperty("notifier_pushover_user");
+        pushNotifier = new PushNotifier(pushOverTokenEvelyn, pushOverUser);
+
+        gami = new GlobalAssetMetadataIndex(evelynGamiFilename);
+        ticker = new MEXCTicker();
+        contractDetails = new MEXCContractDetails();
+
+        String mexcAccessKey = secrets.getProperty("assetaz_exchange_mexc_access_key");
+
+        String mexcSecretKey = secrets.getProperty("assetaz_exchange_mexc_secret_key");
+        mexcSpotPlugin = new MEXCSpotPlugin(mexcAccessKey, mexcSecretKey);
+
+        configuration = new Configuration(evelynConfigFilename);
+        configuration.update();
+        timeOuts = new TimeOuts(evelynTimeoutFilename, configuration.getTimeOut());
+        String positionsFilename = evelynHomeDir + "/conf/Positions.conf";
+        portfolio = new Portfolio(pushNotifier, positionsFilename, gami, mexcSpotPlugin, contractDetails);
+
+        String mexcUserAgent = secrets.getProperty("assetaz_exchange_mexc_useragent");
+
+        String mexcWebKey = secrets.getProperty("assetaz_exchange_mexc_webkey");
+        mexcFuturesPlugin = new MEXCFuturesPlugin(mexcWebKey, mexcUserAgent);
+
+        mexcFundingRates = new MEXCFundingRates();
+        mexcLeverageInfo = new MEXCLeverageInfo(mexcFuturesPlugin);
+        scoreCalculator = new ScoreCalculatorImpl();
+        earningsStatistics = new EarningsStatistics();
+        MEXCAccountDetailsService realAccountDetailsService = new MEXCAccountDetailsServiceImpl(mexcFuturesPlugin, "USDT");
+        accountDetails = new RetryingMEXCAccountDetailsServiceDecorator(
+                mexcFuturesPlugin,
+                realAccountDetailsService,
+                3,
+                secrets,
+                3000
+        );
+
+        try {
+            eventWatcher = new EventWatcher(Thread.currentThread(), evelynTmpDir);
+            eventWatcher.start();
+        } catch(Exception e) {
+            log.error("ERROR: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    public Configuration getConfiguration() {
+        return configuration;
+    }
+
+    public MEXCAccountDetailsService getAccountDetails() {
+        return accountDetails;
+    }
+
+    public EarningsStatistics getEarningsStatistics() {
+        return earningsStatistics;
+    }
+
+    public GlobalAssetMetadataIndex getGlobalAssetMetadataIndex() {
+        return gami;
+    }
+
+    public MEXCTicker getTicker() {
+        return ticker;
+    }
+
+    public MEXCContractDetails getContractDetails() {
+        return contractDetails;
+    }
+
+    public MEXCSpotPlugin getMEXCSpotPlugin() {
+        return mexcSpotPlugin;
+    }
+
+    public TimeOuts getTimeOuts() {
+        return timeOuts;
+    }
+
+    public Portfolio getPortfolio() {
+        return portfolio;
+    }
+
+    public MEXCFuturesPlugin getMexcFuturesPlugin() {
+        return mexcFuturesPlugin;
+    }
+
+    public MEXCFundingRates getMexcFundingRates() {
+        return mexcFundingRates;
+    }
+
+    public MEXCLeverageInfo getMexcLeverageInfo() {
+        return mexcLeverageInfo;
+    }
+
+    public ScoreCalculator getScoreCalculator() {
+        return scoreCalculator;
+    }
+
+    public PushNotifier getPushNotifier() {
+        return pushNotifier;
+    }
+
+    public EncryptedFileProperties getSecrets() {
+        return secrets;
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(NenjimObjectRepository.class);
+
+    private final EncryptedFileProperties secrets;
+    private final GlobalAssetMetadataIndex gami;
+    private final MEXCTicker ticker;
+    private final MEXCContractDetails contractDetails;
+    private final MEXCSpotPlugin mexcSpotPlugin;
+    private final TimeOuts timeOuts;
+    private final Portfolio portfolio;
+    private final MEXCFuturesPlugin mexcFuturesPlugin;
+    private final MEXCFundingRates mexcFundingRates;
+    private final MEXCLeverageInfo mexcLeverageInfo;
+    private final ScoreCalculator scoreCalculator;
+    private final PushNotifier pushNotifier;
+    private final EarningsStatistics earningsStatistics;
+    private final MEXCAccountDetailsService accountDetails;
+    private final Configuration configuration;
+    private final String evelynHomeDir;
+    private final String evelynConfigDir;
+    private final String evelynGamiFilename;
+    private final String evelynConfigFilename;
+    private final String evelynTimeoutFilename;
+    private final String evelynTmpDir;
+    private EventWatcher eventWatcher = null;
+}

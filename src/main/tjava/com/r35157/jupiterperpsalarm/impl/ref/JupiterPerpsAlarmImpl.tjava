@@ -1,0 +1,217 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+import com.r35157.libs.jupiter.perps.impl.anchoridl.AnchorIdlJupiterPerpsServiceImpl;
+import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.impl.ref.SolanaBlockChainImpl;
+
+import java.net.URI;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+
+public final class JupiterPerpsAlarmImpl {
+
+    public static void main(String[] args) throws Exception {
+        Config config;
+
+        try {
+            config = Config.parse(args, System.getenv());
+        } catch (IllegalArgumentException exception) {
+            printUsage();
+            String errMsg = "Could not parse configuration for JupiterPerpsAlarm: " + exception.getMessage() + "!";
+            throw new IllegalStateException(errMsg, exception);
+        }
+
+        List<PriceAlarmDefinition> definitions;
+        AlarmConfiguration alarmConfiguration;
+
+        try {
+            alarmConfiguration = AlarmConfigurationParser.parse(config.alarmConfiguration());
+            definitions = alarmConfiguration.definitions();
+        } catch (Exception exception) {
+            String errMsg = "Could not load alarm configuration: " + exception.getMessage() + "!";
+            throw new IllegalStateException(errMsg, exception);
+        }
+
+        AlarmVariableResolver variableResolver = new AlarmVariableResolver(
+                alarmConfiguration.variables()
+        );
+
+        SolanaBlockChain solanaBlockChain = new SolanaBlockChainImpl();
+        JupiterPerpsService jupiterPerpsService = new AnchorIdlJupiterPerpsServiceImpl(solanaBlockChain);
+        JupiterPerpsEntryPriceVariableRefresher entryPriceVariableRefresher =
+                new JupiterPerpsEntryPriceVariableRefresher(alarmConfiguration.variables(), jupiterPerpsService);
+        entryPriceVariableRefresher.refresh();
+
+        JupiterPerpsEntryPriceVariableRefreshWatcher entryPriceVariableRefreshWatcher =
+                new JupiterPerpsEntryPriceVariableRefreshWatcher(
+                        config.alarmConfiguration().getParent(),
+                        entryPriceVariableRefresher
+                );
+
+        entryPriceVariableRefreshWatcher.start();
+
+        List<AlarmAction> actions = new ArrayList<>();
+        actions.add(new ConsoleAlarmAction());
+
+        if (config.pushoverToken() != null && config.pushoverUserKey() != null) {
+            actions.add(new PushoverAlarmAction(
+                    config.pushoverToken(),
+                    config.pushoverUserKey()
+            ));
+            System.out.println("Pushover emergency alarm is enabled.");
+        } else {
+            System.out.println(
+                    "Pushover is disabled. Set PUSHOVER_APP_TOKEN and " +
+                    "PUSHOVER_USER_KEY to enable it."
+            );
+        }
+
+        AlarmAction action = new CompositeAlarmAction(actions);
+        Map<JupiterPerpsAsset, List<PriceAlarmDefinition>> definitionsByAsset =
+                groupByAsset(definitions);
+
+        Map<JupiterPerpsAsset, AssetPriceAlarmMonitor> monitors = new EnumMap<>(
+                JupiterPerpsAsset.class
+        );
+
+        definitionsByAsset.forEach((asset, assetDefinitions) -> monitors.put(
+                asset,
+                new AssetPriceAlarmMonitor(asset, assetDefinitions, variableResolver, action)
+        ));
+
+        List<OracleWebSocketClient> clients = new ArrayList<>();
+        for (Map.Entry<JupiterPerpsAsset, AssetPriceAlarmMonitor> entry : monitors.entrySet()) {
+            for (URI endpoint : config.webSocketEndpoints()) {
+                clients.add(new OracleWebSocketClient(
+                        endpoint,
+                        entry.getKey(),
+                        entry.getValue()::accept
+                ));
+            }
+        }
+
+        Runtime.getRuntime().addShutdownHook(new Thread(
+                () -> clients.forEach(OracleWebSocketClient::close),
+                "shutdown"
+        ));
+
+        System.out.println("Alarm configuration: " + config.alarmConfiguration().toAbsolutePath());
+        System.out.println("Loaded alarms: " + definitions.size());
+        definitionsByAsset.forEach((asset, assetDefinitions) -> {
+            System.out.printf(
+                    "  %s: %d alarm(s), oracle account %s%n",
+                    asset,
+                    assetDefinitions.size(),
+                    asset.oracleAccount()
+            );
+            assetDefinitions.forEach(definition -> System.out.printf(
+                    "    %s %s USD, %s, severity=%s%n",
+                    definition.direction(),
+                    definition.targetExpression(),
+                    definition.trigger(),
+                    definition.severity()
+            ));
+        });
+        System.out.println("RPC endpoints per asset: " + config.webSocketEndpoints().size());
+        System.out.println("Total WebSocket connections: " + clients.size());
+
+        clients.forEach(OracleWebSocketClient::start);
+        new CountDownLatch(1).await();
+    }
+
+    private static Map<JupiterPerpsAsset, List<PriceAlarmDefinition>> groupByAsset(
+            List<PriceAlarmDefinition> definitions
+    ) {
+        Map<JupiterPerpsAsset, List<PriceAlarmDefinition>> result = new EnumMap<>(
+                JupiterPerpsAsset.class
+        );
+        for (PriceAlarmDefinition definition : definitions) {
+            result.computeIfAbsent(definition.asset(), ignored -> new ArrayList<>())
+                    .add(definition);
+        }
+        result.replaceAll((asset, alarms) -> List.copyOf(alarms));
+        return result;
+    }
+
+    private static void printUsage() {
+        System.err.println("""
+                Usage:
+                  gradle run
+                  gradle run --args='--config=/path/to/price-alarms.conf'
+
+                Options:
+                  --config=<path>            Default: price-alarms.conf
+                  --ws=<url1,url2,...>       Default: wss://api.mainnet-beta.solana.com
+
+                Environment:
+                  PRICE_ALARMS_CONFIG        Alternative default configuration path
+                  SOLANA_WS_URLS             Comma-separated RPC WebSocket endpoints
+                  PUSHOVER_APP_TOKEN         Pushover application token
+                  PUSHOVER_USER_KEY          Pushover user/group key
+                """);
+    }
+
+    private record Config(
+            Path alarmConfiguration,
+            List<URI> webSocketEndpoints,
+            String pushoverToken,
+            String pushoverUserKey
+    ) {
+        private static Config parse(String[] args, Map<String, String> environment) {
+            Map<String, String> options = Arrays.stream(args)
+                    .filter(argument -> argument.startsWith("--") && argument.contains("="))
+                    .map(argument -> argument.substring(2).split("=", 2))
+                    .collect(java.util.stream.Collectors.toMap(
+                            parts -> parts[0],
+                            parts -> parts[1],
+                            (first, second) -> second
+                    ));
+
+            String configurationText = options.get("config");
+            if (configurationText == null || configurationText.isBlank()) {
+                configurationText = environment.getOrDefault(
+                        "PRICE_ALARMS_CONFIG",
+                        "price-alarms.conf"
+                );
+            }
+
+            String endpointText = options.get("ws");
+            if (endpointText == null || endpointText.isBlank()) {
+                endpointText = environment.getOrDefault(
+                        "SOLANA_WS_URLS",
+                        "wss://api.mainnet-beta.solana.com"
+                );
+            }
+
+            List<URI> endpoints = Arrays.stream(endpointText.split(","))
+                    .map(String::trim)
+                    .filter(value -> !value.isBlank())
+                    .map(URI::create)
+                    .toList();
+
+            if (endpoints.isEmpty()) {
+                throw new IllegalArgumentException("At least one WebSocket endpoint is required");
+            }
+
+            return new Config(
+                    Path.of(configurationText),
+                    endpoints,
+                    blankToNull(environment.get("PUSHOVER_APP_TOKEN")),
+                    blankToNull(environment.get("PUSHOVER_USER_KEY"))
+            );
+        }
+
+        private static String blankToNull(String value) {
+            return value == null || value.isBlank() ? null : value;
+        }
+    }
+
+    private JupiterPerpsAlarmImpl() {
+    }
+}

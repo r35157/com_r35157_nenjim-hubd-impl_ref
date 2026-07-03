@@ -1,0 +1,46 @@
+package com.r35157.nenjim.kicker.impl.ref;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import com.r35157.nenjim.hubd.ctx.Context;
+import com.r35157.libs.valuetypes.basic.SemanticVersion;
+//import com.r35157.nenjim.hubd.NenjimJournal;
+
+public final class NenjimClassLoader extends ClassLoader {
+    public NenjimClassLoader(Context context, Path classCacheRoot) {
+        this.context = context;
+        this.classCacheRoot = classCacheRoot;
+    }
+
+    @Override
+    protected Class<?> findClass(String name) throws ClassNotFoundException {
+        // Check if we have any local version preferences configured for the associated Context.
+        SemanticVersion version = context.getVersion(name);
+
+        if(version == null) {
+            // No local configurations for a specific version has been configured for this package
+            // in this Context. Use the version the developer do recommend in the Journal.
+            version = null;//journal.getVersion();
+        }
+
+        System.out.println("Searching for class '" + name + "' in local class cache...");
+        String relativePath = name.replace('.', '/') + ".class";
+        Path classFile = classCacheRoot.resolve(relativePath);
+
+        if (!Files.exists(classFile)) {
+            throw new ClassNotFoundException("Class not found: " + name + " at " + classFile);
+        }
+
+        try {
+            byte[] classBytes = Files.readAllBytes(classFile);
+            return defineClass(name, classBytes, 0, classBytes.length);
+        } catch (IOException e) {
+            throw new ClassNotFoundException("Failed to load class: " + name, e);
+        }
+    }
+
+    //private NenjimJournal journal;
+    private Context context;
+    private Path classCacheRoot;
+}

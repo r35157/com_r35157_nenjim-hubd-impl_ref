@@ -1,0 +1,24 @@
+package com.r35157.libs.solana;
+
+/**
+ * Represents basic information about a Solana account.
+ *
+ * <p>The address identifies the account that was queried. The owner identifies
+ * the Solana program that owns the account. The account data is represented as
+ * a Base64 encoded string, matching the encoding returned by the Solana RPC
+ * account-info response.</p>
+ *
+ * <p>For normal wallet/system accounts, the data may be empty. Program-owned
+ * accounts, token accounts, mint accounts and application-specific state
+ * accounts may contain encoded account data.</p>
+ *
+ * @param address the Solana account address
+ * @param owner the Solana program id that owns the account
+ * @param dataBase64 the account data encoded as Base64, or an empty string if the account has no data
+ */
+public record SolanaAccountInfo(
+        ΩSolanaAddressΩ address,
+        ΩSolanaProgramIdΩ owner,
+        String dataBase64
+) {
+}

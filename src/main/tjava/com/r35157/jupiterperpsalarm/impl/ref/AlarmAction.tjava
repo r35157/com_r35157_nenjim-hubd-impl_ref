@@ -1,0 +1,6 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+@FunctionalInterface
+public interface AlarmAction {
+    void trigger(OraclePrice price, ResolvedPriceAlarm alarm);
+}

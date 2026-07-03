@@ -1,0 +1,203 @@
+package crypto.r35157.cauldron.afets.contractdetails;
+
+import com.google.gson.*;
+
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
+public class MEXCContractDetailsDeserializer implements JsonDeserializer<ContractDetailsResponse> {
+    @Override
+    public ContractDetailsResponse deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+            throws JsonParseException {
+        JsonObject jsonObject = json.getAsJsonObject();
+
+        boolean success = jsonObject.get("success").getAsBoolean();
+        int code = jsonObject.get("code").getAsInt();
+
+        List<ContractDetailsItem> dataItems = new ArrayList<>();
+        JsonArray dataArray = jsonObject.getAsJsonArray("data");
+        for (JsonElement dataElement : dataArray) {
+            JsonObject itemObj = dataElement.getAsJsonObject();
+
+            String symbol = itemObj.get("symbol").getAsString();
+            String displayName = itemObj.get("displayName").getAsString();
+            String displayNameEn = itemObj.get("displayNameEn").getAsString();
+            int positionOpenType = itemObj.get("positionOpenType").getAsInt();
+            String baseCoin = itemObj.get("baseCoin").getAsString();
+            String quoteCoin = itemObj.get("quoteCoin").getAsString();
+            String baseCoinName = itemObj.get("baseCoinName").getAsString();
+            String quoteCoinName = itemObj.get("quoteCoinName").getAsString();
+            int futureType = itemObj.get("futureType").getAsInt();
+            String settleCoin = itemObj.get("settleCoin").getAsString();
+            BigDecimal contractSize = jsonObject.get("contractSize").getAsBigDecimal();
+            int minLeverage = itemObj.get("minLeverage").getAsInt();
+            int maxLeverage = itemObj.get("maxLeverage").getAsInt();
+            int countryConfigContractMaxLeverage = itemObj.get("countryConfigContractMaxLeverage").getAsInt();
+            int priceScale = itemObj.get("priceScale").getAsInt();
+            int volScale = itemObj.get("volScale").getAsInt();
+            int amountScale = itemObj.get("amountScale").getAsInt();
+            double priceUnit = itemObj.get("priceUnit").getAsDouble();
+            int volUnit = itemObj.get("volUnit").getAsInt();
+            long minVol = itemObj.get("minVol").getAsLong();
+            long maxVol = itemObj.get("maxVol").getAsLong();
+            double bidLimitPriceRate = itemObj.get("bidLimitPriceRate").getAsDouble();
+            double askLimitPriceRate = itemObj.get("askLimitPriceRate").getAsDouble();
+            double takerFeeRate = itemObj.get("takerFeeRate").getAsDouble();
+            double makerFeeRate = itemObj.get("makerFeeRate").getAsDouble();
+            double maintenanceMarginRate = itemObj.get("maintenanceMarginRate").getAsDouble();
+            double initialMarginRate = itemObj.get("initialMarginRate").getAsDouble();
+            long riskBaseVol = itemObj.get("riskBaseVol").getAsLong();
+            long riskIncrVol = itemObj.get("riskIncrVol").getAsLong();
+            int riskLongShortSwitch = itemObj.get("riskLongShortSwitch").getAsInt();
+            BigDecimal riskIncrMmr = itemObj.get("riskIncrMmr").getAsBigDecimal();
+            BigDecimal riskIncrImr = itemObj.get("riskIncrImr").getAsBigDecimal();
+            int riskLevelLimit = itemObj.get("riskLevelLimit").getAsInt();
+            double priceCoefficientVariation = itemObj.get("priceCoefficientVariation").getAsDouble();
+
+            List<String> indexOrigin = new ArrayList<>();
+            JsonArray indexOriginArray = itemObj.getAsJsonArray("indexOrigin");
+            for (JsonElement element : indexOriginArray) {
+                indexOrigin.add(element.getAsString());
+            }
+
+            int state = itemObj.get("state").getAsInt();
+            boolean isNew = itemObj.get("isNew").getAsBoolean();
+            boolean isHot = itemObj.get("isHot").getAsBoolean();
+            boolean isHidden = itemObj.get("isHidden").getAsBoolean();
+
+            List<String> conceptPlate = new ArrayList<>();
+            JsonArray conceptPlateArray = itemObj.getAsJsonArray("conceptPlate");
+            for (JsonElement element : conceptPlateArray) {
+                conceptPlate.add(element.getAsString());
+            }
+
+            List<Integer> conceptPlateId = new ArrayList<>();
+            JsonArray conceptPlateIdArray = itemObj.getAsJsonArray("conceptPlateId");
+            for (JsonElement element : conceptPlateIdArray) {
+                conceptPlateId.add(element.getAsInt());
+            }
+
+            String riskLimitType = itemObj.get("riskLimitType").getAsString();
+
+            List<Integer> maxNumOrders = new ArrayList<>();
+            JsonArray maxNumOrdersArray = itemObj.getAsJsonArray("maxNumOrders");
+            for (JsonElement element : maxNumOrdersArray) {
+                maxNumOrders.add(element.getAsInt());
+            }
+
+            int marketOrderMaxLevel = itemObj.get("marketOrderMaxLevel").getAsInt();
+            double marketOrderPriceLimitRate1 = itemObj.get("marketOrderPriceLimitRate1").getAsDouble();
+            double marketOrderPriceLimitRate2 = itemObj.get("marketOrderPriceLimitRate2").getAsDouble();
+            double triggerProtect = itemObj.get("triggerProtect").getAsDouble();
+            int appraisal = itemObj.get("appraisal").getAsInt();
+            int showAppraisalCountdown = itemObj.get("showAppraisalCountdown").getAsInt();
+            int automaticDelivery = itemObj.get("automaticDelivery").getAsInt();
+            boolean apiAllowed = itemObj.get("apiAllowed").getAsBoolean();
+
+            List<String> depthStepList = new ArrayList<>();
+            JsonArray depthStepListArray = itemObj.getAsJsonArray("depthStepList");
+            for (JsonElement element : depthStepListArray) {
+                depthStepList.add(element.getAsString());
+            }
+
+            int limitMaxVol = itemObj.get("limitMaxVol").getAsInt();
+            int threshold = itemObj.get("threshold").getAsInt();
+            String baseCoinIconUrl = itemObj.get("baseCoinIconUrl").getAsString();
+            int id = itemObj.get("id").getAsInt();
+            String vid = itemObj.get("vid").getAsString();
+            String baseCoinId = itemObj.get("baseCoinId").getAsString();
+            long createTime = itemObj.get("createTime").getAsLong();
+            long openingTime = itemObj.get("openingTime").getAsLong();
+            int openingCountdownOption = itemObj.get("openingCountdownOption").getAsInt();
+            boolean showBeforeOpen = itemObj.get("showBeforeOpen").getAsBoolean();
+            boolean isMaxLeverage = itemObj.get("isMaxLeverage").getAsBoolean();
+            boolean isZeroFeeRate = itemObj.get("isZeroFeeRate").getAsBoolean();
+            String riskLimitMode = itemObj.get("riskLimitMode").getAsString();
+
+            List<RiskLimitCustom> riskLimitCustomList = new ArrayList<>();
+            JsonArray riskLimitCustomArray = itemObj.getAsJsonArray("riskLimitCustom");
+            for (JsonElement element : riskLimitCustomArray) {
+                JsonObject riskObj = element.getAsJsonObject();
+                int level = riskObj.get("level").getAsInt();
+                int maxVolVal = riskObj.get("maxVol").getAsInt();
+                double mmr = riskObj.get("mmr").getAsDouble();
+                double imr = riskObj.get("imr").getAsDouble();
+                int maxLeverageVal = riskObj.get("maxLeverage").getAsInt();
+                riskLimitCustomList.add(new RiskLimitCustom(level, maxVolVal, mmr, imr, maxLeverageVal));
+            }
+
+            ContractDetailsItem item = new ContractDetailsItem(
+                    symbol,
+                    displayName,
+                    displayNameEn,
+                    positionOpenType,
+                    baseCoin,
+                    quoteCoin,
+                    baseCoinName,
+                    quoteCoinName,
+                    futureType,
+                    settleCoin,
+                    contractSize,
+                    minLeverage,
+                    maxLeverage,
+                    countryConfigContractMaxLeverage,
+                    priceScale,
+                    volScale,
+                    amountScale,
+                    priceUnit,
+                    volUnit,
+                    minVol,
+                    maxVol,
+                    bidLimitPriceRate,
+                    askLimitPriceRate,
+                    takerFeeRate,
+                    makerFeeRate,
+                    maintenanceMarginRate,
+                    initialMarginRate,
+                    riskBaseVol,
+                    riskIncrVol,
+                    riskLongShortSwitch,
+                    riskIncrMmr,
+                    riskIncrImr,
+                    riskLevelLimit,
+                    priceCoefficientVariation,
+                    indexOrigin,
+                    state,
+                    isNew,
+                    isHot,
+                    isHidden,
+                    conceptPlate,
+                    conceptPlateId,
+                    riskLimitType,
+                    maxNumOrders,
+                    marketOrderMaxLevel,
+                    marketOrderPriceLimitRate1,
+                    marketOrderPriceLimitRate2,
+                    triggerProtect,
+                    appraisal,
+                    showAppraisalCountdown,
+                    automaticDelivery,
+                    apiAllowed,
+                    depthStepList,
+                    limitMaxVol,
+                    threshold,
+                    baseCoinIconUrl,
+                    id,
+                    vid,
+                    baseCoinId,
+                    createTime,
+                    openingTime,
+                    openingCountdownOption,
+                    showBeforeOpen,
+                    isMaxLeverage,
+                    isZeroFeeRate,
+                    riskLimitMode,
+                    riskLimitCustomList
+            );
+            dataItems.add(item);
+        }
+        return new ContractDetailsResponse(success, code, dataItems);
+    }
+}

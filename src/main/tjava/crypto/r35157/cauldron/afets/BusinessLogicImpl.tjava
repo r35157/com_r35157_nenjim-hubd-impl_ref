@@ -1,0 +1,51 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+import static java.math.BigDecimal.ZERO;
+import static java.math.RoundingMode.HALF_UP;
+
+public class BusinessLogicImpl implements BusinessLogic {
+    @Override
+    public BigDecimal calculateContractValueToTrade(
+            BigDecimal maxMarginAmountToTradePerIteration,
+            BigDecimal maxStretchMarginAmountToTradePerIteration,
+            BigDecimal positionValue,
+            BigDecimal currentPrice,
+            BigDecimal tokensPerContract,
+            int leverage,
+            BigDecimal maxTradePctOfFullPosition
+    ) {
+        BigDecimal valueToTrade = maxMarginAmountToTradePerIteration.multiply(BigDecimal.valueOf(leverage));
+        BigDecimal valueOfOneContract = currentPrice.multiply(tokensPerContract);
+
+        BigDecimal maxTradePctOfFullPositionPct = maxTradePctOfFullPosition.divide(new BigDecimal(100), 4, HALF_UP);
+        if (maxTradePctOfFullPositionPct.compareTo(ZERO) > 0) {
+            // Add soft limit
+            BigDecimal softLimit = positionValue.multiply(maxTradePctOfFullPositionPct);
+            valueToTrade = min(softLimit, valueToTrade);
+        }
+
+        // Test if we are allowed to trade this size of contracts
+        if (valueOfOneContract.compareTo(valueToTrade) > 0) {
+            // We cannot afford even one single contract - try stretch
+            BigDecimal maxStretchContractValueToTrade = maxStretchMarginAmountToTradePerIteration.multiply(BigDecimal.valueOf(leverage));
+            if (valueOfOneContract.compareTo(maxStretchContractValueToTrade) <= 0) {
+                // With 'stretch' we can afford, at least, one single contract - but limit to ONE contract ONLY!
+                valueToTrade = valueOfOneContract;
+            }
+        }
+
+        return valueToTrade;
+    }
+
+    @Override
+    public BigDecimal min(BigDecimal a, BigDecimal b) {
+        return a.compareTo(b) < 0 ? a : b;
+    }
+
+    @Override
+    public BigDecimal max(BigDecimal a, BigDecimal b) {
+        return a.compareTo(b) < 0 ? b : a;
+    }
+}

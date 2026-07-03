@@ -1,0 +1,32 @@
+package com.r35157.libs.notification.impl.discord;
+
+import com.r35157.libs.notification.BoundNotifier;
+
+import java.io.IOException;
+import java.net.URL;
+import java.net.http.HttpClient;
+
+public class DiscordNotifier implements BoundNotifier<DiscordMessage> {
+
+    public DiscordNotifier(URL discordWebhookUrl) {
+        this.httpClient = HttpClient.newHttpClient();
+        this.discordWebhookUrl = discordWebhookUrl;
+    }
+
+    @Override
+    public void push(DiscordMessage message) throws IOException {
+        throw new UnsupportedOperationException("Not implemented yet!");
+    }
+
+    private void test() throws IOException {
+        URL discordWebhookUrl = null;
+
+        BoundNotifier<DiscordMessage> boundNotifier = new DiscordNotifier(discordWebhookUrl);
+
+        DiscordMessage message = new DiscordMessage("Hello World!");
+        boundNotifier.push(message);
+    }
+
+    private final HttpClient httpClient;
+    private final URL discordWebhookUrl;
+}

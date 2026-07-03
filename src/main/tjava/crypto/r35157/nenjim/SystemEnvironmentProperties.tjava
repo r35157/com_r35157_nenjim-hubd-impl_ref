@@ -1,0 +1,27 @@
+package crypto.r35157.nenjim;
+
+public class SystemEnvironmentProperties implements ImmutableProperties {
+    public SystemEnvironmentProperties() {
+        refresh();
+    }
+
+    @Override
+    public String getProperty(String key) {
+        String value = System.getenv(key);
+        if(value == null) {
+            return null;
+        }
+
+        value = value.trim();
+
+        return value;
+    }
+
+    @Override
+    public int getSize() {
+        return -1;
+    }
+
+    @Override
+    public void refresh() {}
+}

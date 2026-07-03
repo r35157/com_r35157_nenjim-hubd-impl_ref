@@ -1,0 +1,13 @@
+package crypto.r35157.cauldron.afets.fundingrate;
+
+import java.math.BigDecimal;
+
+public record MEXCFundingRateItem(
+        String symbol,
+        BigDecimal fundingRate,
+        BigDecimal maxFundingRate,
+        BigDecimal minFundingRate,
+        int collectCycle,
+        long nextSettleTime,
+        long timestamp
+){}

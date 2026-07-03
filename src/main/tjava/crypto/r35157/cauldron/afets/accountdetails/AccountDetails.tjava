@@ -1,0 +1,16 @@
+package crypto.r35157.cauldron.afets.accountdetails;
+
+import java.math.BigDecimal;
+
+public record AccountDetails(
+        String currency,
+        BigDecimal positionMargin,
+        BigDecimal availableBalance,
+        BigDecimal cashBalance,
+        BigDecimal frozenBalance,
+        BigDecimal equity,
+        BigDecimal unrealized,
+        BigDecimal bonus,
+        BigDecimal availableCash,
+        BigDecimal availableOpen
+) { }

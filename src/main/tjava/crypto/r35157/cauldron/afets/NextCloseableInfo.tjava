@@ -1,0 +1,18 @@
+package crypto.r35157.cauldron.afets;
+
+import java.math.BigDecimal;
+
+public record NextCloseableInfo(
+        Position position,
+        BigDecimal quantityToTradeTokens,
+        int quantityToTradeContracts,
+        PositionType positionType,
+        BigDecimal earning,
+        BigDecimal earningPct,
+        BigDecimal rawScore,
+        BigDecimal adjustedScore,
+        BigDecimal balanceTokens,
+        int balanceContracts,
+        int leverage
+) {
+}

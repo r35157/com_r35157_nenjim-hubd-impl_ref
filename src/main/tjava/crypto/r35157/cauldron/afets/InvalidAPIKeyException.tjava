@@ -1,0 +1,7 @@
+package crypto.r35157.cauldron.afets;
+
+public class InvalidAPIKeyException extends RuntimeException {
+    public InvalidAPIKeyException(String message) {
+        super(message);
+    }
+}

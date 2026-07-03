@@ -1,0 +1,54 @@
+package com.r35157.libs.random.impl.ref;
+
+import com.r35157.libs.random.RandomValueGeneratorInt;
+
+import java.util.concurrent.ThreadLocalRandom;
+
+import static java.lang.Integer.MAX_VALUE;
+import static java.lang.Integer.MIN_VALUE;
+
+public class RandomValueGeneratorIntImpl implements RandomValueGeneratorInt {
+    @Override
+    public int getSomeInt() {
+        // Default: use the full int range
+        return getSomeInt(MIN_VALUE, MAX_VALUE);
+    }
+
+    @Override
+    public int getSomeInt(int minInclusive, int maxInclusive) {
+        if (minInclusive > maxInclusive) {
+            String errorMessage = String.format("'minInclusive' (%d) must be less than or equal to 'maxInclusive' (%d)",
+                    minInclusive, maxInclusive);
+            throw new IllegalArgumentException(errorMessage);
+        }
+
+        if (minInclusive == maxInclusive) {
+            // Edge case: only one possible value
+            return minInclusive;
+        }
+
+        // Fast path: full int range – ThreadLocalRandom.nextInt() already covers it
+        if (minInclusive == MIN_VALUE && maxInclusive == MAX_VALUE) {
+            return ThreadLocalRandom.current().nextInt();
+        }
+
+        // Use long to avoid overflow when calculating range size
+        long bound = ((long) maxInclusive - (long) minInclusive) + 1L;
+
+        if (bound <= Integer.MAX_VALUE) {
+            // Normal case: the range fits in an int
+            // nextInt(bound) gives a uniform value in [0, bound],
+            // then shift it into the target range by adding minInclusive
+            return minInclusive + ThreadLocalRandom.current().nextInt((int) bound);
+        } else {
+            // Rare case: the range is larger than Integer.MAX_VALUE
+            // (e.g. almost the full int space). Use rejection sampling:
+            // draw values until one falls within the desired interval.
+            int r;
+            do {
+                r = ThreadLocalRandom.current().nextInt();
+            } while (r < minInclusive || r > maxInclusive);
+            return r;
+        }
+    }
+}

@@ -1,0 +1,51 @@
+package com.r35157.libs.solana;
+
+/**
+ * Represents a seed used when deriving a Solana program derived address.
+ *
+ * <p>A seed has a kind and a textual value. The kind tells the Solana
+ * implementation how the value should be converted to bytes before it is used
+ * in program address derivation.</p>
+ *
+ * <p>This keeps callers from having to perform encoding or decoding themselves.
+ * For example, a caller can provide a UTF-8 seed or a Solana address seed, and
+ * the implementation decides how each seed is converted to the byte format
+ * required by Solana.</p>
+ *
+ * @param kind the kind of seed
+ * @param value the textual seed value
+ */
+public record SolanaProgramAddressSeed(
+        SolanaProgramAddressSeedKind kind,
+        String value
+) {
+    /**
+     * Creates a UTF-8 seed.
+     *
+     * @param value the text value to encode as UTF-8
+     * @return a program address seed representing the supplied UTF-8 text
+     */
+    public static SolanaProgramAddressSeed utf8(String value) {
+        return new SolanaProgramAddressSeed(
+                SolanaProgramAddressSeedKind.UTF8,
+                value
+        );
+    }
+
+    /**
+     * Creates a Solana address seed.
+     *
+     * <p>The supplied address is represented textually here. The implementation
+     * deriving the program address is responsible for decoding the address into
+     * its raw Solana address bytes.</p>
+     *
+     * @param address the Solana address to use as a seed
+     * @return a program address seed representing the supplied Solana address
+     */
+    public static SolanaProgramAddressSeed solanaAddress(ΩSolanaAddressΩ address) {
+        return new SolanaProgramAddressSeed(
+                SolanaProgramAddressSeedKind.SOLANA_ADDRESS,
+                address
+        );
+    }
+}

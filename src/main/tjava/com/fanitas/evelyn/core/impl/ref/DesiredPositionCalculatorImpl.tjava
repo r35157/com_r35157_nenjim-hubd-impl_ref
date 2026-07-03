@@ -1,0 +1,373 @@
+package com.fanitas.evelyn.core.impl.ref;
+
+import com.r35157.libs.basic.Pair;
+import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionConcentrated;
+import com.fanitas.evelyn.core.DesiredPositionCalculator;
+
+import com.r35157.libs.valuetypes.basic.*;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
+import java.util.*;
+
+import static com.fanitas.evelyn.math.BigDecimalUtils.*;
+import static java.math.BigDecimal.ONE;
+import static java.math.BigDecimal.ZERO;
+
+public class DesiredPositionCalculatorImpl implements DesiredPositionCalculator {
+
+    public DesiredPositionCalculatorImpl(
+            ΩCurveWidthΩ curveWidth,
+            Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> liquidityProviderPositions
+    ) {
+        this.curveWidth = curveWidth;
+        this.liquidityProviderPositions = liquidityProviderPositions;
+    }
+
+    @Override
+    public HashMap<ΩRaydiumLiquidityPoolPositionNftIdΩ, Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ>> calculateRebalancingProposal(
+            ΩSyrupPriceΩ currentPrice,
+            ΩSolanaAmountΩ totalReadyAmountMintA,
+            ΩSyrupAmountΩ totalReadyAmountMintB
+    ) {
+        List<ΩSyrupPriceΩ> intervalStarts = getSortedPositionIntervalFromValues(liquidityProviderPositions);
+        List<ΩSyrupPriceΩ> intervalEnds = getSortedPositionIntervalToValues(liquidityProviderPositions);
+
+        int indexOfPositionWithAnEndPriceBeforePositionWithCurrentPrice = lookupIndexOfLastLessThanOrEqual(
+                intervalStarts,
+                currentPrice
+        );
+
+        ΩSyrupPriceΩ lastLessThanOrEqual = intervalEnds.get(indexOfPositionWithAnEndPriceBeforePositionWithCurrentPrice);
+        HashMap<ΩRaydiumLiquidityPoolPositionIdΩ, Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ>> desiredPositions = new HashMap<>();
+
+        boolean beforeNonZeroPos = true;
+
+        for (int i = 0; i < intervalStarts.size(); i++) {
+            ΩSyrupPriceΩ iStart = intervalStarts.get(i);
+            ΩSyrupPriceΩ iEnd = intervalEnds.get(i);
+
+            ΩSolanaAmountΩ desiredSolanaPosSize = null;  // TODO: Support this
+            ΩSyrupAmountΩ desiredSyrupPosSize = calculateDesiredPositionSizeForInterval(
+                    currentPrice,
+                    totalReadyAmountMintB,
+                    iStart,
+                    iEnd,
+                    lastLessThanOrEqual
+            );
+
+            int desiredPositionSign = desiredSyrupPosSize.amount().compareTo(ZERO);
+
+            if (desiredPositionSign > 0) {
+                beforeNonZeroPos = false;
+            } else if (!beforeNonZeroPos && desiredPositionSign == 0) {
+                break;
+            }
+
+            Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> desiredPositionSizes =
+                    new Pair<>(desiredSolanaPosSize, desiredSyrupPosSize);
+
+            RaydiumLiquidityPoolPositionConcentrated position = getPositionByStartPriceA(iStart);
+            // TODO: What if null is return above?
+            ΩRaydiumLiquidityPoolPositionNftIdΩ poolPositionId = position.nftId();
+
+            desiredPositions.put(poolPositionId, desiredPositionSizes);
+        }
+
+        return desiredPositions;
+    }
+
+    @Override
+    public Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> calculateTotalDistributedSums() {
+        Collection<RaydiumLiquidityPoolPositionConcentrated> c = liquidityProviderPositions.values();
+
+        if(c.isEmpty()) {
+            // TODO: I do not like this - I prefer 0 - but without any positions, do I then know the currencyType?
+            throw new IllegalStateException("No positions in pool!");
+        }
+
+        // TODO: This smells - setting to null. Oh dear!
+        CurrencyType ctA = null;
+        ΩAmountΩ amountA = ZERO;
+        CurrencyType ctB = null;
+        ΩAmountΩ amountB = ZERO;
+
+        for (RaydiumLiquidityPoolPositionConcentrated position : liquidityProviderPositions.values()) {
+            ctA = position.amountMintA().currencyType(); // TODO: Too redundant - please rethink
+            amountA = amountA.add(position.accountingInfo().addedMintA());
+            ctB = position.amountMintB().currencyType(); // TODO: Too redundant - please rethink
+            amountB = amountB.add(position.accountingInfo().addedMintB());
+        }
+
+        MoneyAmount ma = new MoneyAmount(amountA, ctA);
+        MoneyAmount mb = new MoneyAmount(amountB, ctB);
+
+        return new Pair<>(ma, mb);
+    }
+
+    @Override
+    public Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> calculateLockedSums(ΩSyrupPriceΩ currentPrice) {
+        List<ΩSyrupPriceΩ> ascendingPrices = getSortedPositionIntervalFromValues(liquidityProviderPositions);
+        ΩAmountΩ sumA = ZERO;
+        ΩAmountΩ sumB = ZERO;
+
+        // TODO: This smells - setting to null. Oh dear!
+        CurrencyType ctA = null;
+        CurrencyType ctB = null;
+
+        int index = lookupIndexOfFirstGreaterThanOrEqual(ascendingPrices, currentPrice);
+        if(index >= 0) {
+            AssetPrice startPriceOfStartPos = ascendingPrices.get(index);
+
+            for (RaydiumLiquidityPoolPositionConcentrated position : liquidityProviderPositions.values()) {
+                if (position.priceRange().from().compareTo(startPriceOfStartPos) >= 0) {
+                    ctA = position.amountMintA().currencyType();
+                    sumA = sumA.add(position.amountMintA().amount());
+                    ctB = position.amountMintB().currencyType();
+                    sumB = sumB.add(position.amountMintB().amount());
+                }
+            }
+        }
+
+        MoneyAmount ma = new MoneyAmount(sumA, ctA);
+        MoneyAmount mb = new MoneyAmount(sumB, ctB);
+
+        return new Pair<>(ma, mb);
+    }
+
+    @Override
+    public Pair<ΩSolanaAmountΩ, ΩSyrupAmountΩ> calculateRedistributableSums(
+            ΩSyrupPriceΩ currentPrice,
+            ΩSolanaAmountΩ inactiveInAccountMintA,
+            ΩSolanaAmountΩ reservedForBurnMintA,
+            ΩSyrupAmountΩ inactiveInAccountMintB,
+            ΩSyrupAmountΩ reservedForBurnMintB
+    ) {
+        List<AssetPrice> ascendingValues = getSortedPositionIntervalFromValues(liquidityProviderPositions);
+        ΩAmountΩ redistSumA = ZERO;
+        ΩAmountΩ redistSumB = ZERO;
+        CurrencyType ctA = null;
+        CurrencyType ctB = null;
+
+        int index = lookupIndexOfLastLessThan(ascendingValues, currentPrice);
+        if(index >= 0) {
+            AssetPrice startPriceOfStartPos = ascendingValues.get(index);
+
+            for (RaydiumLiquidityPoolPositionConcentrated position : liquidityProviderPositions.values()) {
+                if (position.priceRange().from().compareTo(startPriceOfStartPos) <= 0) {
+                    ctA = position.amountMintA().currencyType();
+                    ctB = position.amountMintB().currencyType();
+                    redistSumA = redistSumA.add(position.amountMintA().amount());
+                    redistSumB = redistSumB.add(position.amountMintB().amount());
+                }
+            }
+        }
+
+        redistSumA = add(inactiveInAccountMintA, redistSumA);
+        redistSumA = subtract(redistSumA, reservedForBurnMintA);
+        redistSumB = add(inactiveInAccountMintB, redistSumB);
+        redistSumB = subtract(redistSumB, reservedForBurnMintB);
+        MoneyAmount ma = new MoneyAmount(redistSumA, ctA);
+        MoneyAmount mb = new MoneyAmount(redistSumB, ctB);
+
+        return new Pair<>(ma, mb);
+    }
+
+    private MoneyAmount add(ΩAmountΩ a, ΩAmountΩ b, CurrencyType ct) {
+        MoneyAmount ma = new MoneyAmount(a.add(b), ct);
+        return ma;
+    }
+
+    private MoneyAmount add(MoneyAmount a, MoneyAmount b) {
+        MoneyAmount ma = new MoneyAmount(a.amount().add(b.amount()), a.currencyType());
+        return ma;
+    }
+
+    private ΩAmountΩ add(MoneyAmount a, ΩAmountΩ b) {
+        return a.amount().add(b);
+    }
+
+    private ΩAmountΩ subtract(ΩAmountΩ a, MoneyAmount b) {
+        return a.subtract(b.amount());
+    }
+
+    private @Nullable RaydiumLiquidityPoolPositionConcentrated getPositionByStartPriceA(@NotNull AssetPrice startPriceA) {
+        for(RaydiumLiquidityPoolPositionConcentrated candidate : liquidityProviderPositions.values()) {
+            if (candidate.priceRange().from().compareTo(startPriceA) == 0) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private ΩSyrupAmountΩ calculateDesiredPositionSizeForInterval(
+            @NotNull ΩSyrupPriceΩ currentPrice,
+            @NotNull ΩSolanaAmountΩ totalSyrupToDistribution,
+            @NotNull ΩSyrupPriceΩ intervalPriceFrom,
+            @NotNull ΩSyrupPriceΩ intervalPriceTo,
+            @NotNull ΩSyrupPriceΩ lookupPrice
+    ) {
+        ΩPriceΩ curveStartPrice = currentPrice.price().multiply(
+                ONE.subtract(curveWidth, MC),
+                MC
+        );
+
+        boolean intervalIsCompletelyBeforeCurve =
+                intervalPriceTo.price().compareTo(curveStartPrice) <= 0;
+
+        boolean intervalIsCompletelyAfterLookupLimit =
+                intervalPriceFrom.price().compareTo(lookupPrice.price()) >= 0;
+
+        if (intervalIsCompletelyBeforeCurve || intervalIsCompletelyAfterLookupLimit) {
+            return new ΩSyrupAmountΩ(ZERO, WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType());
+        }
+
+        ΩPriceΩ effectiveIntervalFrom = max(intervalPriceFrom.price(), curveStartPrice);
+        ΩPriceΩ effectiveIntervalTo = min(intervalPriceTo.price(), lookupPrice.price());
+
+        BigDecimal sigma = currentPrice.price().multiply(curveWidth, MC)
+                .divide(THREE, MC);
+
+        BigDecimal sqrtTwo = sqrt(TWO, MC);
+        BigDecimal denominator = sigma.multiply(sqrtTwo, MC);
+
+        ΩPriceΩ normalizedEffectiveTo = effectiveIntervalTo.subtract(currentPrice.price(), MC)
+                .divide(denominator, MC);
+
+        ΩPriceΩ normalizedEffectiveFrom = effectiveIntervalFrom.subtract(currentPrice.price(), MC)
+                .divide(denominator, MC);
+
+        ΩPriceΩ normalizedLookupPrice = lookupPrice.price().subtract(currentPrice.price(), MC)
+                .divide(denominator, MC);
+
+        ΩPriceΩ normalizedCurveStart = curveStartPrice.subtract(currentPrice.price(), MC)
+                .divide(denominator, MC);
+
+        BigDecimal intervalWeight = new BigDecimal(erf(normalizedEffectiveTo) - erf(normalizedEffectiveFrom));
+        BigDecimal totalWeightInActiveCurve = new BigDecimal(erf(normalizedLookupPrice) - erf(normalizedCurveStart));
+
+        ΩSyrupAmountΩ dps = new ΩSyrupAmountΩ(
+                totalSyrupToDistribution.amount()
+                        .multiply(intervalWeight, MC)
+                        .divide(totalWeightInActiveCurve, MC),
+                WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType()
+        );
+
+        return dps;
+    }
+
+    private static int lookupIndexOfFirstGreaterThan(
+            @NotNull List<ΩSyrupPriceΩ> ascendingPrices,
+            @NotNull ΩSyrupPriceΩ searchPrice
+    ) {
+        int index = -1;
+
+        for (int i = ascendingPrices.size() - 1; i >= 0; i--) {
+            ΩPriceΩ p = ascendingPrices.get(i).price();
+            if (p.compareTo(searchPrice.price()) <= 0) {
+                break;
+            } else {
+                index = i;
+            }
+        }
+
+        if (index == -1) {
+            throw new IllegalArgumentException(
+                    "No position has a greater start price than a position containing '" + searchPrice + "'"
+            );
+        }
+
+        return index;
+    }
+
+    private static int lookupIndexOfFirstGreaterThanOrEqual(
+            @NotNull List<ΩSyrupPriceΩ> ascendingPrices,
+            @NotNull ΩSyrupPriceΩ searchPrice
+    ) {
+        int index = -1;
+
+        for (int i = ascendingPrices.size() - 1; i >= 0; i--) {
+            ΩPriceΩ p = ascendingPrices.get(i).price();
+            if (p.compareTo(searchPrice.price()) <= 0) {
+                break;
+            } else {
+                index = i;
+            }
+        }
+
+        if (index == -1) {
+            throw new IllegalArgumentException(
+                    "No position has a greater start price than a position containing '" + searchPrice + "'"
+            );
+        }
+
+        return index;
+    }
+
+    private static int lookupIndexOfLastLessThanOrEqual(
+            @NotNull List<ΩSyrupPriceΩ> ascendingPrices,
+            @NotNull ΩSyrupPriceΩ searchPrice
+    ) {
+        int index = -1;
+        for (int i = 0; i < ascendingPrices.size() - 1; i++) {
+            ΩPriceΩ p = ascendingPrices.get(i).price();
+            if (p.compareTo(searchPrice.price()) < 0) {
+                index = i - 1;
+            } else {
+                break;
+            }
+        }
+
+        return index;
+    }
+
+    private static int lookupIndexOfLastLessThan(
+            @NotNull List<ΩSyrupPriceΩ> ascendingPrices,
+            @NotNull ΩSyrupPriceΩ searchPrice
+    ) {
+        int index = -1;
+
+        for (int i = 0; i < ascendingPrices.size() - 1; i++) {
+            ΩPriceΩ p = ascendingPrices.get(i).price();
+            if (p.compareTo(searchPrice.price()) < 0) {
+                index = i - 1;
+            } else {
+                break;
+            }
+        }
+
+        return index;
+    }
+
+    private static @NotNull List<ΩSyrupPriceΩ> getSortedPositionIntervalFromValues(
+            @NotNull Map<ΩRaydiumLiquidityPoolPositionNftIdΩ,
+            @NotNull RaydiumLiquidityPoolPositionConcentrated> liquidityPositions
+    ) {
+        List<ΩSyrupPriceΩ> result = new ArrayList<>(liquidityPositions.size());
+        for (RaydiumLiquidityPoolPositionConcentrated position : liquidityPositions.values()) {
+            result.add(position.priceRange().from());
+        }
+        result.sort(ΩSyrupPriceΩ::compareTo);
+        return result;
+    }
+
+    private static @NotNull List<ΩSyrupPriceΩ> getSortedPositionIntervalToValues(
+            @NotNull Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> liquidityPositions
+    ) {
+        List<ΩSyrupPriceΩ> result = new ArrayList<>(liquidityPositions.size());
+        for (RaydiumLiquidityPoolPositionConcentrated position : liquidityPositions.values()) {
+            result.add(position.priceRange().to());
+        }
+        result.sort(ΩSyrupPriceΩ::compareTo);
+        return result;
+    }
+
+    private static final MathContext MC = new MathContext(20, RoundingMode.HALF_UP);
+
+    private final ΩCurveWidthΩ curveWidth;
+    private final Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> liquidityProviderPositions;
+}

@@ -1,0 +1,30 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.util.Map;
+import java.util.Objects;
+
+public final class AlarmVariableResolver {
+
+    public AlarmVariableResolver(Map<String, String> variables) {
+        this.variables = Objects.requireNonNull(variables, "variables");
+    }
+
+    public String resolve(String text) {
+        Objects.requireNonNull(text, "text");
+
+        String resolvedText = text;
+
+        for (Map.Entry<String, String> entry : variables.entrySet()) {
+            String placeholder = "{{" + entry.getKey() + "}}";
+            resolvedText = resolvedText.replace(placeholder, entry.getValue());
+        }
+
+        if (resolvedText.contains("{{") || resolvedText.contains("}}")) {
+            throw new IllegalArgumentException("Unresolved variable in text: " + text);
+        }
+
+        return resolvedText;
+    }
+
+    private final Map<String, String> variables;
+}

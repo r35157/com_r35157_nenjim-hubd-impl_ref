@@ -1,0 +1,6 @@
+package crypto.r35157.cauldron;
+
+public class Version {
+    public static final String VERSION_CAULDRON = "trunk";
+    public static final String VERSION_EVELYN = "trunk";
+}

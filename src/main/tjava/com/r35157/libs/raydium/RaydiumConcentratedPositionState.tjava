@@ -1,0 +1,12 @@
+package com.r35157.libs.raydium;
+
+import java.math.BigInteger;
+
+public record RaydiumConcentratedPositionState(
+        ΩRaydiumLiquidityPoolPositionNftIdΩ nftId,
+        ΩRaydiumLiquidityPoolConcentratedIdΩ poolId,
+        ΩraydiumLiquidityTickIndexΩ tickLowerIndex,
+        ΩraydiumLiquidityTickIndexΩ tickUpperIndex,
+        ΩRaydiumLiquidityΩ liquidity
+) {
+}

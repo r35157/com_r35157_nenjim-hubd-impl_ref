@@ -1,0 +1,7 @@
+package com.r35157.driver.ledsign;
+
+import org.jetbrains.annotations.NotNull;
+
+public interface LedSign {
+    void sendCommand(@NotNull byte[] payload);
+}

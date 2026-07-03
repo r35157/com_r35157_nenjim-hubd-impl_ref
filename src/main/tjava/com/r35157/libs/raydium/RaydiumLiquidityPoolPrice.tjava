@@ -1,0 +1,18 @@
+package com.r35157.libs.raydium;
+
+import com.r35157.libs.valuetypes.basic.AssetPrice;
+
+/**
+ * Represents the current price of the tokens in a Raydium liquidity pool.
+ *
+ * <p>The 'poolId' identifies the Raydium liquidity pool for which the current token price applies.
+ * The 'price' represents the price value returned or calculated for that pool.</p>
+ *
+ * @param poolId the Raydium liquidity pool id that the price belongs to
+ * @param price the price for a token in the liquidity pool
+ */
+public record RaydiumLiquidityPoolPrice(
+        ΩRaydiumLiquidityPoolIdΩ poolId,
+        AssetPrice price
+) {
+}

@@ -1,0 +1,323 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.WebSocket;
+import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.util.Base64;
+import java.util.Objects;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public final class OracleWebSocketClient implements AutoCloseable {
+
+    public OracleWebSocketClient(
+            URI webSocketEndpoint,
+            JupiterPerpsAsset asset,
+            Consumer<OraclePrice> priceConsumer
+    ) {
+        this.webSocketEndpoint = Objects.requireNonNull(webSocketEndpoint);
+        this.httpEndpoint = toHttpEndpoint(webSocketEndpoint);
+        this.asset = Objects.requireNonNull(asset);
+        this.priceConsumer = Objects.requireNonNull(priceConsumer);
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(
+                    runnable,
+                    "oracle-ws-" + this.asset.name().toLowerCase() + "-" +
+                            this.webSocketEndpoint.getHost()
+            );
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    public void start() {
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
+
+        scheduler.scheduleAtFixedRate(this::sendHeartbeat, 20, 20, TimeUnit.SECONDS);
+        connect();
+    }
+
+    @Override
+    public void close() {
+        running.set(false);
+        WebSocket webSocket = currentWebSocket.getAndSet(null);
+        if (webSocket != null) {
+            webSocket.abort();
+        }
+        scheduler.shutdownNow();
+    }
+
+    private void connect() {
+        if (!running.get()) {
+            return;
+        }
+
+        System.out.println("Connecting to " + webSocketEndpoint);
+        httpClient.newWebSocketBuilder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .buildAsync(webSocketEndpoint, new Listener())
+                .whenComplete((webSocket, error) -> {
+                    if (error != null) {
+                        System.err.printf(
+                                "WebSocket connection failed for %s: %s%n",
+                                webSocketEndpoint,
+                                error.getMessage()
+                        );
+                        scheduleReconnect();
+                    }
+                });
+    }
+
+    private void subscribe(WebSocket webSocket) {
+        String request = """
+                {"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["%s",{"encoding":"base64","commitment":"processed"}]}
+                """.formatted(asset.oracleAccount()).trim();
+
+        webSocket.sendText(request, true)
+                .whenComplete((ignored, error) -> {
+                    if (error != null) {
+                        System.err.println("Subscription request failed: " + error.getMessage());
+                    } else {
+                        System.out.printf(
+                                "Subscribed to %s oracle account %s with processed commitment.%n",
+                                asset,
+                                asset.oracleAccount()
+                        );
+                    }
+                });
+    }
+
+    private void fetchCurrentState() {
+        String body = """
+                {"jsonrpc":"2.0","id":2,"method":"getAccountInfo","params":["%s",{"encoding":"base64","commitment":"processed"}]}
+                """.formatted(asset.oracleAccount()).trim();
+
+        HttpRequest request = HttpRequest.newBuilder(httpEndpoint)
+                .timeout(Duration.ofSeconds(15))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .whenComplete((response, error) -> {
+                    if (error != null) {
+                        System.err.printf(
+                                "Initial oracle fetch failed for %s: %s%n",
+                                httpEndpoint,
+                                error.getMessage()
+                        );
+                        return;
+                    }
+                    if (response.statusCode() != 200) {
+                        System.err.printf(
+                                "Initial oracle fetch returned HTTP %d from %s%n",
+                                response.statusCode(),
+                                httpEndpoint
+                        );
+                        return;
+                    }
+                    processJson(response.body());
+                });
+    }
+
+    private void processJson(String json) {
+        if (json.contains("\"error\"")) {
+            System.err.println("Solana RPC error from " + webSocketEndpoint + ": " + json);
+            return;
+        }
+
+        Matcher dataMatcher = DATA_PATTERN.matcher(json);
+        if (!dataMatcher.find()) {
+            return; // Usually the accountSubscribe acknowledgement.
+        }
+
+        long slot = -1L;
+        Matcher slotMatcher = SLOT_PATTERN.matcher(json);
+        if (slotMatcher.find()) {
+            slot = Long.parseLong(slotMatcher.group(1));
+        }
+
+        try {
+            byte[] accountData = Base64.getDecoder().decode(dataMatcher.group(1));
+            OraclePrice price = DovesAgPriceFeedDecoder.decode(
+                    asset,
+                    accountData,
+                    slot,
+                    webSocketEndpoint.toString()
+            );
+            priceConsumer.accept(price);
+        } catch (RuntimeException exception) {
+            System.err.printf(
+                    "Could not decode oracle data from %s: %s%n",
+                    webSocketEndpoint,
+                    exception.getMessage()
+            );
+        }
+    }
+
+    private void sendHeartbeat() {
+        WebSocket webSocket = currentWebSocket.get();
+        if (running.get() && webSocket != null && !webSocket.isOutputClosed()) {
+            webSocket.sendPing(ByteBuffer.wrap(new byte[]{1}))
+                    .exceptionally(error -> {
+                        System.err.println("WebSocket heartbeat failed: " + error.getMessage());
+                        return null;
+                    });
+        }
+    }
+
+    private void scheduleReconnect() {
+        if (!running.get() || !reconnectScheduled.compareAndSet(false, true)) {
+            return;
+        }
+
+        long delay = reconnectDelaySeconds;
+        reconnectDelaySeconds = Math.min(reconnectDelaySeconds * 2, 30);
+        System.err.printf("Reconnecting to %s in %d seconds.%n", webSocketEndpoint, delay);
+
+        scheduler.schedule(() -> {
+            reconnectScheduled.set(false);
+            connect();
+        }, delay, TimeUnit.SECONDS);
+    }
+
+    private static URI toHttpEndpoint(URI webSocketEndpoint) {
+        String scheme = switch (webSocketEndpoint.getScheme()) {
+            case "wss" -> "https";
+            case "ws" -> "http";
+            default -> throw new IllegalArgumentException(
+                    "WebSocket endpoint must use ws:// or wss://"
+            );
+        };
+
+        try {
+            return new URI(
+                    scheme,
+                    webSocketEndpoint.getUserInfo(),
+                    webSocketEndpoint.getHost(),
+                    webSocketEndpoint.getPort(),
+                    webSocketEndpoint.getPath(),
+                    webSocketEndpoint.getQuery(),
+                    webSocketEndpoint.getFragment()
+            );
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("Could not derive HTTP RPC endpoint", exception);
+        }
+    }
+
+    private final class Listener implements WebSocket.Listener {
+        @Override
+        public void onOpen(WebSocket webSocket) {
+            currentWebSocket.set(webSocket);
+            reconnectDelaySeconds = 1;
+            reconnectScheduled.set(false);
+            subscribe(webSocket);
+            fetchCurrentState();
+            webSocket.request(1);
+        }
+
+        @Override
+        public CompletionStage<?> onText(
+                WebSocket webSocket,
+                CharSequence data,
+                boolean last
+        ) {
+            synchronized (textBuffer) {
+                textBuffer.append(data);
+                if (last) {
+                    String json = textBuffer.toString();
+                    textBuffer.setLength(0);
+                    processJson(json);
+                }
+            }
+            webSocket.request(1);
+            return null;
+        }
+
+        @Override
+        public CompletionStage<?> onBinary(
+                WebSocket webSocket,
+                ByteBuffer data,
+                boolean last
+        ) {
+            webSocket.request(1);
+            return null;
+        }
+
+        @Override
+        public CompletionStage<?> onPing(WebSocket webSocket, ByteBuffer message) {
+            webSocket.request(1);
+            return webSocket.sendPong(message);
+        }
+
+        @Override
+        public CompletionStage<?> onPong(WebSocket webSocket, ByteBuffer message) {
+            webSocket.request(1);
+            return null;
+        }
+
+        @Override
+        public CompletionStage<?> onClose(
+                WebSocket webSocket,
+                int statusCode,
+                String reason
+        ) {
+            currentWebSocket.compareAndSet(webSocket, null);
+            System.err.printf(
+                    "WebSocket closed by %s: code=%d reason=%s%n",
+                    webSocketEndpoint,
+                    statusCode,
+                    reason
+            );
+            scheduleReconnect();
+            return null;
+        }
+
+        @Override
+        public void onError(WebSocket webSocket, Throwable error) {
+            currentWebSocket.compareAndSet(webSocket, null);
+            System.err.printf(
+                    "WebSocket error from %s: %s%n",
+                    webSocketEndpoint,
+                    error.getMessage()
+            );
+            scheduleReconnect();
+        }
+
+        private final StringBuilder textBuffer = new StringBuilder();
+    }
+
+    private final URI webSocketEndpoint;
+    private final URI httpEndpoint;
+    private final JupiterPerpsAsset asset;
+    private final Consumer<OraclePrice> priceConsumer;
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(15))
+            .build();
+    private final ScheduledExecutorService scheduler;
+    private final AtomicReference<WebSocket> currentWebSocket = new AtomicReference<>();
+    private final AtomicBoolean running = new AtomicBoolean();
+    private final AtomicBoolean reconnectScheduled = new AtomicBoolean();
+
+    private volatile long reconnectDelaySeconds = 1;
+
+    private static final Pattern DATA_PATTERN = Pattern.compile(
+            "\\\"data\\\"\\s*:\\s*\\[\\s*\\\"([A-Za-z0-9+/=]+)\\\"\\s*,\\s*\\\"base64\\\"\\s*]"
+    );
+    private static final Pattern SLOT_PATTERN = Pattern.compile(
+            "\\\"slot\\\"\\s*:\\s*(\\d+)"
+    );
+}

@@ -1,0 +1,15 @@
+package crypto.r35157.cauldron;
+
+import java.time.format.DateTimeFormatter;
+
+public class TimeUtils {
+    public static final DateTimeFormatter formatter_hhmm = DateTimeFormatter.ofPattern("HH:mm");
+    public static final long ONE_DAY = 1000 * 60 * 60 * 24;
+    public static final long ONE_WEEK = ONE_DAY * 7;
+    public static final long ONE_MONTH = ONE_DAY * 31;
+    public static final long ONE_QUARTER = ONE_MONTH * 3;
+    public static final long ONE_HALFYEAR = ONE_MONTH * 6;
+    public static final long ONE_YEAR = (long)(ONE_DAY * 365.2425f);
+    public static final long FIVE_YEARS = ONE_YEAR * 5;
+    public static final long ONE_DECADE = ONE_DAY * 10;
+}

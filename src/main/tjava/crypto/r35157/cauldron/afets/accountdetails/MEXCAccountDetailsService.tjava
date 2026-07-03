@@ -1,0 +1,8 @@
+package crypto.r35157.cauldron.afets.accountdetails;
+
+import crypto.r35157.cauldron.afets.InvalidAPIKeyException;
+import org.jetbrains.annotations.NotNull;
+
+public interface MEXCAccountDetailsService {
+    @NotNull AccountDetails getDetails() throws InvalidAPIKeyException, Exception;
+}

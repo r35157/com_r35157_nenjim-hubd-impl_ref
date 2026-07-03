@@ -1,0 +1,19 @@
+package com.r35157.libs.solana;
+
+/**
+ * Contains Solana-related constants used by the Solana integration.
+ *
+ * <p>This class is intended for shared constants that are part of the public
+ * Solana API surface or are useful across Solana-related modules.</p>
+ */
+public class SolanaConstants {
+    /**
+     * The default Solana JSON-RPC endpoint used by the integration.
+     */
+    public static final String RPC_URL = "https://api.mainnet.solana.com";
+
+    /**
+     * The SPL mint address for Syrup USDC on Solana.
+     */
+    public static final String SPL_TOKEN_SYRUPUSDC = "AvZZF1YaZDziPY2RCK4oJrRVrbN3mTD9NL24hPeaZeUj";
+}

@@ -1,0 +1,14 @@
+package com.r35157.nenjim.kicker;
+
+//import com.r35157.nenjim.hubd.Context;
+import com.r35157.nenjim.hubd.NenjimHub;
+import org.jetbrains.annotations.NotNull;
+
+public interface NenjimProcess {
+    void run() throws Exception;
+
+    default void setContext(/*@NotNull Context context*/) {};
+    default void setHub(@NotNull NenjimHub hub) {};
+
+    @NotNull String getName();
+}

@@ -1,0 +1,10 @@
+package com.r35157.jupiterperpsalarm;
+
+public enum AlarmSeverity {
+    EMERGENCY,  // Repeated wake-up alarm - sound always
+    CRITICAL,   // One-shot wake-up alarm - sound always
+    WARN,       // Audible warning - respecting quiet hours though
+    INFO,       // Normal notification with visual and audible feedback
+    SILENT,     // Low-priority notification - visual feedback without sound/vibration
+    GHOST       // No visual/audible notification - only visible inside the Pushover app
+}

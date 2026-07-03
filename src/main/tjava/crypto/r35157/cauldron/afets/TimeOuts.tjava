@@ -1,0 +1,154 @@
+package crypto.r35157.cauldron.afets;
+
+import crypto.r35157.TimeTools;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+public class TimeOuts {
+
+    public TimeOuts(@NotNull String filename, long duration) {
+        timeoutMap = new HashMap<>();
+        commentsMap = new HashMap<>();
+
+        this.filename = filename;
+        this.duration = duration;
+
+        log.info("Timeouts file: {}", filename);
+
+        update();
+        purge();
+
+        log.info("      Timeout: {} (Initialized with {} entries)",
+                TimeTools.formatTimeFromMillis(duration), timeoutMap.size());
+    }
+
+    private void update() {
+        File file = new File(filename);
+
+        if (!file.exists()) {
+            timeoutMap.clear();
+            commentsMap.clear();
+            return;
+        }
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
+            String line;
+            String comment;
+
+            while ((line = reader.readLine()) != null) {
+                // Skip empty lines or lines starting with #
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+
+                int commentIndex = line.indexOf('#');
+                if (commentIndex != -1) {
+                    comment = line.substring(commentIndex + 1).trim();
+                    line = line.substring(0, commentIndex).trim();
+                } else {
+                    comment = null;
+                }
+
+                String[] parts = line.split(" ", 2);
+                if (parts.length == 2) {
+                    String key = parts[0];
+                    try {
+                        timeoutMap.put(key, Long.parseLong(parts[1]));
+                        if(comment != null && !comment.trim().isEmpty()) {
+                            commentsMap.put(key, comment);
+                        }
+                    } catch (NumberFormatException e) {
+                        log.error("Skipping invalid line: {}", line);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.error("ERROR: Could not update TimeOuts by reading from '" + filename + "' - " + e.getMessage());
+        }
+    }
+
+    private void persist() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename))) {
+            for (Map.Entry<String, Long> entry : timeoutMap.entrySet()) {
+                String line = entry.getKey() + " " + entry.getValue();
+                String comment = commentsMap.get(entry.getKey());
+                if (comment != null && !comment.trim().isEmpty()) {
+                    line += " #" + comment;
+                }
+                writer.write(line);
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            log.error("ERROR: Could not persist TimeOuts by writing to '" + filename + "' - " + e.getMessage());
+        }
+    }
+
+    public boolean isInTimeOut(UUID uuid, PositionType positionType) {
+        purge();
+
+        String key = getKey(uuid, positionType);
+        return timeoutMap.containsKey(key);
+    }
+
+    public void putInTimeout(UUID uuid, PositionType positionType, String comment) {
+        Long timeout = System.currentTimeMillis() + duration;
+        String key = getKey(uuid, positionType);
+        timeoutMap.put(key, timeout);
+
+        if (comment != null && !comment.trim().isEmpty()) {
+            commentsMap.put(key, comment);
+        }
+
+        persist();
+        purge();
+    }
+
+    public void purge() {
+        long now = System.currentTimeMillis();
+
+        int numberOfElementsBeforePurge = timeoutMap.size();
+
+        // Store keys to be removed
+        Set<String> keysToRemove = timeoutMap.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() <= now)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+
+        // Remove from both maps
+        keysToRemove.forEach(key -> {
+            timeoutMap.remove(key);
+            commentsMap.remove(key);
+        });
+
+        int numberOfElementsAfterPurge = timeoutMap.size();
+
+        int numberOfPurges = numberOfElementsBeforePurge - numberOfElementsAfterPurge;
+
+        if(numberOfPurges > 0) {
+            log.info("Purged {} TimeOuts", numberOfPurges);
+            persist();
+        }
+    }
+
+    private String getKey(UUID uuid, PositionType positionType) {
+        return uuid.toString() + "/" + positionType.toString();
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(TimeOuts.class);
+
+    private final long duration;
+    private final String filename;
+
+    private final Map<String, Long> timeoutMap;
+    private final Map<String, String> commentsMap;
+}

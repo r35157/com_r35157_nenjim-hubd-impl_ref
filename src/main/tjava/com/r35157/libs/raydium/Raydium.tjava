@@ -1,0 +1,221 @@
+package com.r35157.libs.raydium;
+
+import com.r35157.libs.valuetypes.basic.AssetPrice;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import com.r35157.libs.valuetypes.basic.Range;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.Set;
+
+public interface Raydium {
+    /**
+     * Fetches the current price for a Raydium liquidity pool.
+     *
+     * <p>The price is fetched from Raydium using the supplied pool id. The pool id may refer
+     * to any Raydium liquidity pool supported by the implementation.</p>
+     *
+     * @param poolId the Raydium liquidity pool id
+     * @return the current pool price
+     * @throws IOException if the price could not be fetched or the response could not be parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching the price
+     */
+    AssetPrice fetchPoolPrice(ΩRaydiumLiquidityPoolIdΩ poolId) throws IOException, InterruptedException;
+
+    /**
+     * Fetches the Raydium liquidity pool ids where the supplied Solana owner address has positions.
+     *
+     * <p>The returned set contains unique pool ids and does not guarantee iteration order.</p>
+     *
+     * <p>An implementation may discover pools through multiple Raydium position mechanisms,
+     * including standard liquidity pool token holdings and concentrated liquidity position NFTs.
+     * The returned ids are aggregated under the common {@code ΩRaydiumLiquidityPoolIdΩ} ValueTag.</p>
+     *
+     * @param ownerAddress the Solana owner address to inspect
+     * @return the unique Raydium liquidity pool ids where the owner has a position
+     * @throws IOException if liquidity pool ids could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching liquidity pool ids
+     */
+    Set<ΩRaydiumLiquidityPoolIdΩ> fetchLiquidityPoolIds(ΩSolanaAddressΩ ownerAddress) throws IOException, InterruptedException;
+
+    /**
+     * Fetches the Raydium concentrated liquidity position NFT ids owned by a Solana address.
+     *
+     * <p>The supplied owner address is inspected for token holdings that are candidates for
+     * Raydium concentrated liquidity position NFTs. The implementation verifies the candidates
+     * against Raydium's concentrated liquidity program before returning them.</p>
+     *
+     * <p>The returned set contains position NFT ids, not pool ids. Callers can use the returned
+     * NFT ids to fetch concentrated position state and then determine which pools the positions
+     * belong to.</p>
+     *
+     * @param ownerAddress the Solana owner address to inspect
+     * @return the Raydium concentrated liquidity position NFT ids owned by the address
+     * @throws IOException if the position NFT ids could not be fetched or verified
+     * @throws InterruptedException if the calling thread is interrupted while fetching position NFT ids
+     */
+    Set<ΩRaydiumLiquidityPoolPositionNftIdΩ> fetchConcentratedPositionNftIds(
+            ΩSolanaAddressΩ ownerAddress
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Fetches the total token amounts held by a standard Raydium liquidity pool.
+     *
+     * <p>The returned amounts represent the pool-level token reserves for token A and
+     * token B. They do not describe a single liquidity provider's share of the pool.</p>
+     *
+     * @param poolId the Raydium standard liquidity pool id
+     * @return the total token amounts held by the standard liquidity pool
+     * @throws IOException if the pool information could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching the pool information
+     */
+    RaydiumLiquidityPoolTokenAmounts fetchStandardLiquidityPoolTokenAmounts(
+            ΩRaydiumLiquidityPoolStandardIdΩ poolId
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Fetches the token amounts represented by an owner's position in a standard Raydium liquidity pool.
+     *
+     * <p>The returned amounts describe the owner's calculated share of token A and token B in the
+     * standard liquidity pool. The calculation is based on the owner's liquidity pool token holdings,
+     * the LP mint supply and the pool-level token reserves returned by Raydium.</p>
+     *
+     * <p><strong>Important:</strong> The returned amounts should be treated as an estimated pool-share
+     * view, not as an exact withdraw preview. Raydium's UI may show lower amounts when removing
+     * liquidity. For example, for pool {@code 8os8bnXoy5voKv3uBPPuVGyqWZGJaa2RRri5RbLUwPCY},
+     * the pool-share calculation returned approximately {@code 2.1594651 EVE / 31.867153 USDT},
+     * while Raydium's 100% withdraw preview showed approximately {@code 2.1062559 EVE / 31.55046 USDT}.</p>
+     *
+     * <p>// TODO To match Raydium's withdraw preview more precisely, this method should eventually use
+     * on-chain pool state and vault balances, excluding protocol, fund and creator fee buckets.
+     * Raydium's CPMM pool state contains fee fields and a {@code vault_amount_without_fee(...)}
+     * calculation that appears relevant for this. Until that is implemented, this method represents
+     * an estimate based on Raydium REST pool amounts and Solana LP supply.</p>
+     *
+     * <p>This method is specific to standard liquidity pools. Concentrated liquidity positions are
+     * represented differently and should use concentrated-position-specific methods.</p>
+     *
+     * @param ownerAddress the Solana owner address whose standard pool position should be inspected
+     * @param poolId the Raydium standard liquidity pool id
+     * @return the estimated token amounts represented by the owner's standard pool position
+     * @throws IOException if the position information could not be fetched, calculated or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching the position information
+     */
+    RaydiumLiquidityPoolTokenAmounts fetchStandardLiquidityPoolPositionTokenAmounts(
+            ΩSolanaAddressΩ ownerAddress,
+            ΩRaydiumLiquidityPoolStandardIdΩ poolId
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Fetches the raw Raydium concentrated position state for a position NFT.
+     *
+     * <p>The supplied NFT id identifies a concentrated liquidity position on Raydium. The returned
+     * state is a low-level Raydium representation of that position, including the pool id, tick
+     * boundaries and liquidity value decoded from the position account.</p>
+     *
+     * <p>This method does not calculate token amounts, price ranges or higher-level strategy values.
+     * Higher-level modules may use the returned state together with pool state, current price and CLMM
+     * math to calculate those values.</p>
+     *
+     * @param positionNftId the Raydium concentrated liquidity position NFT id
+     * @return the raw Raydium concentrated position state for the supplied position NFT
+     * @throws IOException if the position state could not be fetched or decoded
+     * @throws InterruptedException if the calling thread is interrupted while fetching the position state
+     */
+    RaydiumConcentratedPositionState fetchConcentratedPositionState(
+            ΩRaydiumLiquidityPoolPositionNftIdΩ positionNftId
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Fetches basic information about a Raydium concentrated liquidity pool.
+     *
+     * <p>The returned information contains the pool id, token mint addresses,
+     * token decimals and the current pool price as reported by Raydium. This is
+     * low-level pool information that can be combined with concentrated position
+     * state to interpret ticks, price ranges and liquidity values.</p>
+     *
+     * <p>This method does not fetch an owner's position and does not calculate token
+     * amounts for a position.</p>
+     *
+     * @param poolId the Raydium concentrated liquidity pool id
+     * @return basic information about the concentrated liquidity pool
+     * @throws IOException if the pool information could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching the pool information
+     */
+    RaydiumConcentratedPoolInfo fetchConcentratedPoolInfo(
+            ΩRaydiumLiquidityPoolConcentratedIdΩ poolId
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Fetches the raw on-chain state for a Raydium concentrated liquidity pool.
+     *
+     * <p>The returned state is decoded from the Raydium concentrated pool account on Solana.
+     * It contains low-level CLMM state such as active liquidity, the current square-root price
+     * in Q64.64 format and the current tick index.</p>
+     *
+     * <p>This method is different from {@link #fetchConcentratedPoolInfo(ΩRaydiumLiquidityPoolConcentratedIdΩ)},
+     * which fetches pool information from Raydium's REST API. This method is intended for calculations
+     * that need fresher or more precise on-chain CLMM state than the REST API price field can provide.</p>
+     *
+     * <p>This method does not fetch token metadata, token decimals or position state. Those values
+     * must be supplied separately when needed for higher-level calculations.</p>
+     *
+     * @param poolId the Raydium concentrated liquidity pool id
+     * @return the raw on-chain state for the concentrated liquidity pool
+     * @throws IOException if the pool state could not be fetched or decoded
+     * @throws InterruptedException if the calling thread is interrupted while fetching the pool state
+     */
+    RaydiumConcentratedPoolState fetchConcentratedPoolState(
+            ΩRaydiumLiquidityPoolConcentratedIdΩ poolId
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Calculates the price range represented by a Raydium concentrated liquidity position.
+     *
+     * <p>The returned range is calculated from the position's lower and upper tick indexes,
+     * adjusted by the token decimals from the concentrated pool information.</p>
+     *
+     * <p>Raydium concentrated liquidity ranges are treated as lower-inclusive and
+     * upper-exclusive. This avoids overlapping ownership at shared boundaries between
+     * adjacent tick ranges.</p>
+     *
+     * @param positionState the concentrated position state containing the lower and upper tick indexes
+     * @param poolInfo the concentrated pool information containing token decimals and pool context
+     * @param decimalPlaces the number decimal places in the resulting price currency
+     * @return the price range represented by the concentrated liquidity position
+     */
+    Range<AssetPrice> calculateConcentratedPositionPriceRange(
+            RaydiumConcentratedPositionState positionState,
+            RaydiumConcentratedPoolInfo poolInfo,
+            int decimalPlaces
+    );
+
+    /**
+     * Calculates the token amounts represented by a Raydium concentrated liquidity position using
+     * raw on-chain pool state for the current square-root price.
+     *
+     * <p>The returned amounts are calculated from the position liquidity, the position tick range,
+     * token decimals from the concentrated pool information, and the current square-root price from
+     * the supplied on-chain pool state. This can be more precise than using the REST API price field
+     * from {@link RaydiumConcentratedPoolInfo}.</p>
+     *
+     * <p>If the current pool price is below the position range, the position is represented as
+     * token A. If the current pool price is above the position range, the position is represented
+     * as token B. If the current pool price is inside the position range, the position is
+     * represented as a mix of token A and token B.</p>
+     *
+     * <p>This method performs only the mathematical conversion from Raydium concentrated position
+     * state and pool state to token amounts. It does not fetch position state, pool information or
+     * pool state.</p>
+     *
+     * @param positionState the concentrated position state containing tick indexes and liquidity
+     * @param poolInfo the concentrated pool information containing token mints and decimals
+     * @param poolState the on-chain concentrated pool state containing current square-root price and tick
+     * @return the token amounts represented by the concentrated liquidity position
+     */
+    RaydiumLiquidityPoolTokenAmounts calculateConcentratedPositionTokenAmounts(
+            RaydiumConcentratedPositionState positionState,
+            RaydiumConcentratedPoolInfo poolInfo,
+            RaydiumConcentratedPoolState poolState
+    );
+}

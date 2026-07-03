@@ -1,0 +1,31 @@
+package crypto.r35157.cauldron.afets.ticker;
+
+import com.google.gson.*;
+import org.jetbrains.annotations.NotNull;
+
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+
+public class MEXCTickerDeserializer implements JsonDeserializer<MEXCTickerItem> {
+    @Override
+    public MEXCTickerItem deserialize(
+            @NotNull JsonElement json,
+            @NotNull Type typeOfT,
+            @NotNull JsonDeserializationContext context
+    ) throws JsonParseException {
+        JsonObject jsonObject = json.getAsJsonObject();
+
+        String symbol = jsonObject.get("symbol").getAsString();
+        BigDecimal currentPrice = jsonObject.get("lastPrice").getAsBigDecimal();
+
+        long now = System.currentTimeMillis();
+
+        MEXCTickerItem ticker = new MEXCTickerItem(
+                symbol,
+                currentPrice,
+                now
+        );
+
+        return ticker;
+    }
+}

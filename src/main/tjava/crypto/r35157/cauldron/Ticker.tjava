@@ -1,0 +1,100 @@
+package crypto.r35157.cauldron;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.*;
+
+public class Ticker {
+    public static @NotNull List<TickerItem> getTickerItems(
+            long startTimeStamp,
+            long stopTimeStamp
+    ) {
+        return getTickerItems((Collection<String>) null, startTimeStamp, stopTimeStamp);
+    }
+
+    public static @NotNull List<TickerItem> getTickerItems(
+            String assetId,
+            long startTimeStamp,
+            long stopTimeStamp
+    ) {
+        return getTickerItems(Set.of(assetId), startTimeStamp, stopTimeStamp);
+    }
+
+    public static @NotNull List<TickerItem> getTickerItems(
+            Collection<String> assetIds,
+            long startTimeStamp,
+            long stopTimeStamp
+    ) {
+        List<TickerItem> tickerItems = new ArrayList<>();
+
+        try (BufferedReader br = new BufferedReader(new FileReader(FILEPATH_PRICES))) {
+            String line;
+
+            while ((line = br.readLine()) != null) {
+                if (line.startsWith("#")) {
+                    continue;
+                }
+
+                int commentIndex = line.indexOf('#');
+                if (commentIndex != -1) {
+                    line = line.substring(0, commentIndex);
+                }
+
+                String[] fields = line.split(";");
+
+                for (int i = 0; i < fields.length; i++) {
+                    fields[i] = fields[i].trim();
+                }
+
+                long timestamp = Long.parseLong(fields[FIELD__EPOCH]);
+
+                if(timestamp < startTimeStamp || timestamp > stopTimeStamp) {
+                    // Outside requested period
+                    continue;
+                }
+
+                String source = fields[FIELD__SOURCE_ID];
+                String humanReadableTimestamp = fields[FIELD__HUMAN_READABLE_TIMESTAMP];
+                String pair = fields[FIELD__PAIR];
+                int index = pair.indexOf("_");
+                String base = pair.substring(0, index);
+                String quote = pair.substring(index + 1);
+
+                if(assetIds != null && !assetIds.isEmpty() && !assetIds.contains(quote)) {
+                    continue;
+                }
+
+                double price = Double.parseDouble(fields[FIELD__PRICE]);
+
+                TickerItem tickerItem = new TickerItem(
+                        timestamp,
+                        humanReadableTimestamp,
+                        source,
+                        base,
+                        quote,
+                        price
+                );
+
+                tickerItems.add(tickerItem);
+            }
+        } catch(IOException ioe) {
+            // TODO: Make handling of error more robust!
+            ioe.printStackTrace();
+        }
+
+        tickerItems.sort(Comparator.comparingLong(TickerItem::timestamp));
+
+        return tickerItems;
+    }
+
+    private static final int FIELD__EPOCH = 0;
+    private static final int FIELD__HUMAN_READABLE_TIMESTAMP = 1;
+    private static final int FIELD__SOURCE_ID = 2;
+    private static final int FIELD__PAIR = 3;
+    private static final int FIELD__PRICE = 4;
+
+    private static final String FILEPATH_PRICES = "prices.csv";
+}

@@ -1,0 +1,25 @@
+package crypto.r35157.nenjim;
+
+import java.util.concurrent.CountDownLatch;
+
+public class SodaTaskManager implements NenjimProcess {
+    @Override
+    public void run() throws Exception {
+    }
+
+    @Override
+    public void setNenjimProcessContext(NenjimContext context) {
+        this.nenjimContext = context;
+    }
+
+    @Override
+    public void setNenjimHub(NenjimHub hub) {
+    }
+
+    @Override
+    public String getProcessName() {
+        return "Soda Task Manager";
+    }
+
+    private NenjimContext nenjimContext;
+}

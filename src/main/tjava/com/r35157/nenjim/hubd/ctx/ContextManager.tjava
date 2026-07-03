@@ -1,0 +1,9 @@
+package com.r35157.nenjim.hubd.ctx;
+
+import java.util.Set;
+
+public interface ContextManager {
+    Context getDefault();
+    Context get(ΩContextIdΩ contextName);
+    Set<ΩContextIdΩ> getList();
+}

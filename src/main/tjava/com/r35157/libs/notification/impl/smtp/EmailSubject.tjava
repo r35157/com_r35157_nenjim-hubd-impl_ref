@@ -1,0 +1,9 @@
+package com.r35157.libs.notification.impl.smtp;
+
+public record EmailSubject(String text) {
+    public EmailSubject {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Email subject cannot be blank!");
+        }
+    }
+}

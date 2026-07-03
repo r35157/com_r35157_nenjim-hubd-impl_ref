@@ -1,0 +1,93 @@
+package crypto.r35157.nenjim;
+
+import java.util.HashMap;
+//import java.util.concurrent.StructuredTaskScope;
+
+public class NenjimHubImpl implements NenjimHub {
+    public static void main() throws Exception {
+        new NenjimHubImpl();
+    }
+
+    public NenjimHubImpl() throws Exception {
+        System.out.println("Initializing NenjimHub...");
+
+        nextProcessId = 1;
+        //processesScope = new StructuredTaskScope.ShutdownOnFailure();
+        processes = new HashMap<>();
+
+        System.out.println("Starting autorun processes:");
+        startAutoRunProcesses();
+        waitForAndShutdown();
+    }
+
+    private void waitForAndShutdown() {
+        System.out.println("Done - Now online!");
+
+        /*
+        try {
+            processesScope.join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        processesScope.close();
+        */
+        System.out.println("Nenjim is now shutdown (stopped all processes)!");
+    }
+
+    private void startAutoRunProcesses() throws Exception {
+        String[] processesToAutoStart = {
+                "crypto.r35157.nenjim.NenjimHubSocketAdminAdapter",
+                "crypto.r35157.nenjim.NenjimHubRestAdminAdapter",
+                "crypto.r35157.nenjim.NenjimHubRPCAdminAdapter",
+                "crypto.r35157.nenjim.SuwimoHub",
+                "crypto.r35157.nenjim.SodaTaskManager",
+                "crypto.r35157.assetaz.hub.AssetAZHub"
+        };
+
+        for (String processInterfaceName : processesToAutoStart) {
+            startProcess(processInterfaceName);
+        }
+    }
+
+    @Override
+    public void startProcess(String className) {
+        ClassLoader loader = ClassLoader.getSystemClassLoader();
+
+        /*processesScope.fork(() -> {
+            Class<?> clazz = loader.loadClass(className);
+            if (!NenjimProcess.class.isAssignableFrom(clazz)) {
+                throw new IllegalArgumentException("'" + className + "' does NOT implement NenjimProcess");
+            }
+
+            NenjimProcess proc = (NenjimProcess) clazz.getDeclaredConstructor().newInstance();
+
+            processes.put(nextProcessId, proc);
+            nextProcessId++;
+
+            NenjimContext context = new NenjimContext() { };
+            proc.setNenjimProcessContext(context);
+            proc.setNenjimHub(this);
+
+            Thread.currentThread().setName(proc.getProcessName());
+            System.out.println("   Starter Nenjim process '" + proc.getProcessName() + "'");
+            proc.run();
+
+            return null;
+        });*/
+    }
+
+    @Override
+    public HashMap<Integer, NenjimProcess> getRunningProcesses() {
+        return processes;
+    }
+
+    @Override
+    public void noop() {
+        System.out.println("NenjimHub command: 'noop'");
+    }
+
+    private HashMap<Integer, NenjimProcess> processes;
+    //private StructuredTaskScope.ShutdownOnFailure processesScope;
+    private int nextProcessId;
+}

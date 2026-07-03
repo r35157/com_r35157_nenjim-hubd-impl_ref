@@ -1,0 +1,23 @@
+package crypto.r35157.cauldron.afets;
+
+public enum MEXCPositionSide {
+    OpenLong(1),
+    CloseShort(2),
+    OpenShort(3),
+    CloseLong(4);
+
+    private final int value;
+
+    MEXCPositionSide(int value) {
+        this.value = value;
+    }
+
+    public int getValue() {
+        return value;
+    }
+
+    @Override
+    public String toString() {
+        return String.valueOf(value);
+    }
+}

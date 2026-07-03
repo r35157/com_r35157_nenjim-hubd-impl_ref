@@ -1,0 +1,25 @@
+package com.r35157.nenjim.kicker.impl.ref;
+
+//import com.r35157.nenjim.hubd.Context;
+import com.r35157.nenjim.hubd.NenjimHub;
+import com.r35157.nenjim.kicker.NenjimProcess;
+import org.jetbrains.annotations.NotNull;
+
+public final class NenjimProcessImpl implements NenjimProcess {
+    @Override
+    public void run() throws Exception {
+    }
+
+    @Override
+    public void setContext(/*@NotNull Context context*/) {
+    }
+
+    @Override
+    public void setHub(@NotNull NenjimHub nenjimHub) {
+    }
+
+    @Override
+    public @NotNull String getName() {
+        return "";
+    }
+}

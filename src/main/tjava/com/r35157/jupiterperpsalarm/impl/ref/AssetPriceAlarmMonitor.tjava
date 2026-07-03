@@ -1,0 +1,80 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+public final class AssetPriceAlarmMonitor {
+
+    public AssetPriceAlarmMonitor(
+            JupiterPerpsAsset asset,
+            List<PriceAlarmDefinition> definitions,
+            AlarmVariableResolver variableResolver,
+            AlarmAction action
+    ) {
+        this.asset = asset;
+        this.alarms = definitions.stream()
+                .map(definition -> {
+                    if (definition.asset() != asset) {
+                        throw new IllegalArgumentException(
+                                "Alarm asset " + definition.asset() + " does not match monitor " + asset
+                        );
+                    }
+                    return new PriceAlarm(definition, variableResolver, action);
+                })
+                .toList();
+
+        if (alarms.isEmpty()) {
+            throw new IllegalArgumentException("At least one alarm is required for " + asset);
+        }
+    }
+
+    public synchronized void accept(OraclePrice price) {
+        if (price.asset() != asset) {
+            throw new IllegalArgumentException(
+                    "Received " + price.asset() + " price for " + asset + " monitor"
+            );
+        }
+
+        String eventKey = price.rawPrice() + ":" + price.exponent() + ":" +
+                price.oracleTime().getEpochSecond();
+        if (!recentEvents.add(eventKey)) {
+            return;
+        }
+        trimRecentEvents();
+
+        long ageSeconds = Duration.between(price.oracleTime(), Instant.now()).getSeconds();
+        System.out.printf(
+                "%s  %s=%s USD  oracleAge=%ds  slot=%d  source=%s%n",
+                Instant.now(),
+                asset,
+                price.priceUsd().toPlainString(),
+                ageSeconds,
+                price.slot(),
+                price.source()
+        );
+
+        alarms.forEach(alarm -> alarm.accept(price));
+    }
+
+    public List<PriceAlarm> alarms() {
+        return alarms;
+    }
+
+    private void trimRecentEvents() {
+        while (recentEvents.size() > MAX_RECENT_EVENTS) {
+            Iterator<String> iterator = recentEvents.iterator();
+            iterator.next();
+            iterator.remove();
+        }
+    }
+
+    private final JupiterPerpsAsset asset;
+    private final List<PriceAlarm> alarms;
+    private final Set<String> recentEvents = new LinkedHashSet<>();
+
+    private static final int MAX_RECENT_EVENTS = 512;
+}
