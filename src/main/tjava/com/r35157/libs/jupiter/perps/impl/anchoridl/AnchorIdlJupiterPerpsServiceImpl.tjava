@@ -89,11 +89,11 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         Set<JupiterPerpsPosition> positions = new HashSet<>();
 
         for (SolanaAccountInfo accountInfo : accountInfos) {
-            ΩSolanaAddressΩ address = accountInfo.address();
             ΩSolanaProgramIdΩ programId = accountInfo.owner();
+            ΩJupiterPerpsPositionAccountΩ positionAccount = accountInfo.address();
 
             if (!JUPITER_PERPS_PROGRAM_ID.equals(programId)) {
-                String errorMsg = "Account '" + address + "' is not owned by Jupiter Perps program '" +
+                String errorMsg = "Account '" + positionAccount + "' is not owned by Jupiter Perps program '" +
                         programId + "'";
                 throw new IllegalArgumentException(errorMsg);
             }
