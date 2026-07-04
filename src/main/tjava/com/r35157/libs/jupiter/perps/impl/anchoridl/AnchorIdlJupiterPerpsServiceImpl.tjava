@@ -5,10 +5,15 @@ import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
+import com.r35157.libs.solana.valuetypes.WellKnownCurrencyTypes;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
+
+import static java.math.BigDecimal.ZERO;
 
 public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
@@ -36,7 +41,36 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         }
 
         ΩSPLMintAddressΩ tradedTokenMint = getTradedTokenMint(accountInfo);
-        JupiterPerpsPosition pos = positionDecoder.decode(positionAccount, accountInfo, tradedTokenMint);
+
+        JupiterPerpsPositionInfo info = positionDecoder.decode(accountInfo);
+
+        ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
+        ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
+        BigDecimal pnlPercent = ZERO;          // TODO - Dummy
+        BigDecimal leverage = ZERO;            // TODO - Dummy
+        ΩUSDCPriceΩ marketPrice = ZERO;        // TODO - Dummy
+        ΩUSDCAmountΩ totalFees = ZERO;         // TODO - Dummy
+        ΩUSDCAmountΩ borrowFeesDue = ZERO;     // TODO - Dummy
+        ΩUSDCAmountΩ closeFeePending = ZERO;   // TODO - Dummy
+        ΩSolanaAmountΩ accountRent = new MoneyAmount(ZERO, WellKnownCurrencyTypes.SOLANA.getCurrencyType()); // TODO - Dummy
+
+        JupiterPerpsPosition pos = new JupiterPerpsPosition(
+                positionAccount,
+                tradedTokenMint,
+                info.direction(),
+                value,
+                info.sizeUsd(),
+                pnl,
+                pnlPercent,
+                leverage,
+                info.entryPrice(),
+                marketPrice,
+                info.collateralUsd(),
+                totalFees,
+                borrowFeesDue,
+                closeFeePending,
+                accountRent
+        );
 
         return pos;
     }
@@ -66,8 +100,37 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
             ΩSPLMintAddressΩ tradedTokenMint = getTradedTokenMint(accountInfo);
 
-            JupiterPerpsPosition position = positionDecoder.decode(address, accountInfo, tradedTokenMint);
-            positions.add(position);
+            JupiterPerpsPositionInfo info = positionDecoder.decode(accountInfo);
+
+            ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
+            ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
+            BigDecimal pnlPercent = ZERO;          // TODO - Dummy
+            BigDecimal leverage = ZERO;            // TODO - Dummy
+            ΩUSDCPriceΩ marketPrice = ZERO;        // TODO - Dummy
+            ΩUSDCAmountΩ totalFees = ZERO;         // TODO - Dummy
+            ΩUSDCAmountΩ borrowFeesDue = ZERO;     // TODO - Dummy
+            ΩUSDCAmountΩ closeFeePending = ZERO;   // TODO - Dummy
+            ΩSolanaAmountΩ accountRent = new MoneyAmount(ZERO, WellKnownCurrencyTypes.SOLANA.getCurrencyType()); // TODO - Dummy
+
+            JupiterPerpsPosition pos = new JupiterPerpsPosition(
+                    positionAccount,
+                    tradedTokenMint,
+                    info.direction(),
+                    value,
+                    info.sizeUsd(),
+                    pnl,
+                    pnlPercent,
+                    leverage,
+                    info.entryPrice(),
+                    marketPrice,
+                    info.collateralUsd(),
+                    totalFees,
+                    borrowFeesDue,
+                    closeFeePending,
+                    accountRent
+            );
+
+            positions.add(pos);
         }
 
         return Set.copyOf(positions);

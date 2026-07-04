@@ -2,26 +2,17 @@ package com.r35157.libs.jupiter.perps.impl.anchoridl;
 
 import com.r35157.libs.codec.Base58Codec;
 import com.r35157.libs.codec.impl.ref.Base58CodecImpl;
-import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.solana.SolanaAccountInfo;
-import com.r35157.libs.valuetypes.basic.MoneyAmount;
-import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Base64;
 
-import static java.math.BigDecimal.ZERO;
-
 class AnchorIdlJupiterPerpsPositionDecoder {
 
-    JupiterPerpsPosition decode(
-            ΩJupiterPerpsPositionAccountΩ positionAccount,
-            SolanaAccountInfo accountInfo,
-            ΩSPLMintAddressΩ tradedTokenMint
-    ) {
+    JupiterPerpsPositionInfo decode(SolanaAccountInfo accountInfo) {
         byte[] data = Base64.getDecoder().decode(accountInfo.dataBase64());
 
         if (data.length < PRICE_OFFSET + U64_LENGTH) {
@@ -60,35 +51,15 @@ class AnchorIdlJupiterPerpsPositionDecoder {
                 .valueOf(rawSizeUsd)
                 .movePointLeft(6);
 
-        ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
-        ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
-        BigDecimal pnlPercent = ZERO;          // TODO - Dummy
-        BigDecimal leverage = ZERO;            // TODO - Dummy
-        ΩUSDCPriceΩ marketPrice = ZERO;        // TODO - Dummy
-        ΩUSDCAmountΩ totalFees = ZERO;         // TODO - Dummy
-        ΩUSDCAmountΩ borrowFeesDue = ZERO;     // TODO - Dummy
-        ΩUSDCAmountΩ closeFeePending = ZERO;   // TODO - Dummy
-        ΩSolanaAmountΩ accountRent = new MoneyAmount(ZERO, WellKnownCurrencyTypes.SOLANA.getCurrencyType()); // TODO - Dummy
 
-        JupiterPerpsPosition pos = new JupiterPerpsPosition(
-                positionAccount,
-                tradedTokenMint,
-                direction,
-                value,
-                sizeUsd,
-                pnl,
-                pnlPercent,
-                leverage,
+        JupiterPerpsPositionInfo posInfo = new JupiterPerpsPositionInfo(
                 entryPrice,
-                marketPrice,
-                collateralUsd,
-                totalFees,
-                borrowFeesDue,
-                closeFeePending,
-                accountRent
+                direction,
+                sizeUsd,
+                collateralUsd
         );
 
-        return pos;
+        return posInfo;
     }
 
     ΩSolanaAddressΩ decodeCustodyAccount(SolanaAccountInfo accountInfo) {
