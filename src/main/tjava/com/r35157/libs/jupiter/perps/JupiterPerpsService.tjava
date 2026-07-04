@@ -1,0 +1,45 @@
+package com.r35157.libs.jupiter.perps;
+
+import java.io.IOException;
+import java.util.Set;
+
+/**
+ * Service for reading Jupiter Perps data.
+ *
+ * <p>This service is read-only. It does not open, close, modify, or sign transactions
+ * for Jupiter Perpetual Contracts.</p>
+ *
+ * <p>NOTICE: The first supported operation is reading a known Jupiter Perps position account
+ * and returning its decoded position data.</p>
+ */
+public interface JupiterPerpsService {
+    /**
+     * Reads a Jupiter Perps position from a known position account.
+     *
+     * <p>The supplied account must be the Solana account that stores the Jupiter Perps
+     * position state. It is not the wallet address, token account, custody account, pool
+     * account, or position request account.</p>
+     *
+     * @param positionAccount the Solana account address of the Jupiter Perps position
+     * @return the decoded Jupiter Perps position
+     * @throws IOException if the position account could not be fetched or decoded
+     * @throws InterruptedException if the calling thread is interrupted while fetching
+     *                              the position account
+     */
+    JupiterPerpsPosition getPosition(ΩJupiterPerpsPositionAccountΩ positionAccount)
+            throws IOException, InterruptedException;
+
+    /**
+     * Finds open Jupiter Perps positions owned by a wallet.
+     *
+     * <p>This method returns decoded Jupiter Perps position objects. It does not return
+     * raw Solana accounts or account ids.</p>
+     *
+     * @param owner the wallet address that owns the Jupiter Perps positions
+     * @return the open Jupiter Perps positions owned by the wallet
+     * @throws IOException if the position accounts could not be fetched or decoded
+     * @throws InterruptedException if the calling thread is interrupted while fetching positions
+     */
+    Set<JupiterPerpsPosition> getOpenPositions(ΩSolanaWalletIdΩ owner)
+            throws IOException, InterruptedException;
+}

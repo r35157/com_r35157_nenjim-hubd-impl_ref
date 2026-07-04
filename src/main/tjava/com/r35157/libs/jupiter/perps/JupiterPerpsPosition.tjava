@@ -1,0 +1,27 @@
+package com.r35157.libs.jupiter.perps;
+
+import java.math.BigDecimal;
+
+/**
+ * Represents a Jupiter Perps position.
+ *
+ * <p>A Jupiter Perps position is represented on-chain by a Solana account owned by
+ * the Jupiter Perps program. This record contains the public API view of such a
+ * position.</p>
+ *
+ * @param positionAccount the Solana account address of the Jupiter Perps position
+ * @param entryPrice the entry price of the position, denominated in USDC
+ * @param direction whether the position is long or short
+ * @param tradedTokenMint the mint address of the token being traded
+ * @param sizeUsd the size of this position in USD
+ * @param collateralUsd the amount of USD representing the collateral for this position
+ */
+public record JupiterPerpsPosition(
+        ΩJupiterPerpsPositionAccountΩ positionAccount,
+        ΩUSDCPriceΩ entryPrice,
+        JupiterPerpsPositionDirection direction,
+        ΩSPLMintAddressΩ tradedTokenMint,
+        ΩUSDCAmountΩ sizeUsd,
+        ΩUSDCAmountΩ collateralUsd
+) {
+}

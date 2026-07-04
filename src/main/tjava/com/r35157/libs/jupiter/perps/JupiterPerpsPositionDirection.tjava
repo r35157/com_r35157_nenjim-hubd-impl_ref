@@ -1,0 +1,9 @@
+package com.r35157.libs.jupiter.perps;
+
+/**
+ * Direction of a Jupiter Perps position.
+ */
+public enum JupiterPerpsPositionDirection {
+    LONG,
+    SHORT
+}

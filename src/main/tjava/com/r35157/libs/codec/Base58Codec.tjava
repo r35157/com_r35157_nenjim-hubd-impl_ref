@@ -1,0 +1,5 @@
+package com.r35157.libs.codec;
+
+public interface Base58Codec {
+    String encode(byte[] input);
+}

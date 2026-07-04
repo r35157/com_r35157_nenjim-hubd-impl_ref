@@ -1,0 +1,17 @@
+package com.r35157.libs.solana;
+
+/**
+ * Filter used when fetching accounts owned by a Solana program.
+ *
+ * <p>The initial supported filter type is {@code memcmp}, which asks the
+ * Solana RPC node to only return accounts where the account data at a specific
+ * byte offset matches a base58 encoded value.</p>
+ *
+ * @param offset the byte offset in the account data where comparison starts
+ * @param bytes the base58 encoded bytes to match
+ */
+public record SolanaProgramAccountMemcmpFilter(
+        int offset,
+        String bytes
+) {
+}

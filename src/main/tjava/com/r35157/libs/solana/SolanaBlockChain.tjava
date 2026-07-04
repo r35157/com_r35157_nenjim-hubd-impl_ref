@@ -1,0 +1,167 @@
+package com.r35157.libs.solana;
+
+import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
+import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Provides read-oriented access to the Solana blockchain.
+ *
+ * <p>This interface exposes the Solana operations needed by higher-level
+ * integrations. It can fetch native SOL balances, SPL token holdings, NFT-like
+ * token holding candidates, account information and program derived addresses.</p>
+ *
+ * <p>The interface is intentionally generic and does not contain Raydium-specific
+ * logic. Higher-level integrations are expected to interpret Solana accounts,
+ * token holdings and derived addresses according to their own domain rules.</p>
+ */
+public interface SolanaBlockChain {
+    /**
+     * Fetches the native SOL balance for a Solana address.
+     *
+     * @param address the Solana address to inspect
+     * @return the native SOL balance for the address
+     * @throws IOException if the balance could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching the balance
+     */
+    ΩSolanaAmountΩ getBalanceInSolana(ΩSolanaAddressΩ address) throws IOException, InterruptedException;
+
+    /**
+     * Fetches the native SOL balance for a Solana address in lamports.
+     *
+     * <p>Lamports are the smallest unit of native SOL.</p>
+     *
+     * @param address the Solana address to inspect
+     * @return the native SOL balance for the address in lamports
+     * @throws IOException if the balance could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching the balance
+     */
+    ΩlamportsΩ getBalanceInLamport(ΩSolanaAddressΩ address) throws IOException, InterruptedException;
+
+    /**
+     * Fetches SPL token holdings owned by a Solana address for a specific token program.
+     *
+     * <p>The supplied token program decides which token accounts are inspected. For example,
+     * callers may query the original SPL Token Program or the Token-2022 Program depending
+     * on which token accounts they need to discover.</p>
+     *
+     * @param ownerAddress the Solana owner address whose token holdings should be inspected
+     * @param splProgramId the SPL token program to query
+     * @return a map of SPL mint addresses to token holding information
+     * @throws IOException if the token holdings could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching token holdings
+     */
+    Map<ΩSPLMintAddressΩ, SPLTokenHolding> getSPLTokenHoldings(
+            ΩSolanaAddressΩ ownerAddress,
+            SolanaSPLTokenProgram splProgramId
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Fetches NFT-like token mint address candidates owned by a Solana address for a specific token program.
+     *
+     * <p>This method identifies token holdings that look like NFTs within the supplied token
+     * program. A returned address is only a candidate. Higher-level integrations are responsible
+     * for deciding whether the returned address has domain-specific meaning.</p>
+     *
+     * // TODO This method currently identifies candidates from the owner's token holdings only.
+     * // A token with zero decimals and an owner balance of one is not guaranteed to be a real NFT,
+     * // because the mint's total supply may still be greater than one. A future implementation
+     * // should verify the mint supply, for example by using Solana getTokenSupply, before treating
+     * // the result as a confirmed NFT.
+     *
+     * @param ownerAddress the Solana owner address whose NFT-like holdings should be inspected
+     * @param splProgram the SPL token program to query
+     * @return the NFT-like Solana mint address candidates owned by the address
+     * @throws IOException if the NFT candidate addresses could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching NFT candidate addresses
+     */
+    Set<ΩSolanaNFTAddressΩ> getSolanaNFTCandidateAddresses(
+            ΩSolanaAddressΩ ownerAddress,
+            SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Finds a Solana program derived address for a program id and a set of seeds.
+     *
+     * <p>The seeds describe the logical inputs used to derive the address. The implementation
+     * is responsible for converting each seed into the byte representation required by Solana.</p>
+     *
+     * @param programId the Solana program id used to derive the address
+     * @param seeds the seeds used when deriving the program address
+     * @return the derived Solana address together with its bump value
+     */
+    SolanaProgramDerivedAddress findProgramAddress(
+            ΩSolanaProgramIdΩ programId,
+            List<SolanaProgramAddressSeed> seeds
+    );
+
+    /**
+     * Fetches account information for a Solana account address.
+     *
+     * <p>If the account does not exist, this method returns {@code null}. If the account exists,
+     * the returned value contains the account address, the owning Solana program id and the
+     * account data encoded as Base64.</p>
+     *
+     * @param accountAddress the Solana account address to inspect
+     * @return account information, or {@code null} if the account does not exist
+     * @throws IOException if the account information could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching account information
+     */
+    SolanaAccountInfo getAccountInfo(ΩSolanaAddressΩ accountAddress)
+            throws IOException, InterruptedException;
+
+    /**
+     * Encodes a raw 32-byte Solana address into its textual Solana address representation.
+     *
+     * <p>This method is intended for callers that have obtained raw Solana address bytes from
+     * account data and need the normal string representation used elsewhere in the API.</p>
+     *
+     * @param addressBytes the raw 32-byte Solana address
+     * @return the encoded Solana address
+     * @throws IllegalArgumentException if the supplied byte array is not a valid Solana address length
+     */
+    ΩSolanaAddressΩ encodeSolanaAddress(byte[] addressBytes);
+
+    /**
+     * Fetches the total supply of an SPL token mint for a specific token program.
+     *
+     * <p>The supplied token program identifies which SPL token program owns the mint,
+     * for example the original SPL Token Program or the Token-2022 Program.</p>
+     *
+     * @param mintAddress the SPL mint address whose supply should be fetched
+     * @param splProgram the SPL token program to query
+     * @return the SPL token supply for the mint
+     * @throws IOException if the token supply could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching token supply
+     */
+    SPLTokenSupply getSPLTokenSupply(
+            ΩSPLMintAddressΩ mintAddress,
+            SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Fetches accounts owned by a Solana program using server-side account data filters.
+     *
+     * <p>This method uses Solana's {@code getProgramAccounts} RPC call. The supplied filters
+     * are sent to the RPC node, so matching is performed server-side instead of fetching all
+     * accounts owned by the program and filtering them locally.</p>
+     *
+     * <p>The initial supported filter type is {@link SolanaProgramAccountMemcmpFilter}, which
+     * matches bytes at a specific offset in the account data.</p>
+     *
+     * @param programId the Solana program id that owns the accounts to search
+     * @param filters the memcmp filters to apply when searching program accounts
+     * @return the matching program accounts
+     * @throws IOException if the program accounts could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted while fetching program accounts
+     */
+    Set<SolanaAccountInfo> getProgramAccounts(
+            ΩSolanaProgramIdΩ programId,
+            Set<SolanaProgramAccountMemcmpFilter> filters
+    ) throws IOException, InterruptedException;
+}

@@ -1,0 +1,8 @@
+package com.r35157.libs.valuetypes.basic;
+
+import java.math.BigDecimal;
+
+public record MoneyPrice(
+        ΩPriceΩ price,
+        CurrencyType currencyType
+) { }
