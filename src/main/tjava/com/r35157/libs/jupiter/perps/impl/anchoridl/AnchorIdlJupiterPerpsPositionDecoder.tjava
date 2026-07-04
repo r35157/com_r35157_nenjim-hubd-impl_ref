@@ -4,15 +4,19 @@ import com.r35157.libs.codec.Base58Codec;
 import com.r35157.libs.codec.impl.ref.Base58CodecImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.solana.SolanaAccountInfo;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Base64;
 
+import static java.math.BigDecimal.ZERO;
+
 class AnchorIdlJupiterPerpsPositionDecoder {
 
-    JupiterPerpsPositionInfo decode(SolanaAccountInfo accountInfo) {
+    @Nullable JupiterPerpsPositionInfo decode(@NotNull SolanaAccountInfo accountInfo) {
         byte[] data = Base64.getDecoder().decode(accountInfo.dataBase64());
 
         if (data.length < PRICE_OFFSET + U64_LENGTH) {
@@ -51,13 +55,7 @@ class AnchorIdlJupiterPerpsPositionDecoder {
                 .valueOf(rawSizeUsd)
                 .movePointLeft(6);
 
-
-        JupiterPerpsPositionInfo posInfo = new JupiterPerpsPositionInfo(
-                entryPrice,
-                direction,
-                sizeUsd,
-                collateralUsd
-        );
+        JupiterPerpsPositionInfo posInfo = new JupiterPerpsPositionInfo(entryPrice, direction, sizeUsd, collateralUsd);
 
         return posInfo;
     }

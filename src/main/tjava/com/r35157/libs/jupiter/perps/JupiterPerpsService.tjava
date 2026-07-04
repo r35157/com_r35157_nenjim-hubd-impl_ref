@@ -1,5 +1,8 @@
 package com.r35157.libs.jupiter.perps;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.io.IOException;
 import java.util.Set;
 
@@ -26,7 +29,7 @@ public interface JupiterPerpsService {
      * @throws InterruptedException if the calling thread is interrupted while fetching
      *                              the position account
      */
-    JupiterPerpsPosition getPosition(ΩJupiterPerpsPositionAccountΩ positionAccount)
+    @Nullable JupiterPerpsPosition getPosition(@NotNull ΩJupiterPerpsPositionAccountΩ positionAccount)
             throws IOException, InterruptedException;
 
     /**
@@ -40,6 +43,6 @@ public interface JupiterPerpsService {
      * @throws IOException if the position accounts could not be fetched or decoded
      * @throws InterruptedException if the calling thread is interrupted while fetching positions
      */
-    Set<JupiterPerpsPosition> getOpenPositions(ΩSolanaWalletIdΩ owner)
+    @NotNull Set<JupiterPerpsPosition> getOpenPositions(@NotNull ΩSolanaWalletIdΩ owner)
             throws IOException, InterruptedException;
 }

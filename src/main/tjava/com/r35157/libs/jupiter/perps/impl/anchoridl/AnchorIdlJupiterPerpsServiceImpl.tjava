@@ -7,6 +7,8 @@ import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
 import com.r35157.libs.solana.valuetypes.WellKnownCurrencyTypes;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -26,7 +28,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     }
 
     @Override
-    public JupiterPerpsPosition getPosition(ΩJupiterPerpsPositionAccountΩ positionAccount)
+    public @Nullable JupiterPerpsPosition getPosition(@NotNull ΩJupiterPerpsPositionAccountΩ positionAccount)
             throws IOException, InterruptedException {
         SolanaAccountInfo accountInfo = solanaBlockChain.getAccountInfo(positionAccount);
 
@@ -44,39 +46,44 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
         JupiterPerpsPositionInfo info = positionDecoder.decode(accountInfo);
 
-        ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
-        ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
-        BigDecimal pnlPercent = ZERO;          // TODO - Dummy
-        BigDecimal leverage = ZERO;            // TODO - Dummy
-        ΩUSDCPriceΩ marketPrice = ZERO;        // TODO - Dummy
-        ΩUSDCAmountΩ totalFees = ZERO;         // TODO - Dummy
-        ΩUSDCAmountΩ borrowFeesDue = ZERO;     // TODO - Dummy
-        ΩUSDCAmountΩ closeFeePending = ZERO;   // TODO - Dummy
-        ΩSolanaAmountΩ accountRent = new MoneyAmount(ZERO, WellKnownCurrencyTypes.SOLANA.getCurrencyType()); // TODO - Dummy
+        JupiterPerpsPosition pos;
+        if(info == null) {
+            pos = null;
+        } else {
+            ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
+            ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
+            BigDecimal pnlPercent = ZERO;          // TODO - Dummy
+            BigDecimal leverage = ZERO;            // TODO - Dummy
+            ΩUSDCPriceΩ marketPrice = ZERO;        // TODO - Dummy
+            ΩUSDCAmountΩ totalFees = ZERO;         // TODO - Dummy
+            ΩUSDCAmountΩ borrowFeesDue = ZERO;     // TODO - Dummy
+            ΩUSDCAmountΩ closeFeePending = ZERO;   // TODO - Dummy
+            ΩSolanaAmountΩ accountRent = new MoneyAmount(ZERO, WellKnownCurrencyTypes.SOLANA.getCurrencyType()); // TODO - Dummy
 
-        JupiterPerpsPosition pos = new JupiterPerpsPosition(
-                positionAccount,
-                tradedTokenMint,
-                info.direction(),
-                value,
-                info.sizeUsd(),
-                pnl,
-                pnlPercent,
-                leverage,
-                info.entryPrice(),
-                marketPrice,
-                info.collateralUsd(),
-                totalFees,
-                borrowFeesDue,
-                closeFeePending,
-                accountRent
-        );
+            pos = new JupiterPerpsPosition(
+                    positionAccount,
+                    tradedTokenMint,
+                    info.direction(),
+                    value,
+                    info.sizeUsd(),
+                    pnl,
+                    pnlPercent,
+                    leverage,
+                    info.entryPrice(),
+                    marketPrice,
+                    info.collateralUsd(),
+                    totalFees,
+                    borrowFeesDue,
+                    closeFeePending,
+                    accountRent
+            );
+        }
 
         return pos;
     }
 
     @Override
-    public Set<JupiterPerpsPosition> getOpenPositions(ΩSolanaWalletIdΩ owner)
+    public @NotNull Set<JupiterPerpsPosition> getOpenPositions(@NotNull ΩSolanaWalletIdΩ owner)
             throws IOException, InterruptedException {
         Set<SolanaAccountInfo> accountInfos = solanaBlockChain.getProgramAccounts(
                 JUPITER_PERPS_PROGRAM_ID,
@@ -98,9 +105,12 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 throw new IllegalArgumentException(errorMsg);
             }
 
-            ΩSPLMintAddressΩ tradedTokenMint = getTradedTokenMint(accountInfo);
-
             JupiterPerpsPositionInfo info = positionDecoder.decode(accountInfo);
+            if(info == null || info.sizeUsd().compareTo(ZERO) == 0) {
+                continue;
+            }
+
+            ΩSPLMintAddressΩ tradedTokenMint = getTradedTokenMint(accountInfo);
 
             ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
             ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
