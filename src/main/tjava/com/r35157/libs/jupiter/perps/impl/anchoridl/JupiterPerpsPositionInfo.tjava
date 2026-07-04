@@ -1,0 +1,13 @@
+package com.r35157.libs.jupiter.perps.impl.anchoridl;
+
+import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
+
+import java.math.BigDecimal;
+
+public record JupiterPerpsPositionInfo(
+        ΩUSDCPriceΩ entryPrice,
+        JupiterPerpsPositionDirection direction,
+        ΩUSDCAmountΩ sizeUsd,
+        ΩUSDCAmountΩ collateralUsd
+) {
+}
