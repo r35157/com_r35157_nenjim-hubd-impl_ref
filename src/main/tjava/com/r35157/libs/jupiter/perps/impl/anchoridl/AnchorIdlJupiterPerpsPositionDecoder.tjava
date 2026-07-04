@@ -5,11 +5,15 @@ import com.r35157.libs.codec.impl.ref.Base58CodecImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.solana.SolanaAccountInfo;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Base64;
+
+import static java.math.BigDecimal.ZERO;
 
 class AnchorIdlJupiterPerpsPositionDecoder {
 
@@ -56,13 +60,32 @@ class AnchorIdlJupiterPerpsPositionDecoder {
                 .valueOf(rawSizeUsd)
                 .movePointLeft(6);
 
+        ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
+        ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
+        BigDecimal pnlPercent = ZERO;          // TODO - Dummy
+        BigDecimal leverage = ZERO;            // TODO - Dummy
+        ΩUSDCPriceΩ marketPrice = ZERO;        // TODO - Dummy
+        ΩUSDCAmountΩ totalFees = ZERO;         // TODO - Dummy
+        ΩUSDCAmountΩ borrowFeesDue = ZERO;     // TODO - Dummy
+        ΩUSDCAmountΩ closeFeePending = ZERO;   // TODO - Dummy
+        ΩSolanaAmountΩ accountRent = new MoneyAmount(ZERO, WellKnownCurrencyTypes.SOLANA.getCurrencyType()); // TODO - Dummy
+
         JupiterPerpsPosition pos = new JupiterPerpsPosition(
                 positionAccount,
-                entryPrice,
-                direction,
                 tradedTokenMint,
+                direction,
+                value,
                 sizeUsd,
-                collateralUsd
+                pnl,
+                pnlPercent,
+                leverage,
+                entryPrice,
+                marketPrice,
+                collateralUsd,
+                totalFees,
+                borrowFeesDue,
+                closeFeePending,
+                accountRent
         );
 
         return pos;

@@ -1,5 +1,7 @@
 package com.r35157.libs.jupiter.perps;
 
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+
 import java.math.BigDecimal;
 
 /**
@@ -10,18 +12,36 @@ import java.math.BigDecimal;
  * position.</p>
  *
  * @param positionAccount the Solana account address of the Jupiter Perps position
- * @param entryPrice the entry price of the position, denominated in USDC
- * @param direction whether the position is long or short
  * @param tradedTokenMint the mint address of the token being traded
- * @param sizeUsd the size of this position in USD
- * @param collateralUsd the amount of USD representing the collateral for this position
+ * @param direction whether the position is long or short
+ * @param value the amount the position is worth if closed now
+ * @param size the leveraged amount used to open the contracts
+ * @param pnl the amount in usd in profit or loss on this position
+ * @param pnlPercent the profit and loss represented as a percentage
+ * @param leverage TODO
+ * @param entryPrice the entry price of the position, denominated in USDC
+ * @param marketPrice the current spot price of the token
+ * @param collateral the amount of USD representing the collateral for this position
+ * @param totalFees the total amount of fees (TODO: is that including pending/due fees)
+ * @param borrowFeesDue the amount of USD that is currently outstanding
+ * @param closeFeePending the fee in USD for closing the account (TODO: multiple accounts - when adding collateral?)
+ * @param accountRent refundable amount locked for Solana account renting
  */
 public record JupiterPerpsPosition(
         ΩJupiterPerpsPositionAccountΩ positionAccount,
-        ΩUSDCPriceΩ entryPrice,
-        JupiterPerpsPositionDirection direction,
         ΩSPLMintAddressΩ tradedTokenMint,
-        ΩUSDCAmountΩ sizeUsd,
-        ΩUSDCAmountΩ collateralUsd
+        JupiterPerpsPositionDirection direction,
+        ΩUSDCAmountΩ value,
+        ΩUSDCAmountΩ size,
+        ΩUSDCAmountΩ pnl,
+        BigDecimal pnlPercent,
+        BigDecimal leverage,
+        ΩUSDCPriceΩ entryPrice,
+        ΩUSDCPriceΩ marketPrice,
+        ΩUSDCAmountΩ collateral,
+        ΩUSDCAmountΩ totalFees,
+        ΩUSDCAmountΩ borrowFeesDue,
+        ΩUSDCAmountΩ closeFeePending,
+        ΩSolanaAmountΩ accountRent
 ) {
 }
