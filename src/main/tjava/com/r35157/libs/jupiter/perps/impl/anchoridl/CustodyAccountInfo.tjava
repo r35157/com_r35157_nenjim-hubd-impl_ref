@@ -1,0 +1,9 @@
+package com.r35157.libs.jupiter.perps.impl.anchoridl;
+
+import java.math.BigInteger;
+
+public record CustodyAccountInfo(
+        ΩSPLMintAddressΩ mintAddress,
+        BigInteger currentCumulativeInterestRate
+) {
+}
