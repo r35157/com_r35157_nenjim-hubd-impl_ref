@@ -747,7 +747,7 @@ public class RaydiumImpl implements Raydium {
 
     private byte[] decodeBase64AccountData(SolanaAccountInfo accountInfo) throws IOException {
         try {
-            return Base64.getDecoder().decode(accountInfo.dataBase64());
+            return base64.decode(accountInfo.data());
         } catch (IllegalArgumentException e) {
             throw new IOException("Could not decode Solana account data as Base64 for account: " + accountInfo.address(), e);
         }
@@ -953,6 +953,8 @@ public class RaydiumImpl implements Raydium {
             RAYDIUM_POOL_STATE_LIQUIDITY_OFFSET + RAYDIUM_U128_LENGTH;
     private static final int RAYDIUM_POOL_STATE_TICK_CURRENT_OFFSET =
             RAYDIUM_POOL_STATE_SQRT_PRICE_X64_OFFSET + RAYDIUM_U128_LENGTH;
+
+    private static final Base64.Decoder base64 = Base64.getDecoder();
 
     private final SolanaBlockChain solanaBlockChain;
     private final HttpClient httpClient;

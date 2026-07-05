@@ -25,13 +25,12 @@ public class Main {
     static void main(String[] args) throws Exception {
         NenjimHubImpl nenjimHub = new NenjimHubImpl();
 
-        /*
         SolanaBlockChain sbc = new SolanaBlockChainImpl();
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
         Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
         int a=0;
-        */
+
         nenjimHub.awaitShutdown();
 
         /*        try {

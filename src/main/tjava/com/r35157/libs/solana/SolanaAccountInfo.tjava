@@ -1,5 +1,7 @@
 package com.r35157.libs.solana;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Represents basic information about a Solana account.
  *
@@ -14,11 +16,11 @@ package com.r35157.libs.solana;
  *
  * @param address the Solana account address
  * @param owner the Solana program id that owns the account
- * @param dataBase64 the account data encoded as Base64, or an empty string if the account has no data
+ * @param data the account data encoded as Base64, or null if the account has no data
  */
 public record SolanaAccountInfo(
-        ΩSolanaAddressΩ address,
-        ΩSolanaProgramIdΩ owner,
-        String dataBase64
+        @NotNull ΩSolanaAddressΩ address,
+        @NotNull ΩSolanaProgramIdΩ owner,
+        @NotNull ΩBase64StringΩ data
 ) {
 }

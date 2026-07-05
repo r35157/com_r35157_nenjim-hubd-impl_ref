@@ -42,14 +42,23 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
             );
         }
 
-        ΩSPLMintAddressΩ tradedTokenMint = getTradedTokenMint(accountInfo);
-
-        JupiterPerpsPositionInfo info = positionDecoder.decode(accountInfo);
+        JupiterPerpsPositionInfo perpsPositionInfo = positionDecoder.decode(accountInfo);
 
         JupiterPerpsPosition pos;
-        if(info == null) {
+        if(perpsPositionInfo == null) {
             pos = null;
         } else {
+            ΩJupiterCustodyAccountAddressΩ custodyAccountAddress = positionDecoder.decodeCustodyAccountAddress(accountInfo);
+            ΩJupiterCustodyAccountInfoEncodedΩ encodedCustodyAccountInfo = solanaBlockChain.getAccountInfo(custodyAccountAddress);
+
+            if (encodedCustodyAccountInfo == null) {
+                String errorMsg = "Jupiter Perps custody account does not exist: " + custodyAccountAddress;
+                throw new IllegalArgumentException(errorMsg);
+            }
+
+            JupiterCustodyAccountInfo custodyAccountInfo = custodyDecoder.decode(encodedCustodyAccountInfo);
+            ΩSPLMintAddressΩ mintAddress = custodyAccountInfo.mintAddress();
+
             ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
             ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
             BigDecimal pnlPercent = ZERO;          // TODO - Dummy
@@ -62,16 +71,16 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
             pos = new JupiterPerpsPosition(
                     positionAccount,
-                    tradedTokenMint,
-                    info.direction(),
+                    mintAddress,
+                    perpsPositionInfo.direction(),
                     value,
-                    info.sizeUsd(),
+                    perpsPositionInfo.size(),
                     pnl,
                     pnlPercent,
                     leverage,
-                    info.entryPrice(),
+                    perpsPositionInfo.entryPrice(),
                     marketPrice,
-                    info.collateralUsd(),
+                    perpsPositionInfo.collateral(),
                     totalFees,
                     borrowFeesDue,
                     closeFeePending,
@@ -105,12 +114,21 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 throw new IllegalArgumentException(errorMsg);
             }
 
-            JupiterPerpsPositionInfo info = positionDecoder.decode(accountInfo);
-            if(info == null || info.sizeUsd().compareTo(ZERO) == 0) {
+            JupiterPerpsPositionInfo perpsPositionInfo = positionDecoder.decode(accountInfo);
+            if(perpsPositionInfo == null || perpsPositionInfo.size().compareTo(ZERO) == 0) {
                 continue;
             }
 
-            ΩSPLMintAddressΩ tradedTokenMint = getTradedTokenMint(accountInfo);
+            ΩJupiterCustodyAccountAddressΩ custodyAccountAddress = perpsPositionInfo.custodyAccountAddress();
+            ΩJupiterCustodyAccountInfoEncodedΩ encodedCustodyAccountInfo = solanaBlockChain.getAccountInfo(custodyAccountAddress);
+
+            if (encodedCustodyAccountInfo == null) {
+                String errorMsg = "Jupiter Perps custody account does not exist: " + custodyAccountAddress;
+                throw new IllegalArgumentException(errorMsg);
+            }
+
+            JupiterCustodyAccountInfo custodyAccountInfo = custodyDecoder.decode(encodedCustodyAccountInfo);
+            ΩSPLMintAddressΩ mintAddress = custodyAccountInfo.mintAddress();
 
             ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
             ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
@@ -124,16 +142,16 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
             JupiterPerpsPosition pos = new JupiterPerpsPosition(
                     positionAccount,
-                    tradedTokenMint,
-                    info.direction(),
+                    mintAddress,
+                    perpsPositionInfo.direction(),
                     value,
-                    info.sizeUsd(),
+                    perpsPositionInfo.size(),
                     pnl,
                     pnlPercent,
                     leverage,
-                    info.entryPrice(),
+                    perpsPositionInfo.entryPrice(),
                     marketPrice,
-                    info.collateralUsd(),
+                    perpsPositionInfo.collateral(),
                     totalFees,
                     borrowFeesDue,
                     closeFeePending,
@@ -144,22 +162,6 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         }
 
         return Set.copyOf(positions);
-    }
-
-    private ΩSPLMintAddressΩ getTradedTokenMint(SolanaAccountInfo positionAccountInfo)
-            throws IOException, InterruptedException
-    {
-        ΩSolanaAddressΩ custodyAccount = positionDecoder.decodeCustodyAccount(positionAccountInfo);
-        SolanaAccountInfo custodyAccountInfo = solanaBlockChain.getAccountInfo(custodyAccount);
-
-        if (custodyAccountInfo == null) {
-            throw new IllegalArgumentException(
-                    "Jupiter Perps custody account does not exist: " + custodyAccount
-            );
-        }
-
-        ΩSPLMintAddressΩ mintAddress = custodyDecoder.decodeMint(custodyAccountInfo);
-        return mintAddress;
     }
 
     private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID =

@@ -1,50 +1,64 @@
 package com.r35157.libs.jupiter.perps.impl.anchoridl;
 
-import com.r35157.libs.codec.Base58Codec;
-import com.r35157.libs.codec.impl.ref.Base58CodecImpl;
 import com.r35157.libs.solana.SolanaAccountInfo;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.math.BigInteger;
 import java.util.Base64;
+
+import static com.r35157.libs.jupiter.perps.impl.anchoridl.DecodingPrimitives.*;
 
 class AnchorIdlJupiterPerpsCustodyDecoder {
 
-    ΩSPLMintAddressΩ decodeMint(
-            SolanaAccountInfo custodyAccountInfo
+    @Nullable JupiterCustodyAccountInfo decode(
+            @NotNull ΩJupiterCustodyAccountInfoEncodedΩ encodedCustodyAccountInfo
     ) {
-        byte[] data = Base64.getDecoder().decode(custodyAccountInfo.dataBase64());
+        ΩJupiterPerpsPostionIdlΩ idl = decodeIdl(encodedCustodyAccountInfo);
 
-        if (data.length < MINT_OFFSET + PUBLIC_KEY_LENGTH) {
-            throw new IllegalArgumentException(
-                    "Jupiter Perps custody account data is too short: " + data.length
-            );
-        }
-
-        return readPublicKey(data, MINT_OFFSET);
-    }
-
-    private ΩSPLMintAddressΩ readPublicKey(
-            byte[] data,
-            int offset
-    ) {
-        byte[] publicKeyBytes = new byte[PUBLIC_KEY_LENGTH];
-
-        System.arraycopy(
-                data,
-                offset,
-                publicKeyBytes,
-                0,
-                PUBLIC_KEY_LENGTH
+        JupiterCustodyAccountInfo cai = new JupiterCustodyAccountInfo(
+                readPublicKey(idl, MINT_OFFSET),
+                decodeCumulativeInterestRate(idl)
         );
 
-        return base58.encode(publicKeyBytes);
+        return cai;
     }
 
+    private ΩJupiterPerpsCustodyAccountIdlΩ decodeIdl(ΩJupiterCustodyAccountInfoEncodedΩ encodedCustodyAccountInfo) {
+        ΩJupiterPerpsCustodyAccountIdlΩ idl = base64.decode(encodedCustodyAccountInfo.data());
+
+        if (idl.length < CUMULATIVE_INTEREST_RATE_OFFSET + U128_LENGTH) {
+            String errMsg = "Jupiter Perps custody account data is too short: " + idl.length;
+            throw new IllegalArgumentException(errMsg);
+        }
+
+        return idl;
+    }
+
+    private BigInteger decodeCumulativeInterestRate(byte[] data) {
+        byte[] bytes = readU128(data, CUMULATIVE_INTEREST_RATE_OFFSET);
+        BigInteger cumulativeInterestRate = new BigInteger(1, bytes);
+
+        return cumulativeInterestRate;
+    }
+
+    // Offsets:
+    //    8   discriminator
+    //   +32 pool
+    //   +32 mint
+    //   +32 token_account
+    //   +1  decimals
+    //   +1  is_stable
+    //   +45 oracle
+    //   +48 pricing
+    //   +7  permissions
+    //   +8  target_ratio_bps
+    //   +48 assets
+
     private static final int ANCHOR_DISCRIMINATOR_LENGTH = 8;
-    private static final int PUBLIC_KEY_LENGTH = 32;
+    private static final int MINT_OFFSET = ANCHOR_DISCRIMINATOR_LENGTH + PUBLIC_KEY_LENGTH;
+    private static final int FUNDING_RATE_STATE_OFFSET = 262;
+    private static final int CUMULATIVE_INTEREST_RATE_OFFSET = FUNDING_RATE_STATE_OFFSET;
 
-    private static final int MINT_OFFSET =
-            ANCHOR_DISCRIMINATOR_LENGTH
-                    + PUBLIC_KEY_LENGTH; // pool
-
-    private static final Base58Codec base58 = new Base58CodecImpl();
+    private static final Base64.Decoder base64 = Base64.getDecoder();
 }

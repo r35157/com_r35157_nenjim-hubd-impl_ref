@@ -1,7 +1,5 @@
 package com.r35157.libs.jupiter.perps.impl.anchoridl;
 
-import com.r35157.libs.codec.Base58Codec;
-import com.r35157.libs.codec.impl.ref.Base58CodecImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.solana.SolanaAccountInfo;
 import org.jetbrains.annotations.NotNull;
@@ -12,24 +10,19 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Base64;
 
-import static java.math.BigDecimal.ZERO;
+import static com.r35157.libs.jupiter.perps.impl.anchoridl.DecodingPrimitives.*;
 
 class AnchorIdlJupiterPerpsPositionDecoder {
 
-    @Nullable JupiterPerpsPositionInfo decode(@NotNull SolanaAccountInfo accountInfo) {
-        byte[] data = Base64.getDecoder().decode(accountInfo.dataBase64());
+    @Nullable JupiterPerpsPositionInfo decode(
+            @NotNull ΩJupiterPerpsPositionInfoEncodedΩ encodedPerpsPositionInfo
+    ) {
+        ΩJupiterPerpsPostionIdlΩ idl = decodeIdl(encodedPerpsPositionInfo);
 
-        if (data.length < PRICE_OFFSET + U64_LENGTH) {
-            throw new IllegalArgumentException(
-                    "Jupiter Perps position account data is too short: " + data.length
-            );
-        }
-
-        JupiterPerpsPositionDirection direction =
-                decodeDirection(data[SIDE_OFFSET]);
+        JupiterPerpsPositionDirection direction = decodeDirection(idl);
 
         long rawEntryPrice = ByteBuffer
-                .wrap(data, PRICE_OFFSET, U64_LENGTH)
+                .wrap(idl, PRICE_OFFSET, U64_LENGTH)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getLong();
 
@@ -38,7 +31,7 @@ class AnchorIdlJupiterPerpsPositionDecoder {
                 .movePointLeft(6);
 
         long rawCollateralUsd = ByteBuffer
-                .wrap(data, COLLATERAL_USD_OFFSET, U64_LENGTH)
+                .wrap(idl, COLLATERAL_USD_OFFSET, U64_LENGTH)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getLong();
 
@@ -47,7 +40,7 @@ class AnchorIdlJupiterPerpsPositionDecoder {
                 .movePointLeft(6);
 
         long rawSizeUsd = ByteBuffer
-                .wrap(data, SIZE_USD_OFFSET, U64_LENGTH)
+                .wrap(idl, SIZE_USD_OFFSET, U64_LENGTH)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getLong();
 
@@ -55,29 +48,47 @@ class AnchorIdlJupiterPerpsPositionDecoder {
                 .valueOf(rawSizeUsd)
                 .movePointLeft(6);
 
-        JupiterPerpsPositionInfo posInfo = new JupiterPerpsPositionInfo(entryPrice, direction, sizeUsd, collateralUsd);
+        ΩJupiterCustodyAccountAddressΩ custodyAccountAddress = readPublicKey(idl, CUSTODY_OFFSET);
+
+        JupiterPerpsPositionInfo posInfo = new JupiterPerpsPositionInfo(
+                entryPrice,
+                direction,
+                sizeUsd,
+                collateralUsd,
+                custodyAccountAddress
+        );
 
         return posInfo;
     }
 
-    ΩSolanaAddressΩ decodeCustodyAccount(SolanaAccountInfo accountInfo) {
-        byte[] data = Base64.getDecoder().decode(accountInfo.dataBase64());
+    ΩJupiterCustodyAccountAddressΩ decodeCustodyAccountAddress(SolanaAccountInfo accountInfo) {
+        byte[] data = base64.decode(accountInfo.data());
 
         if (data.length < CUSTODY_OFFSET + PUBLIC_KEY_LENGTH) {
-            throw new IllegalArgumentException(
-                    "Jupiter Perps position account data is too short: " + data.length
-            );
+            String errorMsg = "Jupiter Perps position account data is too short: " + data.length;
+            throw new IllegalArgumentException(errorMsg);
         }
 
-        return readPublicKey(
-                data,
-                CUSTODY_OFFSET
-        );
+        ΩJupiterCustodyAccountAddressΩ addr = readPublicKey(data, CUSTODY_OFFSET);
+
+        return addr;
     }
 
-    private JupiterPerpsPositionDirection decodeDirection(
-            byte rawSide
-    ) {
+    private ΩJupiterPerpsPostionIdlΩ decodeIdl(ΩJupiterPerpsPositionInfoEncodedΩ encodedPerpsPositionInfo) {
+        ΩJupiterPerpsPostionIdlΩ idl = base64.decode(encodedPerpsPositionInfo.data());
+
+        // TODO: Check size correctly, as in AnchorIdlJupiterPerpsCustodyDecoder.decodeIdl()
+        if (idl.length == 0) {
+            String errorMsg = "Jupiter Perps position account data is too short: " + idl.length;
+            throw new IllegalArgumentException(errorMsg);
+        }
+
+        return idl;
+    }
+
+    private JupiterPerpsPositionDirection decodeDirection(ΩJupiterPerpsPostionIdlΩ idl) {
+        byte rawSide = idl[SIDE_OFFSET];
+
         // Jupiter Perps position side values are encoded as 1 = LONG, 2 = SHORT.
         JupiterPerpsPositionDirection direction = switch (rawSide) {
             case 1 -> JupiterPerpsPositionDirection.LONG;
@@ -88,23 +99,6 @@ class AnchorIdlJupiterPerpsPositionDecoder {
         };
 
         return direction;
-    }
-
-    private ΩSolanaAddressΩ readPublicKey(
-            byte[] data,
-            int offset
-    ) {
-        byte[] publicKeyBytes = new byte[PUBLIC_KEY_LENGTH];
-
-        System.arraycopy(
-                data,
-                offset,
-                publicKeyBytes,
-                0,
-                PUBLIC_KEY_LENGTH
-        );
-
-        return base58.encode(publicKeyBytes);
     }
 
     private static final int ANCHOR_DISCRIMINATOR_LENGTH = 8;
@@ -124,5 +118,5 @@ class AnchorIdlJupiterPerpsPositionDecoder {
     private static final int SIZE_USD_OFFSET = PRICE_OFFSET + U64_LENGTH;
     private static final int COLLATERAL_USD_OFFSET = SIZE_USD_OFFSET + U64_LENGTH;
 
-    private static final Base58Codec base58 = new Base58CodecImpl();
+    private static final Base64.Decoder base64 = Base64.getDecoder();
 }

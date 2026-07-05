@@ -1,0 +1,37 @@
+package com.r35157.libs.jupiter.perps.impl.anchoridl;
+
+import com.r35157.libs.codec.Base58Codec;
+import com.r35157.libs.codec.impl.ref.Base58CodecImpl;
+
+public class DecodingPrimitives {
+
+    public static byte[] readU128(byte[] data, int offset) {
+        byte[] bytes = new byte[U128_LENGTH];
+
+        for (int i = 0; i < U128_LENGTH; i++) {
+            bytes[i] = data[offset + U128_LENGTH - 1 - i];
+        }
+
+        return bytes;
+    }
+
+    public static ΩSolanaAddressΩ readPublicKey(byte[] data, int offset) {
+        byte[] bytes = new byte[PUBLIC_KEY_LENGTH];
+
+        System.arraycopy(
+                data,
+                offset,
+                bytes,
+                0,
+                PUBLIC_KEY_LENGTH
+        );
+
+        ΩSolanaAddressΩ addr = base58.encode(bytes);
+        return addr;
+    }
+
+    public static final int U128_LENGTH = 16;
+    public static final int PUBLIC_KEY_LENGTH = 32;
+
+    private static final Base58Codec base58 = new Base58CodecImpl();
+}
