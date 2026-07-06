@@ -17,7 +17,7 @@ class AnchorIdlJupiterPerpsCustodyDecoder {
         ΩJupiterPerpsPostionIdlΩ idl = decodeIdl(encodedCustodyAccountInfo);
 
         JupiterCustodyAccountInfo cai = new JupiterCustodyAccountInfo(
-                readPublicKey(idl, MINT_OFFSET),
+                decodePublicKey(idl, MINT_OFFSET),
                 decodeCumulativeInterestRate(idl)
         );
 
@@ -35,8 +35,8 @@ class AnchorIdlJupiterPerpsCustodyDecoder {
         return idl;
     }
 
-    private BigInteger decodeCumulativeInterestRate(byte[] data) {
-        byte[] bytes = readU128(data, CUMULATIVE_INTEREST_RATE_OFFSET);
+    private @NotNull BigInteger decodeCumulativeInterestRate(ΩJupiterPerpsCustodyAccountIdlΩ idl) {
+        byte[] bytes = readU128(idl, CUMULATIVE_INTEREST_RATE_OFFSET);
         BigInteger cumulativeInterestRate = new BigInteger(1, bytes);
 
         return cumulativeInterestRate;

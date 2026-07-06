@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Base64;
@@ -44,21 +45,30 @@ class AnchorIdlJupiterPerpsPositionDecoder {
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getLong();
 
-        ΩUSDCAmountΩ sizeUsd = BigDecimal
+        ΩUSDCAmountΩ size = BigDecimal
                 .valueOf(rawSizeUsd)
                 .movePointLeft(6);
 
-        ΩJupiterCustodyAccountAddressΩ custodyAccountAddress = readPublicKey(idl, CUSTODY_OFFSET);
+        ΩJupiterCustodyAccountAddressΩ custodyAccountAddress = decodePublicKey(idl, CUSTODY_OFFSET);
+        BigInteger cumulativeInterestSnapshot = decodeCumulativeInterestSnapshot(idl);
 
         JupiterPerpsPositionInfo posInfo = new JupiterPerpsPositionInfo(
                 entryPrice,
                 direction,
-                sizeUsd,
+                size,
                 collateralUsd,
-                custodyAccountAddress
+                custodyAccountAddress,
+                cumulativeInterestSnapshot
         );
 
         return posInfo;
+    }
+
+     private @NotNull BigInteger decodeCumulativeInterestSnapshot(ΩJupiterPerpsPostionIdlΩ idl) {
+        byte[] bytes = readU128(idl, CUMULATIVE_INTEREST_SNAPSHOT_OFFSET);
+         BigInteger cumulativeInterestSnapshot = new BigInteger(1, bytes);
+
+         return cumulativeInterestSnapshot;
     }
 
     ΩJupiterCustodyAccountAddressΩ decodeCustodyAccountAddress(SolanaAccountInfo accountInfo) {
@@ -69,7 +79,7 @@ class AnchorIdlJupiterPerpsPositionDecoder {
             throw new IllegalArgumentException(errorMsg);
         }
 
-        ΩJupiterCustodyAccountAddressΩ addr = readPublicKey(data, CUSTODY_OFFSET);
+        ΩJupiterCustodyAccountAddressΩ addr = decodePublicKey(data, CUSTODY_OFFSET);
 
         return addr;
     }
@@ -117,6 +127,8 @@ class AnchorIdlJupiterPerpsPositionDecoder {
     private static final int PRICE_OFFSET = SIDE_OFFSET + SIDE_ENUM_LENGTH;
     private static final int SIZE_USD_OFFSET = PRICE_OFFSET + U64_LENGTH;
     private static final int COLLATERAL_USD_OFFSET = SIZE_USD_OFFSET + U64_LENGTH;
+    private static final int REALISED_PNL_USD_OFFSET = COLLATERAL_USD_OFFSET + U64_LENGTH;
+    private static final int CUMULATIVE_INTEREST_SNAPSHOT_OFFSET = REALISED_PNL_USD_OFFSET + I64_LENGTH;
 
     private static final Base64.Decoder base64 = Base64.getDecoder();
 }

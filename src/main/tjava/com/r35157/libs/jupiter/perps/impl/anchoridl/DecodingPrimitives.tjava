@@ -2,6 +2,9 @@ package com.r35157.libs.jupiter.perps.impl.anchoridl;
 
 import com.r35157.libs.codec.Base58Codec;
 import com.r35157.libs.codec.impl.ref.Base58CodecImpl;
+import org.jetbrains.annotations.NotNull;
+
+import java.math.BigInteger;
 
 public class DecodingPrimitives {
 
@@ -15,7 +18,7 @@ public class DecodingPrimitives {
         return bytes;
     }
 
-    public static ΩSolanaAddressΩ readPublicKey(byte[] data, int offset) {
+    public static @NotNull ΩSolanaAddressΩ decodePublicKey(ΩJupiterPerpsPostionIdlΩ data, int offset) {
         byte[] bytes = new byte[PUBLIC_KEY_LENGTH];
 
         System.arraycopy(

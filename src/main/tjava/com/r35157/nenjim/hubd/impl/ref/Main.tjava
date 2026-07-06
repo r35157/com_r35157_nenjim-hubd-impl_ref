@@ -15,6 +15,8 @@ import java.lang.management.ManagementFactory;
 import com.r35157.nenjim.hubd.ctx.ContextManager;
 import com.r35157.nenjim.hubd.journal.JournalManager;
 import com.r35157.nenjim.hubd.impl.ref.JournalManagerImpl;
+
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
@@ -28,9 +30,12 @@ public class Main {
         SolanaBlockChain sbc = new SolanaBlockChainImpl();
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
-        Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
-        int a=0;
+        //Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
+        JupiterPerpsPosition pos = jupiter.getPosition("BnFPTcjon3m7Lz625m9oiNB3P2sqxmG7578eZdW1LEu2");
+        ΩUSDCAmountΩ a = pos.borrowFeesDue();
+        int i=0;
 
+        BigDecimal b;
         nenjimHub.awaitShutdown();
 
         /*        try {
