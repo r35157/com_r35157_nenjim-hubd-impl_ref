@@ -49,8 +49,11 @@ class AnchorIdlJupiterPerpsPositionDecoder {
                 .valueOf(rawSizeUsd)
                 .movePointLeft(6);
 
-        ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress = decodePublicKey(idl, CUSTODY_OFFSET);
-        ΩJupiterPerpsCollateralCustodyAccountAddressΩ collateralCustodyAccountAddress = null; // TODO: FIX THIS!!!
+        ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress =
+                decodePublicKey(idl, CUSTODY_OFFSET);
+
+        ΩJupiterPerpsCollateralCustodyAccountAddressΩ collateralCustodyAccountAddress =
+                decodePublicKey(idl, COLLATERAL_CUSTODY_OFFSET);
 
         ΩJupiterCumulativeInterestSnapshotΩ cumulativeInterestSnapshot = decodeCumulativeInterestSnapshot(idl);
 

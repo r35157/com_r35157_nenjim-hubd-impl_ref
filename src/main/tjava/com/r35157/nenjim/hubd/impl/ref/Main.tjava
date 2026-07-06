@@ -31,12 +31,15 @@ public class Main {
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
         //Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
-        JupiterPerpsPosition pos = jupiter.getPosition("BnFPTcjon3m7Lz625m9oiNB3P2sqxmG7578eZdW1LEu2");
-        ΩUSDCAmountΩ a = pos.borrowFeesDue();
-        int i=0;
 
-        BigDecimal b;
-        nenjimHub.awaitShutdown();
+        while(true) {
+            String addr = "2z2oExdggoRPCcojntHrGbRiDWeJgVSRbasfMbPfprQi";
+            JupiterPerpsPosition pos = jupiter.getPosition(addr);
+            ΩUSDCAmountΩ a = pos.borrowFeesDue();
+            int i = 0;
+        }
+
+        // nenjimHub.awaitShutdown();
 
         /*        try {
             log.info("Auto-starting 2 Nenjim application(s)...");
