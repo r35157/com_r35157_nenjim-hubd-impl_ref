@@ -43,7 +43,7 @@ class AnchorIdlJupiterPerpsCustodyDecoder {
     }
 
     // Offsets:
-    //    8   discriminator
+    //    8  discriminator
     //   +32 pool
     //   +32 mint
     //   +32 token_account
@@ -55,8 +55,8 @@ class AnchorIdlJupiterPerpsCustodyDecoder {
     //   +8  target_ratio_bps
     //   +48 assets
 
-    private static final int ANCHOR_DISCRIMINATOR_LENGTH = 8;
-    private static final int MINT_OFFSET = ANCHOR_DISCRIMINATOR_LENGTH + PUBLIC_KEY_LENGTH;
+    private static final int DISCRIMINATOR_LENGTH = 8;
+    private static final int MINT_OFFSET = DISCRIMINATOR_LENGTH + PUBLIC_KEY_LENGTH;
     private static final int FUNDING_RATE_STATE_OFFSET = 262;
     private static final int CUMULATIVE_INTEREST_RATE_OFFSET = FUNDING_RATE_STATE_OFFSET;
 
