@@ -5,8 +5,8 @@ import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
-import com.r35157.libs.solana.valuetypes.WellKnownCurrencyTypes;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
