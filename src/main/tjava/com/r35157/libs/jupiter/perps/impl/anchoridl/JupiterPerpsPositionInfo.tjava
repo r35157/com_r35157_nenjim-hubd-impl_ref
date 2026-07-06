@@ -8,10 +8,10 @@ import java.math.BigInteger;
 public record JupiterPerpsPositionInfo(
         ΩUSDCPriceΩ entryPrice,
         JupiterPerpsPositionDirection direction,
-        ΩUSDCAmountΩ size,
+        ΩUSDCAmountΩ positionSize,
         ΩUSDCAmountΩ collateral,
         ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress,
-        ΩJupiterPerpsCollateralCustodyAccountAddressΩ collateralCustodyAccountAddress
-        BigInteger cumulativeInterestSnapshot
+        ΩJupiterPerpsCollateralCustodyAccountAddressΩ collateralCustodyAccountAddress,
+        ΩJupiterCumulativeInterestSnapshotΩ cumulativeInterestSnapshot
 ) {
 }

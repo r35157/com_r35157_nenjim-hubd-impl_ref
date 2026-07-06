@@ -4,6 +4,6 @@ import java.math.BigInteger;
 
 public record JupiterCustodyAccountInfo(
         ΩSPLMintAddressΩ mintAddress,
-        BigInteger currentCumulativeInterestRate
+        ΩJupiterCumulativeInterestRateΩ currentCumulativeInterestRate
 ) {
 }

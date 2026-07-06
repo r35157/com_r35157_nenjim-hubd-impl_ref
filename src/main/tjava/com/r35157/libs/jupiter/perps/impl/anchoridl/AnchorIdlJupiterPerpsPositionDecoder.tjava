@@ -22,56 +22,60 @@ class AnchorIdlJupiterPerpsPositionDecoder {
 
         JupiterPerpsPositionDirection direction = decodeDirection(idl);
 
-        long rawEntryPrice = ByteBuffer
+        ΩjupiterRawEntryPriceUsdΩ rawEntryPrice = ByteBuffer
                 .wrap(idl, PRICE_OFFSET, U64_LENGTH)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getLong();
 
-        ΩUSDCPriceΩ entryPrice = BigDecimal
+        ΩUSDCPriceΩ entryPrice = ΩUSDCPriceΩ
                 .valueOf(rawEntryPrice)
                 .movePointLeft(6);
 
-        long rawCollateralUsd = ByteBuffer
+        ΩjupiterRawCollateralUsdΩ rawCollateralUsd = ByteBuffer
                 .wrap(idl, COLLATERAL_USD_OFFSET, U64_LENGTH)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getLong();
 
-        ΩUSDCAmountΩ collateralUsd = BigDecimal
+        ΩUSDCAmountΩ collateral = ΩUSDCAmountΩ
                 .valueOf(rawCollateralUsd)
                 .movePointLeft(6);
 
-        long rawSizeUsd = ByteBuffer
+        ΩjupiterRawSizeUsdΩ rawSizeUsd = ByteBuffer
                 .wrap(idl, SIZE_USD_OFFSET, U64_LENGTH)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getLong();
 
-        ΩUSDCAmountΩ size = BigDecimal
+        ΩUSDCAmountΩ positionSize = ΩUSDCAmountΩ
                 .valueOf(rawSizeUsd)
                 .movePointLeft(6);
 
-        ΩJupiterCustodyAccountAddressΩ custodyAccountAddress = decodePublicKey(idl, CUSTODY_OFFSET);
-        BigInteger cumulativeInterestSnapshot = decodeCumulativeInterestSnapshot(idl);
+        ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress = decodePublicKey(idl, CUSTODY_OFFSET);
+        ΩJupiterPerpsCollateralCustodyAccountAddressΩ collateralCustodyAccountAddress = null; // TODO: FIX THIS!!!
+
+        ΩJupiterCumulativeInterestSnapshotΩ cumulativeInterestSnapshot = decodeCumulativeInterestSnapshot(idl);
 
         JupiterPerpsPositionInfo posInfo = new JupiterPerpsPositionInfo(
                 entryPrice,
                 direction,
-                size,
-                collateralUsd,
+                positionSize,
+                collateral,
                 custodyAccountAddress,
+                collateralCustodyAccountAddress,
                 cumulativeInterestSnapshot
         );
 
         return posInfo;
     }
 
-     private @NotNull BigInteger decodeCumulativeInterestSnapshot(ΩJupiterPerpsPostionIdlΩ idl) {
+     private @NotNull ΩJupiterCumulativeInterestSnapshotΩ decodeCumulativeInterestSnapshot(ΩJupiterPerpsPostionIdlΩ idl) {
         byte[] bytes = readU128(idl, CUMULATIVE_INTEREST_SNAPSHOT_OFFSET);
-         BigInteger cumulativeInterestSnapshot = new BigInteger(1, bytes);
+         ΩJupiterCumulativeInterestSnapshotΩ cumulativeInterestSnapshot
+                 = new ΩJupiterCumulativeInterestSnapshotΩ(1, bytes);
 
          return cumulativeInterestSnapshot;
     }
 
-    ΩJupiterCustodyAccountAddressΩ decodeCustodyAccountAddress(SolanaAccountInfo accountInfo) {
+    ΩJupiterPerpsCustodyAccountAddressΩ decodeCustodyAccountAddress(SolanaAccountInfo accountInfo) {
         byte[] data = base64.decode(accountInfo.data());
 
         if (data.length < CUSTODY_OFFSET + PUBLIC_KEY_LENGTH) {
@@ -79,7 +83,7 @@ class AnchorIdlJupiterPerpsPositionDecoder {
             throw new IllegalArgumentException(errorMsg);
         }
 
-        ΩJupiterCustodyAccountAddressΩ addr = decodePublicKey(data, CUSTODY_OFFSET);
+        ΩJupiterPerpsCustodyAccountAddressΩ addr = decodePublicKey(data, CUSTODY_OFFSET);
 
         return addr;
     }

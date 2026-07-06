@@ -35,9 +35,9 @@ class AnchorIdlJupiterPerpsCustodyDecoder {
         return idl;
     }
 
-    private @NotNull BigInteger decodeCumulativeInterestRate(ΩJupiterPerpsCustodyAccountIdlΩ idl) {
+    private @NotNull ΩJupiterCumulativeInterestRateΩ decodeCumulativeInterestRate(ΩJupiterPerpsCustodyAccountIdlΩ idl) {
         byte[] bytes = readU128(idl, CUMULATIVE_INTEREST_RATE_OFFSET);
-        BigInteger cumulativeInterestRate = new BigInteger(1, bytes);
+        ΩJupiterCumulativeInterestRateΩ cumulativeInterestRate = new ΩJupiterCumulativeInterestRateΩ(1, bytes);
 
         return cumulativeInterestRate;
     }
