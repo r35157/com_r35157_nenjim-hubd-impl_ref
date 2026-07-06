@@ -10,7 +10,8 @@ public record JupiterPerpsPositionInfo(
         JupiterPerpsPositionDirection direction,
         ΩUSDCAmountΩ size,
         ΩUSDCAmountΩ collateral,
-        ΩJupiterCustodyAccountAddressΩ custodyAccountAddress,
+        ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress,
+        ΩJupiterPerpsCollateralCustodyAccountAddressΩ collateralCustodyAccountAddress
         BigInteger cumulativeInterestSnapshot
 ) {
 }
