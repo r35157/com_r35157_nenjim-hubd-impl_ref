@@ -169,7 +169,21 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         return fees;
     }
 
+    private static ΩUSDCAmountΩ calculateCloseFeePending(ΩUSDCAmountΩ size) {
+        ΩUSDCAmountΩ fee = size
+                .multiply(BigDecimal.valueOf(CLOSE_FEE_BPS))
+                .divide(
+                        BigDecimal.valueOf(BASIS_POINTS_DIVISOR),
+                        6,
+                        RoundingMode.CEILING
+                );
+
+        return fee;
+    }
+
     private static final long RATE_POWER = 1_000_000_000L;
+    private static final int CLOSE_FEE_BPS = 6;
+    private static final int BASIS_POINTS_DIVISOR = 10_000;
     private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID =
             "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu";
     private static final int POSITION_OWNER_OFFSET = 8;
