@@ -1,6 +1,7 @@
 package com.r35157.libs.jupiter.perps.impl.anchoridl;
 
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
+import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SolanaBlockChain;
@@ -161,7 +162,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 .multiply(size)
                 .divide(
                         BigDecimal.valueOf(RATE_POWER),
-                        6,
+                        USDC_DECIMALS,
                         RoundingMode.CEILING
                 );
         return fees;
@@ -172,11 +173,50 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 .multiply(BigDecimal.valueOf(CLOSE_FEE_BPS))
                 .divide(
                         BigDecimal.valueOf(BASIS_POINTS_DIVISOR),
-                        6,
+                        USDC_DECIMALS,
                         RoundingMode.CEILING
                 );
 
         return fee;
+    }
+
+    private static ΩUSDCPriceΩ calculateLiquidationPrice(
+            JupiterPerpsPositionDirection direction,
+            ΩUSDCPriceΩ price,
+            ΩUSDCAmountΩ collateral,
+            ΩUSDCAmountΩ closeFeePending,
+            ΩUSDCAmountΩ borrowFeesDue,
+            ΩUSDCAmountΩ positionSize
+    ) {
+        ΩUSDCAmountΩ minimumCollateral = positionSize.divide(
+                BigDecimal.valueOf(MAX_LEVERAGE),
+                USDC_DECIMALS,
+                RoundingMode.CEILING
+        );
+
+        ΩUSDCAmountΩ liquidationDistanceAmount = collateral
+                .subtract(closeFeePending)
+                .subtract(borrowFeesDue)
+                .subtract(minimumCollateral)
+                .abs();
+
+        ΩUSDCPriceΩ liquidationDistancePrice = liquidationDistanceAmount
+                .multiply(price)
+                .divide(
+                        positionSize,
+                        USDC_DECIMALS,
+                        RoundingMode.CEILING
+                );
+
+        if (direction == JupiterPerpsPositionDirection.LONG) {
+            return price.subtract(liquidationDistancePrice);
+        }
+
+        if (direction == JupiterPerpsPositionDirection.SHORT) {
+            return price.add(liquidationDistancePrice);
+        }
+
+        throw new IllegalArgumentException("Unsupported Jupiter Perps position direction: " + direction);
     }
 
     private static final long RATE_POWER = 1_000_000_000L;
@@ -185,6 +225,8 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID =
             "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu";
     private static final int POSITION_OWNER_OFFSET = 8;
+    private static final int MAX_LEVERAGE = 500;
+    private static final int USDC_DECIMALS = 6;
 
     private final SolanaBlockChain solanaBlockChain;
     private final AnchorIdlJupiterPerpsPositionDecoder positionDecoder;
