@@ -117,10 +117,9 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         ΩJupiterPostionInterestΩ positionInterest = custodyAccountInfo.currentCumulativeInterestRate()
                 .subtract(perpsPositionInfo.cumulativeInterestSnapshot());
 
-        ΩUSDCAmountΩ borrowFeesDue = calculateBorrowFeesDue(
-                positionInterest,
-                perpsPositionInfo.positionSize()
-        );
+        ΩUSDCAmountΩ positionSize = perpsPositionInfo.positionSize();
+        ΩUSDCAmountΩ borrowFeesDue = calculateBorrowFeesDue(positionInterest, positionSize);
+        ΩUSDCAmountΩ closeFeePending = calculateCloseFeePending(positionSize);
 
         ΩUSDCAmountΩ value = ZERO;                       // TODO - Dummy
         ΩUSDCAmountΩ pnl = ZERO;                         // TODO - Dummy
@@ -128,7 +127,6 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         BigDecimal leverage = ZERO;                      // TODO - Dummy
         ΩUSDCPriceΩ marketPrice = ZERO;                  // TODO - Dummy
         ΩUSDCAmountΩ totalFees = ZERO;                   // TODO - Dummy
-        ΩUSDCAmountΩ closeFeePending = ZERO;             // TODO - Dummy
         ΩSolanaAmountΩ accountRent = new MoneyAmount(    // TODO - Dummy
                 ZERO,
                 WellKnownCurrencyTypes.SOLANA.getCurrencyType()
@@ -139,7 +137,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 mintAddress,
                 perpsPositionInfo.direction(),
                 value,
-                perpsPositionInfo.positionSize(),
+                positionSize,
                 pnl,
                 pnlPercent,
                 leverage,
