@@ -121,6 +121,13 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         ΩUSDCAmountΩ positionSize = perpsPositionInfo.positionSize();
         ΩUSDCAmountΩ borrowFeesDue = calculateBorrowFeesDue(positionInterest, positionSize);
         ΩUSDCAmountΩ closeFeePending = calculateCloseFeePending(positionSize);
+        ΩUSDCPriceΩ liquidationPrice = calculateLiquidationPrice(
+                perpsPositionInfo.entryPrice(),
+                perpsPositionInfo.collateral(),
+                closeFeePending,
+                borrowFeesDue,
+                perpsPositionInfo.positionSize()
+        );
 
         ΩUSDCAmountΩ value = ZERO;                       // TODO - Dummy
         ΩUSDCAmountΩ pnl = ZERO;                         // TODO - Dummy
@@ -143,6 +150,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 pnlPercent,
                 leverage,
                 perpsPositionInfo.entryPrice(),
+                liquidationPrice,
                 marketPrice,
                 perpsPositionInfo.collateral(),
                 totalFees,
@@ -181,7 +189,6 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     }
 
     private static ΩUSDCPriceΩ calculateLiquidationPrice(
-            JupiterPerpsPositionDirection direction,
             ΩUSDCPriceΩ price,
             ΩUSDCAmountΩ collateral,
             ΩUSDCAmountΩ closeFeePending,
@@ -208,15 +215,8 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                         RoundingMode.CEILING
                 );
 
-        if (direction == JupiterPerpsPositionDirection.LONG) {
-            return price.subtract(liquidationDistancePrice);
-        }
-
-        if (direction == JupiterPerpsPositionDirection.SHORT) {
-            return price.add(liquidationDistancePrice);
-        }
-
-        throw new IllegalArgumentException("Unsupported Jupiter Perps position direction: " + direction);
+        ΩUSDCPriceΩ liqPrice = price.subtract(liquidationDistancePrice);
+        return liqPrice;
     }
 
     private static final long RATE_POWER = 1_000_000_000L;

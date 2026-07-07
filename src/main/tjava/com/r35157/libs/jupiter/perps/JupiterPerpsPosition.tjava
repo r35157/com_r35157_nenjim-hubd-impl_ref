@@ -20,6 +20,7 @@ import java.math.BigDecimal;
  * @param pnlPercent the profit and loss represented as a percentage
  * @param leverage TODO
  * @param entryPrice the entry price of the position, denominated in USDC
+ * @param liquidationPrice the estimated liquidation price of the position, denominated in USDC
  * @param marketPrice the current spot price of the token
  * @param collateral the amount of USD representing the collateral for this position
  * @param totalFees the total amount of fees (TODO: is that including pending/due fees)
@@ -37,6 +38,7 @@ public record JupiterPerpsPosition(
         BigDecimal pnlPercent,
         BigDecimal leverage,
         ΩUSDCPriceΩ entryPrice,
+        ΩUSDCPriceΩ liquidationPrice,
         ΩUSDCPriceΩ marketPrice,
         ΩUSDCAmountΩ collateral,
         ΩUSDCAmountΩ totalFees,
