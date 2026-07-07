@@ -46,57 +46,14 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
         JupiterPerpsPositionInfo perpsPositionInfo = positionDecoder.decode(accountInfo);
 
-        JupiterPerpsPosition pos;
-        if(perpsPositionInfo == null) {
-            pos = null;
-        } else {
-            ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress = positionDecoder.decodeCustodyAccountAddress(accountInfo);
-            ΩJupiterCustodyAccountInfoEncodedΩ encodedCustodyAccountInfo = solanaBlockChain.getAccountInfo(custodyAccountAddress);
-
-            if (encodedCustodyAccountInfo == null) {
-                String errorMsg = "Jupiter Perps custody account does not exist: " + custodyAccountAddress;
-                throw new IllegalArgumentException(errorMsg);
-            }
-
-            JupiterCustodyAccountInfo custodyAccountInfo = custodyDecoder.decode(encodedCustodyAccountInfo);
-            ΩSPLMintAddressΩ mintAddress = custodyAccountInfo.mintAddress();
-
-            ΩJupiterPostionInterestΩ positionInterest =
-                    custodyAccountInfo.currentCumulativeInterestRate()
-                            .subtract(perpsPositionInfo.cumulativeInterestSnapshot());
-            ΩUSDCAmountΩ borrowFeesDue =
-                    calculateBorrowFeesDue(
-                            positionInterest,
-                            perpsPositionInfo.positionSize()
-                    );
-
-            ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
-            ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
-            BigDecimal pnlPercent = ZERO;          // TODO - Dummy
-            BigDecimal leverage = ZERO;            // TODO - Dummy
-            ΩUSDCPriceΩ marketPrice = ZERO;        // TODO - Dummy
-            ΩUSDCAmountΩ totalFees = ZERO;         // TODO - Dummy
-            ΩUSDCAmountΩ closeFeePending = ZERO;   // TODO - Dummy
-            ΩSolanaAmountΩ accountRent = new MoneyAmount(ZERO, WellKnownCurrencyTypes.SOLANA.getCurrencyType()); // TODO - Dummy
-
-            pos = new JupiterPerpsPosition(
-                    positionAccount,
-                    mintAddress,
-                    perpsPositionInfo.direction(),
-                    value,
-                    perpsPositionInfo.positionSize(),
-                    pnl,
-                    pnlPercent,
-                    leverage,
-                    perpsPositionInfo.entryPrice(),
-                    marketPrice,
-                    perpsPositionInfo.collateral(),
-                    totalFees,
-                    borrowFeesDue,
-                    closeFeePending,
-                    accountRent
-            );
+        if (perpsPositionInfo == null) {
+            return null;
         }
+
+        JupiterPerpsPosition pos = buildPosition(
+                positionAccount,
+                perpsPositionInfo
+        );
 
         return pos;
     }
@@ -125,62 +82,77 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
             }
 
             JupiterPerpsPositionInfo perpsPositionInfo = positionDecoder.decode(accountInfo);
-            if(perpsPositionInfo == null || perpsPositionInfo.positionSize().compareTo(ZERO) == 0) {
+            if (perpsPositionInfo == null || perpsPositionInfo.positionSize().compareTo(ZERO) == 0) {
                 continue;
             }
 
-            ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress = perpsPositionInfo.custodyAccountAddress();
-            ΩJupiterCustodyAccountInfoEncodedΩ encodedCustodyAccountInfo
-                    = solanaBlockChain.getAccountInfo(custodyAccountAddress);
-
-            if (encodedCustodyAccountInfo == null) {
-                String errorMsg = "Jupiter Perps custody account does not exist: " + custodyAccountAddress;
-                throw new IllegalArgumentException(errorMsg);
-            }
-
-            JupiterCustodyAccountInfo custodyAccountInfo = custodyDecoder.decode(encodedCustodyAccountInfo);
-            ΩSPLMintAddressΩ mintAddress = custodyAccountInfo.mintAddress();
-
-            ΩJupiterPostionInterestΩ positionInterest =
-                    custodyAccountInfo.currentCumulativeInterestRate()
-                            .subtract(perpsPositionInfo.cumulativeInterestSnapshot());
-            ΩUSDCAmountΩ borrowFeesDue =
-                    calculateBorrowFeesDue(
-                            positionInterest,
-                            perpsPositionInfo.positionSize()
-                    );
-
-            ΩUSDCAmountΩ value = ZERO;             // TODO - Dummy
-            ΩUSDCAmountΩ pnl = ZERO;               // TODO - Dummy
-            BigDecimal pnlPercent = ZERO;          // TODO - Dummy
-            BigDecimal leverage = ZERO;            // TODO - Dummy
-            ΩUSDCPriceΩ marketPrice = ZERO;        // TODO - Dummy
-            ΩUSDCAmountΩ totalFees = ZERO;         // TODO - Dummy
-            ΩUSDCAmountΩ closeFeePending = ZERO;   // TODO - Dummy
-            ΩSolanaAmountΩ accountRent = new MoneyAmount(ZERO, WellKnownCurrencyTypes.SOLANA.getCurrencyType()); // TODO - Dummy
-
-            JupiterPerpsPosition pos = new JupiterPerpsPosition(
+            JupiterPerpsPosition pos = buildPosition(
                     positionAccount,
-                    mintAddress,
-                    perpsPositionInfo.direction(),
-                    value,
-                    perpsPositionInfo.positionSize(),
-                    pnl,
-                    pnlPercent,
-                    leverage,
-                    perpsPositionInfo.entryPrice(),
-                    marketPrice,
-                    perpsPositionInfo.collateral(),
-                    totalFees,
-                    borrowFeesDue,
-                    closeFeePending,
-                    accountRent
+                    perpsPositionInfo
             );
 
             positions.add(pos);
         }
 
         return Set.copyOf(positions);
+    }
+
+    private JupiterPerpsPosition buildPosition(
+            ΩJupiterPerpsPositionAccountΩ positionAccount,
+            JupiterPerpsPositionInfo perpsPositionInfo
+    ) throws IOException, InterruptedException {
+        ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress = perpsPositionInfo.custodyAccountAddress();
+
+        ΩJupiterCustodyAccountInfoEncodedΩ encodedCustodyAccountInfo = solanaBlockChain.getAccountInfo(custodyAccountAddress);
+
+        if (encodedCustodyAccountInfo == null) {
+            String errorMsg = "Jupiter Perps custody account does not exist: " + custodyAccountAddress;
+            throw new IllegalArgumentException(errorMsg);
+        }
+
+        JupiterCustodyAccountInfo custodyAccountInfo = custodyDecoder.decode(encodedCustodyAccountInfo);
+
+        ΩSPLMintAddressΩ mintAddress = custodyAccountInfo.mintAddress();
+
+        ΩJupiterPostionInterestΩ positionInterest = custodyAccountInfo.currentCumulativeInterestRate()
+                .subtract(perpsPositionInfo.cumulativeInterestSnapshot());
+
+        ΩUSDCAmountΩ borrowFeesDue = calculateBorrowFeesDue(
+                positionInterest,
+                perpsPositionInfo.positionSize()
+        );
+
+        ΩUSDCAmountΩ value = ZERO;                       // TODO - Dummy
+        ΩUSDCAmountΩ pnl = ZERO;                         // TODO - Dummy
+        BigDecimal pnlPercent = ZERO;                    // TODO - Dummy
+        BigDecimal leverage = ZERO;                      // TODO - Dummy
+        ΩUSDCPriceΩ marketPrice = ZERO;                  // TODO - Dummy
+        ΩUSDCAmountΩ totalFees = ZERO;                   // TODO - Dummy
+        ΩUSDCAmountΩ closeFeePending = ZERO;             // TODO - Dummy
+        ΩSolanaAmountΩ accountRent = new MoneyAmount(    // TODO - Dummy
+                ZERO,
+                WellKnownCurrencyTypes.SOLANA.getCurrencyType()
+        );
+
+        JupiterPerpsPosition pos = new JupiterPerpsPosition(
+                positionAccount,
+                mintAddress,
+                perpsPositionInfo.direction(),
+                value,
+                perpsPositionInfo.positionSize(),
+                pnl,
+                pnlPercent,
+                leverage,
+                perpsPositionInfo.entryPrice(),
+                marketPrice,
+                perpsPositionInfo.collateral(),
+                totalFees,
+                borrowFeesDue,
+                closeFeePending,
+                accountRent
+        );
+
+        return pos;
     }
 
     private static ΩUSDCAmountΩ calculateBorrowFeesDue(

@@ -30,16 +30,15 @@ public class Main {
         SolanaBlockChain sbc = new SolanaBlockChainImpl();
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
-        //Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
+        Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
 
-        while(true) {
-            String addr = "2z2oExdggoRPCcojntHrGbRiDWeJgVSRbasfMbPfprQi";
+        /*while(true) {
+            String addr = "31eu4pNE2vb8ErASGoJDHZXvjezhuE2PxjdnuQcCbUv7";
             JupiterPerpsPosition pos = jupiter.getPosition(addr);
             ΩUSDCAmountΩ a = pos.borrowFeesDue();
-            int i = 0;
-        }
-
-        // nenjimHub.awaitShutdown();
+        }*/
+        int i = 0;
+        nenjimHub.awaitShutdown();
 
         /*        try {
             log.info("Auto-starting 2 Nenjim application(s)...");
