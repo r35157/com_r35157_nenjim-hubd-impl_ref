@@ -1,0 +1,76 @@
+package com.r35157.libs.objcache.impl.ref;
+
+import com.r35157.libs.objcache.ObjectCache;
+import com.r35157.libs.objcache.ObjectCacheKey;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+public final class ObjectCacheImpl implements ObjectCache {
+
+    @Override
+    public void put(
+            ObjectCacheKey key,
+            Object object,
+            long ttlMillis
+    ) {
+        Objects.requireNonNull(key);
+        Objects.requireNonNull(object);
+
+        if (ttlMillis < 0) {
+            throw new IllegalArgumentException(
+                    "ttlMillis must be zero or greater"
+            );
+        }
+
+        objects.put(
+                key,
+                new ObjectCacheEntry(
+                        object,
+                        System.currentTimeMillis(),
+                        ttlMillis
+                )
+        );
+    }
+
+    @Override
+    public @Nullable Object get(
+            ObjectCacheKey key
+    ) {
+        Objects.requireNonNull(key);
+
+        ObjectCacheEntry entry = objects.get(key);
+
+        if (entry == null) {
+            return null;
+        }
+
+        if (entry.isExpired()) {
+            objects.remove(key, entry);
+            return null;
+        }
+
+        return entry.getObject();
+    }
+
+    @Override
+    public void remove(
+            ObjectCacheKey key
+    ) {
+        Objects.requireNonNull(key);
+        objects.remove(key);
+    }
+
+    @Override
+    public void clear() {
+        objects.clear();
+    }
+
+    private final ConcurrentMap<
+            ObjectCacheKey,
+            ObjectCacheEntry
+            > objects = new ConcurrentHashMap<>();
+
+}
