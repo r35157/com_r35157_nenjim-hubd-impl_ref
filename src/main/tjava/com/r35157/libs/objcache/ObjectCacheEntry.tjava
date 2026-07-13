@@ -2,24 +2,31 @@ package com.r35157.libs.objcache;
 
 import java.util.Objects;
 
-public final class ObjectCacheEntry<T> {
+public final class ObjectCacheEntry {
 
     public ObjectCacheEntry(
-            T value,
-            long createdAtMillis
+            Object object,
+            long insertedAtMillis,
+            long ttlMillis
     ) {
-        this.value = Objects.requireNonNull(value);
-        this.createdAtMillis = createdAtMillis;
+        this.object = Objects.requireNonNull(object);
+        this.insertedAtMillis = insertedAtMillis;
+        this.ttlMillis = ttlMillis;
     }
 
-    public T getValue() {
-        return value;
+    public Object getObject() {
+        return object;
     }
 
-    public boolean isExpired(long ttlMillis) {
-        return System.currentTimeMillis() >= createdAtMillis + ttlMillis;
+    public long getAgeMillis() {
+        return System.currentTimeMillis() - insertedAtMillis;
     }
 
-    private final T value;
-    private final long createdAtMillis;
+    public boolean isExpired() {
+        return getAgeMillis() >= ttlMillis;
+    }
+
+    private final Object object;
+    private final long insertedAtMillis;
+    private final long ttlMillis;
 }
