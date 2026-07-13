@@ -1,0 +1,25 @@
+package com.r35157.libs.objcache;
+
+import java.util.Objects;
+
+public final class ObjectCacheEntry<T> {
+
+    public ObjectCacheEntry(
+            T value,
+            long createdAtMillis
+    ) {
+        this.value = Objects.requireNonNull(value);
+        this.createdAtMillis = createdAtMillis;
+    }
+
+    public T getValue() {
+        return value;
+    }
+
+    public boolean isExpired(long ttlMillis) {
+        return System.currentTimeMillis() >= createdAtMillis + ttlMillis;
+    }
+
+    private final T value;
+    private final long createdAtMillis;
+}
