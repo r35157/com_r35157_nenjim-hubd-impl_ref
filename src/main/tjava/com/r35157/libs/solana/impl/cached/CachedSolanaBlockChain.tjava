@@ -1,0 +1,171 @@
+package com.r35157.libs.solana.impl.cached;
+
+import com.r35157.libs.objcache.ObjectCache;
+import com.r35157.libs.objcache.ObjectCacheKey;
+import com.r35157.libs.solana.SPLTokenHolding;
+import com.r35157.libs.solana.SPLTokenSupply;
+import com.r35157.libs.solana.SolanaAccountInfo;
+import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
+import com.r35157.libs.solana.SolanaProgramAddressSeed;
+import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
+import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import org.jetbrains.annotations.Nullable;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+public final class CachedSolanaBlockChain implements SolanaBlockChain {
+
+    public CachedSolanaBlockChain(
+            SolanaBlockChain delegate,
+            ObjectCache objectCache
+    ) {
+        this.delegate = Objects.requireNonNull(delegate);
+        this.objectCache = Objects.requireNonNull(objectCache);
+    }
+
+    @Override
+    public ΩSolanaAmountΩ getBalanceInSolana(
+            ΩSolanaAddressΩ address
+    ) throws IOException, InterruptedException {
+        return delegate.getBalanceInSolana(address);
+    }
+
+    @Override
+    public ΩlamportsΩ getBalanceInLamport(
+            ΩSolanaAddressΩ address
+    ) throws IOException, InterruptedException {
+        return delegate.getBalanceInLamport(address);
+    }
+
+    @Override
+    public Map<ΩSPLMintAddressΩ, SPLTokenHolding> getSPLTokenHoldings(
+            ΩSolanaAddressΩ ownerAddress,
+            SolanaSPLTokenProgram splProgramId
+    ) throws IOException, InterruptedException {
+        return delegate.getSPLTokenHoldings(
+                ownerAddress,
+                splProgramId
+        );
+    }
+
+    @Override
+    public Set<ΩSolanaNFTAddressΩ> getSolanaNFTCandidateAddresses(
+            ΩSolanaAddressΩ ownerAddress,
+            SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException {
+        return delegate.getSolanaNFTCandidateAddresses(
+                ownerAddress,
+                splProgram
+        );
+    }
+
+    @Override
+    public SolanaProgramDerivedAddress findProgramAddress(
+            ΩSolanaProgramIdΩ programId,
+            List<SolanaProgramAddressSeed> seeds
+    ) {
+        return delegate.findProgramAddress(
+                programId,
+                seeds
+        );
+    }
+
+    @Override
+    public @Nullable SolanaAccountInfo getAccountInfo(
+            ΩSolanaAddressΩ accountAddress
+    ) throws IOException, InterruptedException {
+        return delegate.getAccountInfo(accountAddress);
+    }
+
+    @Override
+    public ΩSolanaAddressΩ encodeSolanaAddress(
+            byte[] addressBytes
+    ) {
+        return delegate.encodeSolanaAddress(addressBytes);
+    }
+
+    @Override
+    public SPLTokenSupply getSPLTokenSupply(
+            ΩSPLMintAddressΩ mintAddress,
+            SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException {
+        return delegate.getSPLTokenSupply(
+                mintAddress,
+                splProgram
+        );
+    }
+
+    @Override
+    public Set<SolanaAccountInfo> getProgramAccounts(
+            ΩSolanaProgramIdΩ programId,
+            Set<SolanaProgramAccountMemcmpFilter> filters
+    ) throws IOException, InterruptedException {
+        Set<SolanaProgramAccountMemcmpFilter> copiedFilters =
+                Set.copyOf(filters);
+
+        ObjectCacheKey key = new ObjectCacheKey(
+                SolanaBlockChain.class.getName(),
+                "getProgramAccounts",
+                programId,
+                copiedFilters
+        );
+
+        Object cachedObject = objectCache.get(key);
+
+        if (cachedObject != null) {
+            return castProgramAccounts(cachedObject);
+        }
+
+        return loadProgramAccounts(
+                key,
+                programId,
+                copiedFilters
+        );
+    }
+
+    private synchronized Set<SolanaAccountInfo> loadProgramAccounts(
+            ObjectCacheKey key,
+            ΩSolanaProgramIdΩ programId,
+            Set<SolanaProgramAccountMemcmpFilter> filters
+    ) throws IOException, InterruptedException {
+        Object cachedObject = objectCache.get(key);
+
+        if (cachedObject != null) {
+            return castProgramAccounts(cachedObject);
+        }
+
+        Set<SolanaAccountInfo> programAccounts = Set.copyOf(
+                delegate.getProgramAccounts(
+                        programId,
+                        filters
+                )
+        );
+
+        objectCache.put(
+                key,
+                programAccounts,
+                PROGRAM_ACCOUNTS_TTL_MILLIS
+        );
+
+        return programAccounts;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Set<SolanaAccountInfo> castProgramAccounts(
+            Object object
+    ) {
+        return (Set<SolanaAccountInfo>) object;
+    }
+
+    private static final long PROGRAM_ACCOUNTS_TTL_MILLIS = 60_000;
+
+    private final SolanaBlockChain delegate;
+    private final ObjectCache objectCache;
+
+}
