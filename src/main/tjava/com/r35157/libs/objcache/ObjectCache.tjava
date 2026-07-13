@@ -1,0 +1,24 @@
+package com.r35157.libs.objcache;
+
+import org.jetbrains.annotations.Nullable;
+
+public interface ObjectCache {
+
+    void put(
+            ObjectCacheKey key,
+            Object object,
+            long ttlMillis
+    );
+
+    @Nullable
+    Object get(
+            ObjectCacheKey key
+    );
+
+    void remove(
+            ObjectCacheKey key
+    );
+
+    void clear();
+
+}
