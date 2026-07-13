@@ -1,0 +1,62 @@
+package com.r35157.libs.objcache;
+
+import java.util.List;
+import java.util.Objects;
+
+public final class ObjectCacheKey {
+
+    public ObjectCacheKey(
+            String owner,
+            String operation,
+            Object... parameters
+    ) {
+        this.owner = Objects.requireNonNull(owner);
+        this.operation = Objects.requireNonNull(operation);
+        this.parameters = List.copyOf(List.of(parameters));
+    }
+
+    public String getOwner() {
+        return owner;
+    }
+
+    public String getOperation() {
+        return operation;
+    }
+
+    public List<Object> getParameters() {
+        return parameters;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+
+        if (!(object instanceof ObjectCacheKey other)) {
+            return false;
+        }
+
+        return owner.equals(other.owner)
+                && operation.equals(other.operation)
+                && parameters.equals(other.parameters);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(owner, operation, parameters);
+    }
+
+    @Override
+    public String toString() {
+        return "ObjectCacheKey{" +
+                "owner='" + owner + '\'' +
+                ", operation='" + operation + '\'' +
+                ", parameters=" + parameters +
+                '}';
+    }
+
+    private final String owner;
+    private final String operation;
+    private final List<Object> parameters;
+}

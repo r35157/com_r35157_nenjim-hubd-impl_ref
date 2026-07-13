@@ -73,6 +73,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         Set<JupiterPerpsPosition> positions = new HashSet<>();
 
         for (SolanaAccountInfo accountInfo : accountInfos) {
+            System.out.println("      Found " + accountInfos.size() + " postion candidates...");
             ΩSolanaProgramIdΩ programId = accountInfo.owner();
             ΩJupiterPerpsPositionAccountΩ positionAccount = accountInfo.address();
 
@@ -104,7 +105,9 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     ) throws IOException, InterruptedException {
         ΩJupiterPerpsCustodyAccountAddressΩ custodyAccountAddress = perpsPositionInfo.custodyAccountAddress();
 
+        System.out.print("      Getting account info for: " + custodyAccountAddress + "...");
         ΩJupiterCustodyAccountInfoEncodedΩ encodedCustodyAccountInfo = solanaBlockChain.getAccountInfo(custodyAccountAddress);
+        System.out.println(" Done.");
 
         if (encodedCustodyAccountInfo == null) {
             String errorMsg = "Jupiter Perps custody account does not exist: " + custodyAccountAddress;
@@ -115,18 +118,36 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
         ΩSPLMintAddressΩ mintAddress = custodyAccountInfo.mintAddress();
 
-        ΩJupiterPostionInterestΩ positionInterest = custodyAccountInfo.currentCumulativeInterestRate()
+        ΩJupiterPerpsCollateralCustodyAccountAddressΩ collateralCustodyAccountAddress =
+                perpsPositionInfo.collateralCustodyAccountAddress();
+
+        System.out.print("      Getting collateral custody account Info for: " + custodyAccountAddress + "...");
+        ΩJupiterCustodyAccountInfoEncodedΩ encodedCollateralCustodyAccountInfo =
+                solanaBlockChain.getAccountInfo(collateralCustodyAccountAddress);
+        System.out.println(" Done.");
+
+        if (encodedCollateralCustodyAccountInfo == null) {
+            String errorMsg = "Jupiter Perps collateral custody account does not exist: " + collateralCustodyAccountAddress;
+            throw new IllegalArgumentException(errorMsg);
+        }
+
+        System.out.print("      Calculating fiels in position...");
+        JupiterCustodyAccountInfo collateralCustodyAccountInfo =
+                custodyDecoder.decode(encodedCollateralCustodyAccountInfo);
+
+        ΩJupiterPostionInterestΩ positionInterest = collateralCustodyAccountInfo.currentCumulativeInterestRate()
                 .subtract(perpsPositionInfo.cumulativeInterestSnapshot());
 
         ΩUSDCAmountΩ positionSize = perpsPositionInfo.positionSize();
         ΩUSDCAmountΩ borrowFeesDue = calculateBorrowFeesDue(positionInterest, positionSize);
         ΩUSDCAmountΩ closeFeePending = calculateCloseFeePending(positionSize);
         ΩUSDCPriceΩ liquidationPrice = calculateLiquidationPrice(
+                perpsPositionInfo.direction(),
                 perpsPositionInfo.entryPrice(),
                 perpsPositionInfo.collateral(),
                 closeFeePending,
                 borrowFeesDue,
-                perpsPositionInfo.positionSize()
+                positionSize
         );
 
         ΩUSDCAmountΩ value = ZERO;                       // TODO - Dummy
@@ -159,6 +180,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 accountRent
         );
 
+        System.out.println(" Done.");
         return pos;
     }
 
@@ -189,6 +211,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     }
 
     private static ΩUSDCPriceΩ calculateLiquidationPrice(
+            JupiterPerpsPositionDirection direction,
             ΩUSDCPriceΩ price,
             ΩUSDCAmountΩ collateral,
             ΩUSDCAmountΩ closeFeePending,
@@ -201,13 +224,15 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 RoundingMode.CEILING
         );
 
-        ΩUSDCAmountΩ liquidationDistanceAmount = collateral
-                .subtract(closeFeePending)
-                .subtract(borrowFeesDue)
-                .subtract(minimumCollateral)
+        ΩUSDCAmountΩ maxLoss = minimumCollateral
+                .add(closeFeePending)
+                .add(borrowFeesDue);
+
+        ΩUSDCAmountΩ maxPriceDiffAmount = maxLoss
+                .subtract(collateral)
                 .abs();
 
-        ΩUSDCPriceΩ liquidationDistancePrice = liquidationDistanceAmount
+        ΩUSDCPriceΩ maxPriceDiff = maxPriceDiffAmount
                 .multiply(price)
                 .divide(
                         positionSize,
@@ -215,8 +240,25 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                         RoundingMode.CEILING
                 );
 
-        ΩUSDCPriceΩ liqPrice = price.subtract(liquidationDistancePrice);
-        return liqPrice;
+        boolean maxLossExceedsCollateral = maxLoss.compareTo(collateral) > 0;
+
+        if (direction == JupiterPerpsPositionDirection.LONG) {
+            if (maxLossExceedsCollateral) {
+                return price.add(maxPriceDiff);
+            }
+
+            return price.subtract(maxPriceDiff);
+        }
+
+        if (direction == JupiterPerpsPositionDirection.SHORT) {
+            if (maxLossExceedsCollateral) {
+                return price.subtract(maxPriceDiff);
+            }
+
+            return price.add(maxPriceDiff);
+        }
+
+        throw new IllegalArgumentException("Unsupported Jupiter Perps position direction: " + direction);
     }
 
     private static final long RATE_POWER = 1_000_000_000L;

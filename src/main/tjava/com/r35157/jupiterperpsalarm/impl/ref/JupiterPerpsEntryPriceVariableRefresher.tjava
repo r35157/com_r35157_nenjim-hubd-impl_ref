@@ -4,6 +4,7 @@ import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -19,14 +20,15 @@ public final class JupiterPerpsEntryPriceVariableRefresher {
     }
 
     public void refresh() {
-        ΩSolanaWalletIdΩ  wallet = variables.get("JUPITER_PERPS_WALLET");
+        ΩSolanaWalletIdΩ wallet = variables.get("JUPITER_PERPS_WALLET");
 
         if (wallet == null || wallet.isBlank()) {
-            System.err.println("Cannot refresh Jupiter Perps entry price variables: JUPITER_PERPS_WALLET is not configured");
+            System.err.println("Cannot refresh Jupiter Perps price variables: JUPITER_PERPS_WALLET is not configured");
             return;
         }
 
         try {
+            System.out.println("   Fetching 'Open Positions':");
             Set<JupiterPerpsPosition> positions = jupiterPerpsService.getOpenPositions(wallet);
 
             System.out.println(
@@ -34,41 +36,92 @@ public final class JupiterPerpsEntryPriceVariableRefresher {
                             + " open Jupiter Perps positions for wallet: " + wallet
             );
 
-            removeEntryPriceVariables();
+
+            Map<String, String> previousPriceVariables = copyPriceVariables();
+
+            removePriceVariables();
 
             for (JupiterPerpsPosition position : positions) {
-                String variableName = createEntryPriceVariableName(position);
+                String entryPriceVariableName = createEntryPriceVariableName(position);
 
-                System.out.println(
-                        "Jupiter Perps position maps to variable "
-                                + variableName
-                                + " = "
-                                + position.entryPrice()
+                putPriceVariable(
+                        previousPriceVariables,
+                        entryPriceVariableName,
+                        position.entryPrice().toPlainString()
                 );
-                variables.put(variableName, position.entryPrice().toPlainString());
+
+                String liquidationPriceVariableName = createLiquidationPriceVariableName(position);
+
+                putPriceVariable(
+                        previousPriceVariables,
+                        liquidationPriceVariableName,
+                        position.liquidationPrice().toPlainString()
+                );
+
             }
-        } catch (IOException | InterruptedException exception) {
+        } catch (IOException |
+                 InterruptedException exception) {
             if (exception instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
 
             System.err.println(
-                    "Could not refresh Jupiter Perps entry price variables: "
-                            + exception.getMessage()
+                    "Could not refresh Jupiter Perps price variables: " + exception.getMessage()
             );
         }
     }
 
-    private void removeEntryPriceVariables() {
-        variables.remove("SOL_LONG_ENTRY_PRICE");
-        variables.remove("SOL_SHORT_ENTRY_PRICE");
-        variables.remove("BTC_LONG_ENTRY_PRICE");
-        variables.remove("BTC_SHORT_ENTRY_PRICE");
-        variables.remove("ETH_LONG_ENTRY_PRICE");
-        variables.remove("ETH_SHORT_ENTRY_PRICE");
+    private Map<String, String> copyPriceVariables() {
+        Map<String, String> previousPriceVariables = new HashMap<>();
+
+        for (String variableName : PRICE_VARIABLE_NAMES) {
+            String value = variables.get(variableName);
+
+            if (value != null) {
+                previousPriceVariables.put(variableName, value);
+            }
+        }
+
+        return previousPriceVariables;
+    }
+
+    private void removePriceVariables() {
+        for (String variableName : PRICE_VARIABLE_NAMES) {
+            variables.remove(variableName);
+        }
+    }
+
+    private void putPriceVariable(
+            Map<String, String> previousPriceVariables,
+            String variableName,
+            String variableValue
+    ) {
+        String previousValue = previousPriceVariables.get(variableName);
+
+        variables.put(variableName, variableValue);
+
+        if (previousValue == null || !previousValue.equals(variableValue)) {
+            System.out.println(
+                    "{{" + variableName + "}} updated from " +
+                            previousValue +
+                            " --> " +
+                            variableValue
+            );
+        }
     }
 
     private static String createEntryPriceVariableName(JupiterPerpsPosition position) {
+        return createPriceVariableName(position, "ENTRY_PRICE");
+    }
+
+    private static String createLiquidationPriceVariableName(JupiterPerpsPosition position) {
+        return createPriceVariableName(position, "LIQ_PRICE");
+    }
+
+    private static String createPriceVariableName(
+        JupiterPerpsPosition position,
+        String suffix
+    ) {
         String asset = switch (position.tradedTokenMint()) {
             case "So11111111111111111111111111111111111111112" -> "SOL";
             case "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh" -> "BTC";
@@ -78,8 +131,28 @@ public final class JupiterPerpsEntryPriceVariableRefresher {
             );
         };
 
-        return asset + "_" + position.direction() + "_ENTRY_PRICE";
+        return asset + "_" + position.direction() + "_" + suffix;
     }
+
+    private static final Set<String> PRICE_VARIABLE_NAMES = Set.of(
+            "SOL_LONG_ENTRY_PRICE",
+            "SOL_SHORT_ENTRY_PRICE",
+
+            "BTC_LONG_ENTRY_PRICE",
+            "BTC_SHORT_ENTRY_PRICE",
+
+            "ETH_LONG_ENTRY_PRICE",
+            "ETH_SHORT_ENTRY_PRICE",
+
+            "SOL_LONG_LIQ_PRICE",
+            "SOL_SHORT_LIQ_PRICE",
+
+            "BTC_LONG_LIQ_PRICE",
+            "BTC_SHORT_LIQ_PRICE",
+
+            "ETH_LONG_LIQ_PRICE",
+            "ETH_SHORT_LIQ_PRICE"
+    );
 
     private final Map<String, String> variables;
     private final JupiterPerpsService jupiterPerpsService;

@@ -27,17 +27,18 @@ public class Main {
     static void main(String[] args) throws Exception {
         NenjimHubImpl nenjimHub = new NenjimHubImpl();
 
-        SolanaBlockChain sbc = new SolanaBlockChainImpl();
+        /*SolanaBlockChain sbc = new SolanaBlockChainImpl();
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
         Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
+        */
 
         /*while(true) {
             String addr = "31eu4pNE2vb8ErASGoJDHZXvjezhuE2PxjdnuQcCbUv7";
             JupiterPerpsPosition pos = jupiter.getPosition(addr);
             ΩUSDCAmountΩ a = pos.borrowFeesDue();
         }*/
-        int i = 0;
+        //int i = 0;
         nenjimHub.awaitShutdown();
 
         /*        try {

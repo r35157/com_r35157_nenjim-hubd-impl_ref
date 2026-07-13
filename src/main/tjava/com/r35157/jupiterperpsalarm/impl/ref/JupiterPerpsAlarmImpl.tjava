@@ -18,9 +18,11 @@ public final class JupiterPerpsAlarmImpl {
 
     public static void main(String[] args) throws Exception {
         Config config;
-
+        System.out.println("Starting Jupiter Perps Alarms...");
         try {
+            System.out.print("Parsing commandline parameters... ");
             config = Config.parse(args, System.getenv());
+            System.out.println("Done.");
         } catch (IllegalArgumentException exception) {
             printUsage();
             String errMsg = "Could not parse configuration for JupiterPerpsAlarm: " + exception.getMessage() + "!";
@@ -31,7 +33,9 @@ public final class JupiterPerpsAlarmImpl {
         AlarmConfiguration alarmConfiguration;
 
         try {
+            System.out.print("Parsing alarm configuration... ");
             alarmConfiguration = AlarmConfigurationParser.parse(config.alarmConfiguration());
+            System.out.println("Done.");
             definitions = alarmConfiguration.definitions();
         } catch (Exception exception) {
             String errMsg = "Could not load alarm configuration: " + exception.getMessage() + "!";
@@ -42,11 +46,16 @@ public final class JupiterPerpsAlarmImpl {
                 alarmConfiguration.variables()
         );
 
+        System.out.print("Initializing dependecies... ");
         SolanaBlockChain solanaBlockChain = new SolanaBlockChainImpl();
         JupiterPerpsService jupiterPerpsService = new AnchorIdlJupiterPerpsServiceImpl(solanaBlockChain);
         JupiterPerpsEntryPriceVariableRefresher entryPriceVariableRefresher =
                 new JupiterPerpsEntryPriceVariableRefresher(alarmConfiguration.variables(), jupiterPerpsService);
+        System.out.println("Done.");
+
+        System.out.println("Executing first pre-run data fetch:");
         entryPriceVariableRefresher.refresh();
+        System.out.println("Fetching done.");
 
         JupiterPerpsEntryPriceVariableRefreshWatcher entryPriceVariableRefreshWatcher =
                 new JupiterPerpsEntryPriceVariableRefreshWatcher(
