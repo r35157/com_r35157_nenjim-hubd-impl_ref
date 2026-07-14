@@ -48,10 +48,13 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
             ΩSolanaAddressΩ ownerAddress,
             SolanaSPLTokenProgram splProgramId
     ) throws IOException, InterruptedException {
-        return delegate.getSPLTokenHoldings(
+        long t0 = System.currentTimeMillis();
+        Map<ΩSPLMintAddressΩ, SPLTokenHolding> result = delegate.getSPLTokenHoldings(
                 ownerAddress,
                 splProgramId
         );
+        System.out.println("**F** LOOKUP TIME: " + (System.currentTimeMillis() - t0) + "ms");
+        return result;
     }
 
     @Override
@@ -59,10 +62,13 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
             ΩSolanaAddressΩ ownerAddress,
             SolanaSPLTokenProgram splProgram
     ) throws IOException, InterruptedException {
-        return delegate.getSolanaNFTCandidateAddresses(
+        long t0 = System.currentTimeMillis();
+        Set<ΩSolanaNFTAddressΩ> result = delegate.getSolanaNFTCandidateAddresses(
                 ownerAddress,
                 splProgram
         );
+        System.out.println("@@@E@@@ LOOKUP TIME: " + (System.currentTimeMillis() - t0) + "ms");
+        return result;
     }
 
     @Override
@@ -70,17 +76,39 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
             ΩSolanaProgramIdΩ programId,
             List<SolanaProgramAddressSeed> seeds
     ) {
-        return delegate.findProgramAddress(
+        long t0 = System.currentTimeMillis();
+        SolanaProgramDerivedAddress addr = delegate.findProgramAddress(
                 programId,
                 seeds
         );
+        System.out.println("@@@D@@@ LOOKUP TIME: " + (System.currentTimeMillis() - t0) + "ms");
+        return addr;
     }
 
     @Override
     public @Nullable SolanaAccountInfo getAccountInfo(
             ΩSolanaAddressΩ accountAddress
     ) throws IOException, InterruptedException {
-        return delegate.getAccountInfo(accountAddress);
+        long t0 = System.currentTimeMillis();
+        SolanaAccountInfo result;
+
+        ObjectCacheKey key = new ObjectCacheKey(
+                SolanaBlockChain.class.getName(),
+                "getAccountInfo",
+                accountAddress
+        );
+
+        Object cachedObject = objectCache.get(key);
+
+        result = (cachedObject != null)
+                ? castAccountInfo(cachedObject)
+                : loadAccountInfo(
+                key,
+                accountAddress
+        );
+
+        System.out.println("@@@C@@@ LOOKUP TIME: " + (System.currentTimeMillis() - t0) + "ms");
+        return result;
     }
 
     @Override
@@ -95,10 +123,13 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
             ΩSPLMintAddressΩ mintAddress,
             SolanaSPLTokenProgram splProgram
     ) throws IOException, InterruptedException {
-        return delegate.getSPLTokenSupply(
+        long t0 = System.currentTimeMillis();
+        SPLTokenSupply supply = delegate.getSPLTokenSupply(
                 mintAddress,
                 splProgram
         );
+        System.out.println("@@@B@@@ LOOKUP TIME: " + (System.currentTimeMillis() - t0) + "ms");
+        return supply;
     }
 
     @Override
@@ -106,6 +137,8 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
             ΩSolanaProgramIdΩ programId,
             Set<SolanaProgramAccountMemcmpFilter> filters
     ) throws IOException, InterruptedException {
+        long t0 = System.currentTimeMillis();
+        Set<SolanaAccountInfo> result;
         Set<SolanaProgramAccountMemcmpFilter> copiedFilters =
                 Set.copyOf(filters);
 
@@ -118,15 +151,16 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
 
         Object cachedObject = objectCache.get(key);
 
-        if (cachedObject != null) {
-            return castProgramAccounts(cachedObject);
-        }
+        result = (cachedObject != null)
+                ? castProgramAccounts(cachedObject)
+                : loadProgramAccounts(
+                    key,
+                    programId,
+                    copiedFilters
+                );
 
-        return loadProgramAccounts(
-                key,
-                programId,
-                copiedFilters
-        );
+        System.out.println("@@@A@@@ LOOKUP TIME: " + (System.currentTimeMillis() - t0) + "ms");
+        return result;
     }
 
     private synchronized Set<SolanaAccountInfo> loadProgramAccounts(
@@ -156,6 +190,27 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
         return programAccounts;
     }
 
+    private synchronized SolanaAccountInfo loadAccountInfo(
+            ObjectCacheKey key,
+            ΩSolanaAddressΩ accountAddress
+    ) throws IOException, InterruptedException {
+        Object cachedObject = objectCache.get(key);
+
+        if (cachedObject != null) {
+            return castAccountInfo(cachedObject);
+        }
+
+        SolanaAccountInfo accountInfo = delegate.getAccountInfo(accountAddress);
+
+        objectCache.put(
+                key,
+                accountInfo,
+                ACCOUNT_INFO_TTL_MILLIS
+        );
+
+        return accountInfo;
+    }
+
     @SuppressWarnings("unchecked")
     private Set<SolanaAccountInfo> castProgramAccounts(
             Object object
@@ -163,9 +218,16 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
         return (Set<SolanaAccountInfo>) object;
     }
 
-    private static final long PROGRAM_ACCOUNTS_TTL_MILLIS = 60_000;
+    @SuppressWarnings("unchecked")
+    private SolanaAccountInfo castAccountInfo(
+            Object object
+    ) {
+        return (SolanaAccountInfo) object;
+    }
+
+    private static final long ACCOUNT_INFO_TTL_MILLIS       = 60_000;
+    private static final long PROGRAM_ACCOUNTS_TTL_MILLIS   = 60_000;
 
     private final SolanaBlockChain delegate;
     private final ObjectCache objectCache;
-
 }

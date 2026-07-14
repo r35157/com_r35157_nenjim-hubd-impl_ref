@@ -2,7 +2,10 @@ package com.r35157.jupiterperpsalarm.impl.ref;
 
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.jupiter.perps.impl.anchoridl.AnchorIdlJupiterPerpsServiceImpl;
+import com.r35157.libs.objcache.ObjectCache;
+import com.r35157.libs.objcache.impl.ref.ObjectCacheImpl;
 import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.impl.cached.CachedSolanaBlockChain;
 import com.r35157.libs.solana.impl.ref.SolanaBlockChainImpl;
 
 import java.net.URI;
@@ -46,8 +49,14 @@ public final class JupiterPerpsAlarmImpl {
                 alarmConfiguration.variables()
         );
 
-        System.out.print("Initializing dependecies... ");
-        SolanaBlockChain solanaBlockChain = new SolanaBlockChainImpl();
+        System.out.print("Initializing dependencies... ");
+        ObjectCache objectCache = new ObjectCacheImpl();
+        SolanaBlockChain realSolanaBlockChain = new SolanaBlockChainImpl();
+        SolanaBlockChain solanaBlockChain = new CachedSolanaBlockChain(
+                realSolanaBlockChain,
+                objectCache
+        );
+
         JupiterPerpsService jupiterPerpsService = new AnchorIdlJupiterPerpsServiceImpl(solanaBlockChain);
         JupiterPerpsEntryPriceVariableRefresher entryPriceVariableRefresher =
                 new JupiterPerpsEntryPriceVariableRefresher(alarmConfiguration.variables(), jupiterPerpsService);

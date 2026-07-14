@@ -2,14 +2,17 @@ package com.r35157.jupiterperpsalarm.impl.ref;
 
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
-
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-public final class JupiterPerpsEntryPriceVariableRefresher {
+public final class JupiterPerpsEntryPriceVariableRefresher
+        implements AutoCloseable {
 
     public JupiterPerpsEntryPriceVariableRefresher(
             Map<String, String> variables,
@@ -17,9 +20,40 @@ public final class JupiterPerpsEntryPriceVariableRefresher {
     ) {
         this.variables = Objects.requireNonNull(variables, "variables");
         this.jupiterPerpsService = Objects.requireNonNull(jupiterPerpsService, "jupiterPerpsService");
+
+        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(
+                    runnable,
+                    "jupiter-perps-price-variable-refresher"
+            );
+
+            thread.setDaemon(true);
+
+            return thread;
+        });
     }
 
-    public void refresh() {
+    public void startPeriodicRefresh() {
+        scheduler.scheduleWithFixedDelay(
+                this::refreshPeriodically,
+                REFRESH_INTERVAL_SECONDS,
+                REFRESH_INTERVAL_SECONDS,
+                TimeUnit.SECONDS
+        );
+
+        System.out.println(
+                "Periodic Jupiter Perps price variable refresh started with interval: "
+                        + REFRESH_INTERVAL_SECONDS
+                        + " seconds"
+        );
+    }
+
+    @Override
+    public void close() {
+        scheduler.shutdownNow();
+    }
+
+    public synchronized void refresh() {
         ΩSolanaWalletIdΩ wallet = variables.get("JUPITER_PERPS_WALLET");
 
         if (wallet == null || wallet.isBlank()) {
@@ -154,6 +188,22 @@ public final class JupiterPerpsEntryPriceVariableRefresher {
             "ETH_SHORT_LIQ_PRICE"
     );
 
+    private void refreshPeriodically() {
+        try {
+            refresh();
+        } catch (RuntimeException exception) {
+            System.err.println(
+                    "Unexpected error during periodic Jupiter Perps price variable refresh: "
+                            + exception.getMessage()
+            );
+
+            exception.printStackTrace(System.err);
+        }
+    }
+
+    private static final ΩsecondsΩ REFRESH_INTERVAL_SECONDS = 60;
+
+    private final ScheduledExecutorService scheduler;
     private final Map<String, String> variables;
     private final JupiterPerpsService jupiterPerpsService;
 }

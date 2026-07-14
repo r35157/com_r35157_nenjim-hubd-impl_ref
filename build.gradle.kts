@@ -44,7 +44,6 @@ dependencies {
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.26.0")
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.26.0")
 
-    implementation("com.r35157.nenjim:hubd-api:0.1-dev")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.6")
     implementation("com.fazecast:jSerialComm:2.11.4")
     implementation("com.google.code.gson:gson:2.14.0")
