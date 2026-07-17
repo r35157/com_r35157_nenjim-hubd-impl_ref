@@ -66,6 +66,8 @@ public final class JupiterPerpsAlarmImpl {
         entryPriceVariableRefresher.refresh();
         System.out.println("Fetching done.");
 
+        entryPriceVariableRefresher.startPeriodicRefresh();
+
         JupiterPerpsEntryPriceVariableRefreshWatcher entryPriceVariableRefreshWatcher =
                 new JupiterPerpsEntryPriceVariableRefreshWatcher(
                         config.alarmConfiguration().getParent(),
@@ -115,7 +117,10 @@ public final class JupiterPerpsAlarmImpl {
         }
 
         Runtime.getRuntime().addShutdownHook(new Thread(
-                () -> clients.forEach(OracleWebSocketClient::close),
+                () -> {
+                    entryPriceVariableRefresher.close();
+                    clients.forEach(OracleWebSocketClient::close);
+                },
                 "shutdown"
         ));
 

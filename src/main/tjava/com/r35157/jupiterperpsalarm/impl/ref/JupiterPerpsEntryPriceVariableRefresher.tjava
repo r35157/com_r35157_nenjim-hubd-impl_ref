@@ -54,6 +54,8 @@ public final class JupiterPerpsEntryPriceVariableRefresher
     }
 
     public synchronized void refresh() {
+        System.out.println("Executing refresh now...");
+
         ΩSolanaWalletIdΩ wallet = variables.get("JUPITER_PERPS_WALLET");
 
         if (wallet == null || wallet.isBlank()) {
