@@ -1,0 +1,15 @@
+package com.r35157.libs.solana;
+
+/**
+ * A serialized Solana transaction that has not yet been signed or submitted.
+ *
+ * @param serializedTransaction the complete Base64 encoded Solana transaction
+ * @param blockhash the recent blockhash used by the transaction
+ * @param lastValidBlockHeight the last block height at which the transaction is valid
+ */
+public record SolanaUnsignedTransaction(
+        ΩBase64StringΩ serializedTransaction,
+        ΩSolanaBlockhashΩ blockhash,
+        long lastValidBlockHeight
+) {
+}
