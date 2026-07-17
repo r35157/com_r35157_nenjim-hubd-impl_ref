@@ -6,6 +6,7 @@ import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
+import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
 import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 import org.jetbrains.annotations.NotNull;
@@ -97,6 +98,18 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         }
 
         return Set.copyOf(positions);
+    }
+
+    @Override
+    public @NotNull SolanaUnsignedTransaction buildPositionIncreaseTransaction(
+            @NotNull ΩSolanaWalletIdΩ owner,
+            @NotNull ΩSPLMintAddressΩ tradedTokenMint,
+            @NotNull JupiterPerpsPositionDirection direction,
+            @NotNull ΩUSDCAmountΩ inputTokenAmount,
+            @NotNull ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException {
+        throw new UnsupportedOperationException("Not implemented yet!");
     }
 
     private JupiterPerpsPosition buildPosition(

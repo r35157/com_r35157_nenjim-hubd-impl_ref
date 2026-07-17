@@ -1,19 +1,20 @@
 package com.r35157.libs.jupiter.perps;
 
+import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.Set;
 
 /**
- * Service for reading Jupiter Perps data.
+ * Service for interacting with Jupiter Perpertual Contracts.
  *
  * <p>This service is read-only. It does not open, close, modify, or sign transactions
- * for Jupiter Perpetual Contracts.</p>
- *
- * <p>NOTICE: The first supported operation is reading a known Jupiter Perps position account
- * and returning its decoded position data.</p>
+ * for Jupiter Perpetual Contracts but methods for creating unsigned transactions exist.
+ * A compatible wallet is needed to sign the transactions generated here and post them to
+ * the Solana blockchain.</p>
  */
 public interface JupiterPerpsService {
     /**
@@ -45,4 +46,25 @@ public interface JupiterPerpsService {
      */
     @NotNull Set<JupiterPerpsPosition> getOpenPositions(@NotNull ΩSolanaWalletIdΩ owner)
             throws IOException, InterruptedException;
+
+    /**
+     * TODO: JavaDoc missing here!
+     * @param owner
+     * @param tradedTokenMint
+     * @param direction
+     * @param inputTokenAmount
+     * @param sizeUsdDelta
+     * @param maxSlippageBps
+     * @return
+     * @throws IOException
+     * @throws InterruptedException
+     */
+    @NotNull SolanaUnsignedTransaction buildPositionIncreaseTransaction(
+            @NotNull ΩSolanaWalletIdΩ owner,
+            @NotNull ΩSPLMintAddressΩ tradedTokenMint,
+            @NotNull JupiterPerpsPositionDirection direction,
+            @NotNull ΩUSDCAmountΩ inputTokenAmount,
+            @NotNull ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException;
 }
