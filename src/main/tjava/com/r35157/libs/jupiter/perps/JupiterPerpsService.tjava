@@ -47,16 +47,29 @@ public interface JupiterPerpsService {
             throws IOException, InterruptedException;
 
     /**
-     * TODO: JavaDoc missing here!
-     * @param owner
-     * @param tradedTokenMint
-     * @param direction
-     * @param inputTokenAmount
-     * @param sizeUsdDelta
-     * @param maxSlippageBps
-     * @return
-     * @throws IOException
-     * @throws InterruptedException
+     * Constructs an unsigned Solana transaction for opening or increasing
+     * a Jupiter Perps position.
+     *
+     * <p>The transaction is constructed for the supplied wallet, traded asset,
+     * position direction, USDC collateral amount, position-size delta, and
+     * slippage limit.</p>
+     *
+     * <p>This method does not sign or submit the transaction and therefore does
+     * not modify blockchain state. The returned transaction must be signed by
+     * the supplied wallet and submitted separately.</p>
+     *
+     * @param owner the wallet that owns or will own the position
+     * @param tradedTokenMint the mint address of the asset being traded
+     * @param direction whether the position is long or short
+     * @param inputTokenAmount the amount of USDC to supply as collateral
+     * @param sizeUsdDelta the requested increase in position size, denominated in USD
+     * @param maxSlippageBps the maximum accepted slippage, in basis points
+     * @return the complete unsigned Solana transaction
+     * @throws IllegalArgumentException if an amount, mint, or slippage value is invalid
+     * @throws IOException if Jupiter cannot construct the transaction or its response
+     *                     cannot be decoded
+     * @throws InterruptedException if the calling thread is interrupted while
+     *                              communicating with Jupiter
      */
     @NotNull SolanaUnsignedTransaction buildPositionIncreaseTransaction(
             @NotNull ΩSolanaWalletIdΩ owner,

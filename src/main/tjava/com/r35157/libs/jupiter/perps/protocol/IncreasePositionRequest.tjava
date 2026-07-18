@@ -1,5 +1,23 @@
 package com.r35157.libs.jupiter.perps.protocol;
 
+/**
+ * Jupiter Perps protocol request for constructing an unsigned
+ * position-increase transaction.
+ *
+ * @param asset the Jupiter Perps market symbol, such as {@code SOL},
+ *              {@code BTC}, or {@code ETH}
+ * @param inputToken the symbol of the token supplied as collateral,
+ *                   currently {@code USDC}
+ * @param inputTokenAmount the input-token amount in raw chain units,
+ *                         encoded as a decimal string
+ * @param side the position direction in Jupiter protocol format:
+ *             {@code long} or {@code short}
+ * @param maxSlippageBps the maximum accepted slippage in basis points,
+ *                       encoded as a decimal string
+ * @param sizeUsdDelta the requested position-size increase in micro-USD,
+ *                     encoded as a decimal string
+ * @param walletAddress the Solana wallet that owns or will own the position
+ */
 public record IncreasePositionRequest(
         String asset,
         String inputToken,

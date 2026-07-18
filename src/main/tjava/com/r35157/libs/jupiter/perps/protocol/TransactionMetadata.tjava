@@ -2,6 +2,13 @@ package com.r35157.libs.jupiter.perps.protocol;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+/**
+ * Validity metadata for a Solana transaction constructed by Jupiter.
+ *
+ * @param blockhash the recent Solana blockhash embedded in the transaction
+ * @param lastValidBlockHeight the last block height at which the transaction
+ *                             may be processed, encoded as a decimal string
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TransactionMetadata(
         String blockhash,
