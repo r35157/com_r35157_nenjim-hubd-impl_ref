@@ -454,9 +454,9 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         return response;
     }
 
-    private static final ΩSPLMintAddressΩ SOL_MINT = "So11111111111111111111111111111111111111112";
-    private static final ΩSPLMintAddressΩ BTC_MINT = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
-    private static final ΩSPLMintAddressΩ ETH_MINT = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
+    public static final ΩSPLMintAddressΩ SOL_MINT = "So11111111111111111111111111111111111111112";
+    public static final ΩSPLMintAddressΩ BTC_MINT = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
+    public static final ΩSPLMintAddressΩ ETH_MINT = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
 
     private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID = "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu";
 

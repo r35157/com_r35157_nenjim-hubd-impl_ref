@@ -1,0 +1,11 @@
+package com.r35157.libs.solana;
+
+/**
+ * A complete serialized Solana transaction containing all required signatures.
+ *
+ * @param serializedTransaction the signed transaction encoded as Base64
+ */
+public record SolanaSignedTransaction(
+        ΩBase64StringΩ serializedTransaction
+) {
+}

@@ -8,6 +8,7 @@ import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
 import com.r35157.libs.solana.SolanaProgramAddressSeed;
+import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
 import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
@@ -161,6 +162,13 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
 
         System.out.println("@@@A@@@ LOOKUP TIME: " + (System.currentTimeMillis() - t0) + "ms");
         return result;
+    }
+
+    @Override
+    public ΩSolanaTransactionSignatureΩ sendTransaction(
+            SolanaSignedTransaction transaction
+    ) throws IOException, InterruptedException {
+        return delegate.sendTransaction(transaction);
     }
 
     private synchronized Set<SolanaAccountInfo> loadProgramAccounts(

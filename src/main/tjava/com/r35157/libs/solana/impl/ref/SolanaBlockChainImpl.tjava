@@ -392,6 +392,13 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
         return Set.copyOf(accountInfos);
     }
 
+    @Override
+    public ΩSolanaTransactionSignatureΩ sendTransaction(
+            SolanaSignedTransaction transaction
+    ) throws IOException, InterruptedException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
     private String createGetProgramAccountsBody(
             ΩSolanaProgramIdΩ programId,
             Set<SolanaProgramAccountMemcmpFilter> filters

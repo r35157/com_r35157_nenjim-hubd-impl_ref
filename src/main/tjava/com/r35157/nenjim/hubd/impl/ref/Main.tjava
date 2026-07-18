@@ -1,9 +1,11 @@
 package com.r35157.nenjim.hubd.impl.ref;
 
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
+import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.jupiter.perps.impl.anchoridl.AnchorIdlJupiterPerpsServiceImpl;
 import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import com.r35157.libs.solana.impl.ref.SolanaBlockChainImpl;
 import com.r35157.nenjim.hubd.ctx.Context;
 import com.r35157.nenjim.hubd.NenjimHub;
@@ -15,11 +17,13 @@ import java.lang.management.ManagementFactory;
 import com.r35157.nenjim.hubd.ctx.ContextManager;
 import com.r35157.nenjim.hubd.journal.JournalManager;
 import com.r35157.nenjim.hubd.impl.ref.JournalManagerImpl;
-
+import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
+
+import static com.r35157.libs.jupiter.perps.impl.anchoridl.AnchorIdlJupiterPerpsServiceImpl.BTC_MINT;
 
 public class Main {
 
@@ -27,9 +31,35 @@ public class Main {
     static void main(String[] args) throws Exception {
         NenjimHubImpl nenjimHub = new NenjimHubImpl();
 
-        /*SolanaBlockChain sbc = new SolanaBlockChainImpl();
+        SolanaBlockChain sbc = new SolanaBlockChainImpl();
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
+        Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
+
+        SolanaUnsignedTransaction transaction =
+                jupiter.buildPositionIncreaseTransaction(
+                        walletId,
+                        BTC_MINT,
+                        JupiterPerpsPositionDirection.LONG,
+                        new BigDecimal("0.1"),
+                        new BigDecimal("1"),
+                        200
+                );
+
+        Path transactionFile = Path.of("/tmp/utx.b64");
+
+        Files.writeString(
+                transactionFile,
+                transaction.serializedTransaction(),
+                StandardCharsets.US_ASCII
+        );
+
+        System.out.println("Unsigned transaction written to: " + transactionFile);
+        int a = 0;
+
+
+
+        /*
         Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
         */
 

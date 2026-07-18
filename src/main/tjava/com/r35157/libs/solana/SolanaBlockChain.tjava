@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Provides read-oriented access to the Solana blockchain.
+ * Provides generic access to the Solana blockchain.
  *
  * <p>This interface exposes the Solana operations needed by higher-level
  * integrations. It can fetch native SOL balances, SPL token holdings, NFT-like
@@ -163,5 +163,23 @@ public interface SolanaBlockChain {
     Set<SolanaAccountInfo> getProgramAccounts(
             ΩSolanaProgramIdΩ programId,
             Set<SolanaProgramAccountMemcmpFilter> filters
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Submits a complete signed transaction to the Solana blockchain.
+     *
+     * <p>The transaction must already contain all required signatures.
+     * This method does not sign or modify the transaction.</p>
+     *
+     * @param transaction the complete signed transaction to submit
+     * @return the transaction signature returned by Solana RPC
+     * @throws IllegalArgumentException if the serialized transaction is blank
+     * @throws IOException if the transaction cannot be submitted or Solana
+     *                     returns an RPC error
+     * @throws InterruptedException if the calling thread is interrupted while
+     *                              submitting the transaction
+     */
+    ΩSolanaTransactionSignatureΩ sendTransaction(
+            SolanaSignedTransaction transaction
     ) throws IOException, InterruptedException;
 }
