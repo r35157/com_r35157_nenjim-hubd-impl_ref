@@ -9,12 +9,11 @@ import java.math.BigDecimal;
 import java.util.Set;
 
 /**
- * Service for interacting with Jupiter Perpertual Contracts.
+ * Service for reading Jupiter Perps data and constructing unsigned transactions.
  *
- * <p>This service is read-only. It does not open, close, modify, or sign transactions
- * for Jupiter Perpetual Contracts but methods for creating unsigned transactions exist.
- * A compatible wallet is needed to sign the transactions generated here and post them to
- * the Solana blockchain.</p>
+ * <p>This service does not sign or submit transactions and therefore does not
+ * modify blockchain state by itself. A compatible wallet is required to sign
+ * the generated transactions and submit them to the Solana blockchain.</p>
  */
 public interface JupiterPerpsService {
     /**
