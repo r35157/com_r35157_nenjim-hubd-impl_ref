@@ -1,9 +1,12 @@
 package com.r35157.libs.jupiter.perps.impl.anchoridl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.jupiter.perps.protocol.IncreasePositionRequest;
+import com.r35157.libs.jupiter.perps.protocol.IncreasePositionResponse;
+import com.r35157.libs.jupiter.perps.protocol.TransactionMetadata;
 import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
@@ -17,6 +20,10 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -119,9 +126,37 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 maxSlippageBps
         );
 
-        throw new UnsupportedOperationException(
-                "Jupiter HTTP call is not implemented yet: " + request
-        );
+        IncreasePositionResponse response = requestPositionIncrease(request);
+        TransactionMetadata metadata = response.txMetadata();
+
+        if (response.serializedTxBase64() == null
+                || response.serializedTxBase64().isBlank()) {
+            throw new IOException(
+                    "Jupiter Perps response did not contain a serialized transaction"
+            );
+        }
+
+        if (metadata == null) {
+            throw new IOException(
+                    "Jupiter Perps response did not contain transaction metadata"
+            );
+        }
+
+        try {
+            SolanaUnsignedTransaction utx = new SolanaUnsignedTransaction(
+                    response.serializedTxBase64(),
+                    metadata.blockhash(),
+                    Long.parseLong(metadata.lastValidBlockHeight())
+            );
+
+            return utx;
+        } catch (NumberFormatException e) {
+            throw new IOException(
+                    "Invalid lastValidBlockHeight returned by Jupiter: "
+                            + metadata.lastValidBlockHeight(),
+                    e
+            );
+        }
     }
 
     private JupiterPerpsPosition buildPosition(
@@ -362,12 +397,48 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
                 .toString();
     }
 
+    private static IncreasePositionResponse requestPositionIncrease(
+            IncreasePositionRequest request
+    ) throws IOException, InterruptedException {
+        String requestJson = OBJECT_MAPPER.writeValueAsString(request);
+
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(INCREASE_POSITION_ENDPOINT)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("x-client-platform", "nenjim-hub")
+                .POST(HttpRequest.BodyPublishers.ofString(requestJson))
+                .build();
+
+        HttpResponse<String> httpResponse = HTTP_CLIENT.send(
+                httpRequest,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+            throw new IOException(
+                    "Jupiter Perps increase-position request failed with HTTP "
+                            + httpResponse.statusCode()
+                            + ": "
+                            + httpResponse.body()
+            );
+        }
+
+        return OBJECT_MAPPER.readValue(
+                httpResponse.body(),
+                IncreasePositionResponse.class
+        );
+    }
+
     private static final ΩSPLMintAddressΩ SOL_MINT = "So11111111111111111111111111111111111111112";
     private static final ΩSPLMintAddressΩ BTC_MINT = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
     private static final ΩSPLMintAddressΩ ETH_MINT = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
 
     private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID = "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu";
 
+    private static final URI INCREASE_POSITION_ENDPOINT = URI.create("https://perps-api.jup.ag/v2/positions/increase");
+    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final long RATE_POWER = 1_000_000_000L;
     private static final int CLOSE_FEE_BPS = 6;
     private static final int BASIS_POINTS_DIVISOR = 10_000;
