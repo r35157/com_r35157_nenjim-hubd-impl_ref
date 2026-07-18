@@ -1,5 +1,8 @@
 package com.r35157.nenjim.hubd.impl.ref;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.r35157.cryptowallet.solana.SolanaWallet;
 import com.r35157.cryptowallet.solana.impl.ref.SolanaWalletImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
@@ -14,12 +17,19 @@ import com.r35157.nenjim.hubd.ctx.Context;
 import com.r35157.nenjim.hubd.NenjimHub;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
 
 import com.r35157.nenjim.hubd.ctx.ContextManager;
 import com.r35157.nenjim.hubd.journal.JournalManager;
 import com.r35157.nenjim.hubd.impl.ref.JournalManagerImpl;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -40,7 +50,7 @@ public class Main {
 //Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
 
         long t0 = System.currentTimeMillis();
-        SolanaUnsignedTransaction utx =
+        /*SolanaUnsignedTransaction unsignedTransaction =
                 jupiter.buildPositionIncreaseTransaction(
                         walletId,
                         BTC_MINT,
@@ -49,15 +59,28 @@ public class Main {
                         new BigDecimal("1"),
                         200
                 );
-
+*/
         SolanaWallet solanaWallet = new SolanaWalletImpl(walletId, "evelyn-prod", sbc);
-        SolanaSignedTransaction sst = solanaWallet.signTransaction(utx);
+        System.out.println("@@@: " + solanaWallet.getSolanaBalance());
 
+  //      SolanaSignedTransaction signedTransaction = solanaWallet.signTransaction(unsignedTransaction);
+//        ΩSolanaTransactionSignatureΩ signature = executeJupiterPositionIncrease(signedTransaction);
+
+  /*      System.out.println(
+                "Jupiter transaction signature: "
+                        + signature
+                        + ", "
+                        + (System.currentTimeMillis() - t0)
+                        + "ms"
+        );
+*/
+
+        /*
         ΩSolanaTransactionSignatureΩ signature =
                 sbc.sendTransaction(sst);
 
         System.out.println("Transaction signature: " + signature + ", " + (System.currentTimeMillis() - t0) + "ms");
-
+        */
         int a = 1;
 
         /*
@@ -112,6 +135,57 @@ public class Main {
         NenjimKicker kicker = (NenjimKicker)instance;
         */
             //int a = 0;
+    }
+
+    private static ΩSolanaTransactionSignatureΩ executeJupiterPositionIncrease(
+            SolanaSignedTransaction transaction
+    ) throws IOException, InterruptedException {
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("action", "increase-position");
+        body.put(
+                "serializedTxBase64",
+                transaction.serializedTransaction()
+        );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(
+                        "https://perps-api.jup.ag/v2/transaction/execute"
+                ))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("x-client-platform", "nenjim-hub")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        objectMapper.writeValueAsString(body)
+                ))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException(
+                    "Jupiter transaction execution failed with HTTP "
+                            + response.statusCode()
+                            + ": "
+                            + response.body()
+            );
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode txid = root.get("txid");
+
+        if (txid == null || !txid.isTextual() || txid.asText().isBlank()) {
+            throw new IOException(
+                    "Jupiter execution response did not contain txid: "
+                            + response.body()
+            );
+        }
+
+        return txid.asText();
     }
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);

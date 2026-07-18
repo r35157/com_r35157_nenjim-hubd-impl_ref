@@ -2,7 +2,6 @@ package com.r35157.cryptowallet.solana.impl.ref;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r35157.cryptowallet.solana.SolanaWallet;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaSignedTransaction;
