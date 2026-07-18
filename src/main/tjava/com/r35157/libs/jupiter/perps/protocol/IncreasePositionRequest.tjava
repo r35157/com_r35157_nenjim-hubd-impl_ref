@@ -1,0 +1,12 @@
+package com.r35157.libs.jupiter.perps.protocol;
+
+public record IncreasePositionRequest(
+        String asset,
+        String inputToken,
+        String inputTokenAmount,
+        String side,
+        String maxSlippageBps,
+        String sizeUsdDelta,
+        String walletAddress
+) {
+}

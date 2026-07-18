@@ -1,0 +1,11 @@
+package com.r35157.libs.jupiter.perps.protocol;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record IncreasePositionResponse(
+        String positionPubkey,
+        String serializedTxBase64,
+        TransactionMetadata txMetadata
+) {
+}
