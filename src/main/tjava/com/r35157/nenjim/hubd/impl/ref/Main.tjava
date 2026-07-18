@@ -1,5 +1,7 @@
 package com.r35157.nenjim.hubd.impl.ref;
 
+import com.r35157.cryptowallet.solana.SolanaWallet;
+import com.r35157.cryptowallet.solana.impl.ref.SolanaWalletImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
@@ -37,7 +39,8 @@ public class Main {
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
 //Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
 
-        SolanaUnsignedTransaction transaction =
+        long t0 = System.currentTimeMillis();
+        SolanaUnsignedTransaction utx =
                 jupiter.buildPositionIncreaseTransaction(
                         walletId,
                         BTC_MINT,
@@ -47,19 +50,14 @@ public class Main {
                         200
                 );
 
-        Path transactionFile = Path.of("/tmp/utx.b64");
+        SolanaWallet solanaWallet = new SolanaWalletImpl(walletId, "evelyn-prod", sbc);
+        SolanaSignedTransaction sst = solanaWallet.signTransaction(utx);
 
-        Files.writeString(
-                transactionFile,
-                transaction.serializedTransaction(),
-                StandardCharsets.US_ASCII
-        );
+        ΩSolanaTransactionSignatureΩ signature =
+                sbc.sendTransaction(sst);
 
-        System.out.println("Unsigned transaction written to: " + transactionFile);
+        System.out.println("Transaction signature: " + signature + ", " + (System.currentTimeMillis() - t0) + "ms");
 
-        ΩBase64StringΩ txt = "";
-        SolanaSignedTransaction stx = new SolanaSignedTransaction(txt);
-        ΩSolanaTransactionSignatureΩ sig = sbc.sendTransaction(stx);
         int a = 1;
 
         /*

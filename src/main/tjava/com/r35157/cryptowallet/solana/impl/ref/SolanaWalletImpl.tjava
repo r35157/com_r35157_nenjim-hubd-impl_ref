@@ -1,27 +1,133 @@
 package com.r35157.cryptowallet.solana.impl.ref;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r35157.cryptowallet.solana.SolanaWallet;
+import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
-
 public class SolanaWalletImpl implements SolanaWallet {
+    public SolanaWalletImpl(
+            ΩSolanaWalletIdΩ address,
+            String signerKeyName,
+            SolanaBlockChain solanaBlockChain
+    ) {
+        this.address = address;
+        this.signerKeyName = signerKeyName;
+        this.solanaBlockChain = solanaBlockChain;
+    }
+
     @Override
     public @NotNull ΩSolanaWalletIdΩ getAddress() {
-        throw new UnsupportedOperationException();
+        return address;
     }
 
     @Override
-    public @NotNull ΩSolanaAmountΩ getSolanaBalance() throws IOException, InterruptedException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public @NotNull SolanaSignedTransaction signTransaction(@NotNull SolanaUnsignedTransaction transaction)
+    public @NotNull ΩSolanaAmountΩ getSolanaBalance()
             throws IOException, InterruptedException {
-        throw new UnsupportedOperationException();
+        return solanaBlockChain.getBalanceInSolana(address);
     }
+
+    @Override
+    public @NotNull SolanaSignedTransaction signTransaction(
+            @NotNull SolanaUnsignedTransaction transaction
+    ) throws IOException, InterruptedException {
+        if (transaction.serializedTransaction() == null
+                || transaction.serializedTransaction().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Unsigned serialized transaction must not be blank"
+            );
+        }
+
+        Process process = new ProcessBuilder(
+                "jup",
+                "sign",
+                "-f",
+                "json",
+                "--key",
+                signerKeyName,
+                "--tx",
+                transaction.serializedTransaction()
+        ).start();
+
+        String standardOutput = new String(
+                process.getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8
+        );
+
+        String standardError = new String(
+                process.getErrorStream().readAllBytes(),
+                StandardCharsets.UTF_8
+        );
+
+        int exitCode = process.waitFor();
+
+        if (exitCode != 0) {
+            throw new IOException(
+                    "Solana transaction signing failed with exit code "
+                            + exitCode
+                            + ": "
+                            + standardError
+            );
+        }
+
+        SignerResponse response;
+
+        try {
+            response = OBJECT_MAPPER.readValue(
+                    standardOutput,
+                    SignerResponse.class
+            );
+        } catch (JsonProcessingException e) {
+            throw new IOException(
+                    "Unable to decode signer response: " + standardOutput,
+                    e
+            );
+        }
+
+        if (response.signer() == null || response.signer().isBlank()) {
+            throw new IOException(
+                    "Signer response did not contain a signer address"
+            );
+        }
+
+        if (!address.equals(response.signer())) {
+            throw new IOException(
+                    "Unexpected signer address. Expected "
+                            + address
+                            + " but received "
+                            + response.signer()
+            );
+        }
+
+        if (response.signedTransaction() == null
+                || response.signedTransaction().isBlank()) {
+            throw new IOException(
+                    "Signer response did not contain a signed transaction"
+            );
+        }
+
+        ΩBase64StringΩ signedTransaction = response.signedTransaction();
+        SolanaSignedTransaction sst = new SolanaSignedTransaction(signedTransaction);
+
+        return sst;
+    }
+
+    private record SignerResponse(
+            String signer,
+            ΩBase64StringΩ signedTransaction
+    ) {
+    }
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    private final ΩSolanaWalletIdΩ address;
+    private final String signerKeyName;
+    private final SolanaBlockChain solanaBlockChain;
 }
