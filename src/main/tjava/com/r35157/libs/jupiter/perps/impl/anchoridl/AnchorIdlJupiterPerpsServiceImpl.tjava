@@ -3,6 +3,7 @@ package com.r35157.libs.jupiter.perps.impl.anchoridl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+import com.r35157.libs.jupiter.perps.protocol.IncreasePositionRequest;
 import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
@@ -109,7 +110,18 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
             @NotNull ΩUSDCAmountΩ sizeUsdDelta,
             int maxSlippageBps
     ) throws IOException, InterruptedException {
-        throw new UnsupportedOperationException("Not implemented yet!");
+        IncreasePositionRequest request = buildIncreasePositionRequest(
+                owner,
+                tradedTokenMint,
+                direction,
+                inputTokenAmount,
+                sizeUsdDelta,
+                maxSlippageBps
+        );
+
+        throw new UnsupportedOperationException(
+                "Jupiter HTTP call is not implemented yet: " + request
+        );
     }
 
     private JupiterPerpsPosition buildPosition(
@@ -274,11 +286,91 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         throw new IllegalArgumentException("Unsupported Jupiter Perps position direction: " + direction);
     }
 
+    private static IncreasePositionRequest buildIncreasePositionRequest(
+            ΩSolanaWalletIdΩ owner,
+            ΩSPLMintAddressΩ tradedTokenMint,
+            JupiterPerpsPositionDirection direction,
+            ΩUSDCAmountΩ inputTokenAmount,
+            ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) {
+        if (inputTokenAmount.signum() <= 0) {
+            throw new IllegalArgumentException(
+                    "Input token amount must be greater than zero: " + inputTokenAmount
+            );
+        }
+
+        if (sizeUsdDelta.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Position size delta must not be negative: " + sizeUsdDelta
+            );
+        }
+
+        if (maxSlippageBps < 0 || maxSlippageBps > BASIS_POINTS_DIVISOR) {
+            throw new IllegalArgumentException(
+                    "Maximum slippage must be between 0 and "
+                            + BASIS_POINTS_DIVISOR
+                            + " basis points: "
+                            + maxSlippageBps
+            );
+        }
+
+        IncreasePositionRequest request = new IncreasePositionRequest(
+                toProtocolAsset(tradedTokenMint),
+                "USDC",
+                toMicroAmount(inputTokenAmount),
+                toProtocolSide(direction),
+                Integer.toString(maxSlippageBps),
+                toMicroAmount(sizeUsdDelta),
+                owner
+        );
+
+        return request;
+    }
+
+    private static String toProtocolAsset(ΩSPLMintAddressΩ tradedTokenMint) {
+        if (SOL_MINT.equals(tradedTokenMint)) {
+            return "SOL";
+        }
+
+        if (BTC_MINT.equals(tradedTokenMint)) {
+            return "BTC";
+        }
+
+        if (ETH_MINT.equals(tradedTokenMint)) {
+            return "ETH";
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported Jupiter Perps traded-token mint: " + tradedTokenMint
+        );
+    }
+
+    private static String toProtocolSide(
+            JupiterPerpsPositionDirection direction
+    ) {
+        return switch (direction) {
+            case LONG -> "long";
+            case SHORT -> "short";
+        };
+    }
+
+    private static String toMicroAmount(BigDecimal amount) {
+        return amount
+                .movePointRight(USDC_DECIMALS)
+                .toBigIntegerExact()
+                .toString();
+    }
+
+    private static final ΩSPLMintAddressΩ SOL_MINT = "So11111111111111111111111111111111111111112";
+    private static final ΩSPLMintAddressΩ BTC_MINT = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
+    private static final ΩSPLMintAddressΩ ETH_MINT = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
+
+    private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID = "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu";
+
     private static final long RATE_POWER = 1_000_000_000L;
     private static final int CLOSE_FEE_BPS = 6;
     private static final int BASIS_POINTS_DIVISOR = 10_000;
-    private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID =
-            "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu";
     private static final int POSITION_OWNER_OFFSET = 8;
     private static final int MAX_LEVERAGE = 500;
     private static final int USDC_DECIMALS = 6;
