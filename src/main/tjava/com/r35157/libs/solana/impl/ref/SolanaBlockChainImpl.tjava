@@ -2,12 +2,14 @@ package com.r35157.libs.solana.impl.ref;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.r35157.libs.solana.*;
 import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
-import com.r35157.libs.valuetypes.basic.MoneyAmount;
-import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
 import com.r35157.libs.valuetypes.basic.CurrencyType;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -396,7 +398,85 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
     public ΩSolanaTransactionSignatureΩ sendTransaction(
             SolanaSignedTransaction transaction
     ) throws IOException, InterruptedException {
-        throw new UnsupportedOperationException("Not implemented yet");
+        String jsonBody = createSendTransactionBody(transaction);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RPC_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException(
+                    "Solana sendTransaction RPC call failed: HTTP "
+                            + response.statusCode()
+                            + "\n"
+                            + response.body()
+            );
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+
+        JsonNode errorNode = root.get("error");
+
+        if (errorNode != null && !errorNode.isNull()) {
+            throw new IOException(
+                    "Solana sendTransaction RPC error: "
+                            + errorNode.toPrettyString()
+            );
+        }
+
+        JsonNode resultNode = root.get("result");
+
+        if (resultNode == null
+                || !resultNode.isTextual()
+                || resultNode.asText().isBlank()) {
+            throw new IOException(
+                    "Solana sendTransaction response did not contain "
+                            + "a transaction signature: "
+                            + response.body()
+            );
+        }
+
+        ΩSolanaTransactionSignatureΩ signature = resultNode.asText();
+        return signature;
+    }
+
+    private String createSendTransactionBody(
+            SolanaSignedTransaction transaction
+    ) throws IOException {
+        if (transaction == null) {
+            throw new IllegalArgumentException(
+                    "Signed transaction must not be null"
+            );
+        }
+
+        ΩBase64StringΩ serializedTransaction =
+                transaction.serializedTransaction();
+
+        if (serializedTransaction == null
+                || serializedTransaction.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Serialized signed transaction must not be blank"
+            );
+        }
+
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("jsonrpc", "2.0");
+        request.put("id", 1);
+        request.put("method", "sendTransaction");
+
+        ArrayNode params = request.putArray("params");
+        params.add(serializedTransaction);
+
+        ObjectNode configuration = params.addObject();
+        configuration.put("encoding", "base64");
+        configuration.put("skipPreflight", false);
+        configuration.put("preflightCommitment", "confirmed");
+
+        return objectMapper.writeValueAsString(request);
     }
 
     private String createGetProgramAccountsBody(

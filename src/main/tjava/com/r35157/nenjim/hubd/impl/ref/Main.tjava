@@ -5,6 +5,7 @@ import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.jupiter.perps.impl.anchoridl.AnchorIdlJupiterPerpsServiceImpl;
 import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import com.r35157.libs.solana.impl.ref.SolanaBlockChainImpl;
 import com.r35157.nenjim.hubd.ctx.Context;
@@ -34,7 +35,7 @@ public class Main {
         SolanaBlockChain sbc = new SolanaBlockChainImpl();
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
-        Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
+//Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);
 
         SolanaUnsignedTransaction transaction =
                 jupiter.buildPositionIncreaseTransaction(
@@ -55,9 +56,11 @@ public class Main {
         );
 
         System.out.println("Unsigned transaction written to: " + transactionFile);
-        int a = 0;
 
-
+        ΩBase64StringΩ txt = "";
+        SolanaSignedTransaction stx = new SolanaSignedTransaction(txt);
+        ΩSolanaTransactionSignatureΩ sig = sbc.sendTransaction(stx);
+        int a = 1;
 
         /*
         Set<JupiterPerpsPosition> positions = jupiter.getOpenPositions(walletId);

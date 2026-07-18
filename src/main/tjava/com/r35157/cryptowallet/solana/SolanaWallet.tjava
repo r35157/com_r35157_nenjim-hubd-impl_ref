@@ -1,0 +1,54 @@
+package com.r35157.cryptowallet.solana;
+
+import com.r35157.libs.solana.SolanaSignedTransaction;
+import com.r35157.libs.solana.SolanaUnsignedTransaction;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+
+/**
+ * A Solana wallet capable of identifying itself and signing transactions.
+ *
+ * <p>Signing a transaction does not submit it to the Solana blockchain.
+ * Submission must be performed separately through {@code SolanaBlockChain}.</p>
+ */
+public interface SolanaWallet {
+    /**
+     * Returns the public Solana address controlled by this wallet.
+     *
+     * @return the wallet's public address
+     */
+    @NotNull
+    ΩSolanaWalletIdΩ getAddress();
+
+    /**
+     * Returns the native SOL balance of this wallet.
+     *
+     * @return the wallet's native SOL balance
+     * @throws IOException if the balance cannot be fetched or decoded
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    @NotNull
+    ΩSolanaAmountΩ getSolanaBalance()
+            throws IOException, InterruptedException;
+
+    /**
+     * Signs an unsigned Solana transaction.
+     *
+     * <p>The configured wallet must be a required signer for the supplied
+     * transaction. This method does not submit the resulting transaction
+     * to the Solana blockchain.</p>
+     *
+     * @param transaction the unsigned transaction to sign
+     * @return the transaction containing the wallet's required signature
+     * @throws IllegalArgumentException if the transaction is missing or blank
+     * @throws IOException if the transaction cannot be signed or the signer
+     *                     returns an invalid response
+     * @throws InterruptedException if the signing process is interrupted
+     */
+    @NotNull
+    SolanaSignedTransaction signTransaction(
+            @NotNull SolanaUnsignedTransaction transaction
+    ) throws IOException, InterruptedException;
+}
