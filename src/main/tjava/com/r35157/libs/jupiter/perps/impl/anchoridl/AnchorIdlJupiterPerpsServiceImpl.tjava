@@ -424,10 +424,34 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
             );
         }
 
-        return OBJECT_MAPPER.readValue(
+        IncreasePositionResponse response = OBJECT_MAPPER.readValue(
                 httpResponse.body(),
                 IncreasePositionResponse.class
         );
+
+        TransactionMetadata metadata = response.txMetadata();
+
+        if (metadata.blockhash() == null || metadata.blockhash().isBlank()) {
+            String errorMsg = "Jupiter Perps response did not contain a blockhash";
+            throw new IOException(errorMsg);
+        }
+
+        long lastValidBlockHeight;
+
+        try {
+            lastValidBlockHeight =
+                    Long.parseLong(metadata.lastValidBlockHeight());
+        } catch (NumberFormatException e) {
+            String errorMsg = "Invalid lastValidBlockHeight returned by Jupiter: " + metadata.lastValidBlockHeight();
+            throw new IOException(errorMsg, e);
+        }
+
+        if (lastValidBlockHeight <= 0) {
+            String errorMsg = "Invalid lastValidBlockHeight returned by Jupiter: " + lastValidBlockHeight;
+            throw new IOException(errorMsg);
+        }
+
+        return response;
     }
 
     private static final ΩSPLMintAddressΩ SOL_MINT = "So11111111111111111111111111111111111111112";
