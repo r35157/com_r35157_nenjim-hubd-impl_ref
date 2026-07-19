@@ -1,5 +1,6 @@
 package com.r35157.libs.jupiter.perps;
 
+import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -9,11 +10,11 @@ import java.math.BigDecimal;
 import java.util.Set;
 
 /**
- * Service for reading Jupiter Perps data and constructing unsigned transactions.
+ * Service for reading Jupiter Perps data and constructing and executing
+ * Jupiter Perps transactions.
  *
- * <p>This service does not sign or submit transactions and therefore does not
- * modify blockchain state by itself. A compatible wallet is required to sign
- * the generated transactions and submit them to the Solana blockchain.</p>
+ * <p>This service does not sign transactions. A compatible wallet is
+ * required to sign a constructed transaction before it can be executed.</p>
  */
 public interface JupiterPerpsService {
     /**
@@ -78,5 +79,28 @@ public interface JupiterPerpsService {
             @NotNull ΩUSDCAmountΩ inputTokenAmount,
             @NotNull ΩUSDCAmountΩ sizeUsdDelta,
             int maxSlippageBps
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Executes a signed Jupiter Perps position-increase transaction.
+     *
+     * <p>The supplied transaction must previously have been constructed by
+     * {@link #buildPositionIncreaseTransaction} and signed by its required
+     * Solana wallet.</p>
+     *
+     * <p>Unlike the build method, this operation submits the transaction and
+     * may therefore modify blockchain state.</p>
+     *
+     * @param transaction the complete signed position-increase transaction
+     * @return the Solana transaction signature
+     * @throws IllegalArgumentException if the transaction is missing or blank
+     * @throws IOException if Jupiter rejects the transaction or its response
+     *                     cannot be decoded
+     * @throws InterruptedException if the calling thread is interrupted while
+     *                              communicating with Jupiter
+     */
+    @NotNull
+    ΩSolanaTransactionSignatureΩ executePositionIncreaseTransaction(
+            @NotNull SolanaSignedTransaction transaction
     ) throws IOException, InterruptedException;
 }

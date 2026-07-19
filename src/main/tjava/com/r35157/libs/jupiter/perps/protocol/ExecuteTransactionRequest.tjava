@@ -1,0 +1,14 @@
+package com.r35157.libs.jupiter.perps.protocol;
+
+/**
+ * Jupiter Perps protocol request for executing a signed transaction.
+ *
+ * @param action the Jupiter transaction action
+ * @param serializedTxBase64 the complete signed Solana transaction,
+ *                           encoded as Base64
+ */
+public record ExecuteTransactionRequest(
+        String action,
+        String serializedTxBase64
+) {
+}

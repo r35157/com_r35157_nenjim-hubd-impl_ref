@@ -1,0 +1,14 @@
+package com.r35157.libs.jupiter.perps.protocol;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+/**
+ * Relevant fields returned by Jupiter after executing a transaction.
+ *
+ * @param txid the Solana transaction signature
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record ExecuteTransactionResponse(
+        String txid
+) {
+}
