@@ -1,6 +1,11 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
-public final class ConsoleAlarmAction implements AlarmAction {
+public final class ConsoleAlarmAction implements ConfiguredAlarmAction {
+    @Override
+    public String getConfigurationFileName() {
+        return "alarmaction_Console.conf";
+    }
+
     @Override
     public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
         System.err.println();

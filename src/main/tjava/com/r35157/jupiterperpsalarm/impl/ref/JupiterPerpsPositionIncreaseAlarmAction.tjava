@@ -8,10 +8,15 @@ import com.r35157.libs.solana.SolanaUnsignedTransaction;
 
 import java.math.BigDecimal;
 
-public final class JupiterPerpsPositionIncreaseAlarmAction implements AlarmAction {
+public final class JupiterPerpsPositionIncreaseAlarmAction implements ConfiguredAlarmAction {
     public JupiterPerpsPositionIncreaseAlarmAction(SolanaWallet wallet, JupiterPerpsService jupiter) {
         this.wallet = wallet;
         this.jupiter = jupiter;
+    }
+
+    @Override
+    public String getConfigurationFileName() {
+        return "alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf";
     }
 
     @Override

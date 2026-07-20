@@ -10,11 +10,16 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
-public final class PushoverAlarmAction implements AlarmAction {
+public final class PushoverAlarmAction implements ConfiguredAlarmAction {
 
     public PushoverAlarmAction(String applicationToken, String userKey) {
         this.applicationToken = applicationToken;
         this.userKey = userKey;
+    }
+
+    @Override
+    public String getConfigurationFileName() {
+        return "alarmaction_Pushover.conf";
     }
 
     @Override
