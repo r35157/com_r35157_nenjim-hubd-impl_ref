@@ -1,0 +1,55 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.cryptowallet.solana.SolanaWallet;
+import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
+import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+import com.r35157.libs.solana.SolanaSignedTransaction;
+import com.r35157.libs.solana.SolanaUnsignedTransaction;
+
+import java.math.BigDecimal;
+
+public final class JupiterPerpsPositionIncreaseAlarmAction implements AlarmAction {
+    public JupiterPerpsPositionIncreaseAlarmAction(SolanaWallet wallet, JupiterPerpsService jupiter) {
+        this.wallet = wallet;
+        this.jupiter = jupiter;
+    }
+
+    @Override
+    public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
+        ΩUSDCAmountΩ inputTokenAmount = new ΩUSDCAmountΩ("0.25");
+        ΩUSDCAmountΩ sizeUsdDelta;
+
+        if(alarm.id() == 4) {
+            // Critical
+            sizeUsdDelta = new ΩUSDCAmountΩ("2.50");     // Leverage: 10x
+        } else if(alarm.id() == 5) {
+            // Info
+            sizeUsdDelta = new ΩUSDCAmountΩ("6.25");     // Leverage: 25x
+        } else {
+            return;
+        }
+
+        try {
+            SolanaUnsignedTransaction utrans =
+                    jupiter.buildPositionIncreaseTransaction(
+                            wallet.getAddress(),
+                            SOL_MINT,
+                            JupiterPerpsPositionDirection.LONG,
+                            inputTokenAmount,
+                            sizeUsdDelta,
+                            200
+                    );
+            SolanaSignedTransaction strans = wallet.signTransaction(utrans);
+            ΩSolanaTransactionSignatureΩ signature = jupiter.executePositionIncreaseTransaction(strans);
+            System.out.println("Position Increase Signature: " + signature);
+        } catch(Exception e) {
+            System.err.println("EXCEPTION: " + e.getMessage());
+        }
+    }
+
+    private static final ΩSPLMintAddressΩ SOL_MINT = "So11111111111111111111111111111111111111112";
+    private static final ΩSPLMintAddressΩ BTC_MINT = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
+
+    private SolanaWallet wallet;
+    private JupiterPerpsService jupiter;
+}
