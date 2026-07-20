@@ -20,7 +20,7 @@
 #################################################################################################################################
 
 # SOL SHORT
-1      SOL     >={{SOL_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:60     CRITICAL   "🚨 SOL Add Short add 1.1x"
+1      SOL     >={{SOL_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:60     CRITICAL   "🚨 SOL Short add 1.1x"
 2      SOL     [{{SOL_SHORT_LIQ_PRICE}}-3%-->{{SOL_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:3600   INFO       "🌱 SOL Short add 3x"
 3      SOL     <={{SOL_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:3600   INFO       "💵 SOL Short close"
 

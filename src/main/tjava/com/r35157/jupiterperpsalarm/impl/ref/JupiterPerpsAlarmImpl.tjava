@@ -68,6 +68,10 @@ public final class JupiterPerpsAlarmImpl {
         entryPriceVariableRefresher.refresh();
         System.out.println("Fetching done.");
 
+        System.out.print("Validating alarm conditions... ");
+        validateAlarmConditions(definitions, variableResolver);
+        System.out.println("Done.");
+
         entryPriceVariableRefresher.startPeriodicRefresh();
 
         JupiterPerpsEntryPriceVariableRefreshWatcher entryPriceVariableRefreshWatcher =
@@ -152,6 +156,29 @@ public final class JupiterPerpsAlarmImpl {
 
         clients.forEach(OracleWebSocketClient::start);
         new CountDownLatch(1).await();
+    }
+
+    private static void validateAlarmConditions(
+            List<PriceAlarmDefinition> definitions,
+            AlarmVariableResolver variableResolver
+    ) {
+        for (PriceAlarmDefinition definition : definitions) {
+            try {
+                AlarmConditionParser.parse(
+                        variableResolver.resolve(definition.conditionExpression())
+                );
+            } catch (RuntimeException exception) {
+                throw new IllegalArgumentException(
+                        "Invalid condition for alarm "
+                                + definition.id()
+                                + " ("
+                                + definition.conditionExpression()
+                                + "): "
+                                + exception.getMessage(),
+                        exception
+                );
+            }
+        }
     }
 
     private static Map<JupiterPerpsAsset, List<PriceAlarmDefinition>> groupByAsset(
