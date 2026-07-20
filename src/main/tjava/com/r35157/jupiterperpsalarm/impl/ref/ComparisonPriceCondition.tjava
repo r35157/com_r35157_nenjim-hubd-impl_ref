@@ -20,6 +20,6 @@ public record ComparisonPriceCondition(
 
     @Override
     public String expression() {
-        return operator.symbol() + " " + target.toPlainString();
+        return operator.symbol() + target.toPlainString();
     }
 }

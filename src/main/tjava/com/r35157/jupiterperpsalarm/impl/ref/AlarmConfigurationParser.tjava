@@ -83,20 +83,18 @@ public final class AlarmConfigurationParser {
     }
 
     private static String parseConditionExpression(Cursor cursor) {
-        String firstToken = cursor.nextToken("condition");
+        String conditionExpression = cursor.nextToken("condition");
 
-        if (firstToken.equals("<")
-                || firstToken.equals("<=")
-                || firstToken.equals(">")
-                || firstToken.equals(">=")) {
-            return firstToken + " " + cursor.nextToken("condition target");
+        if (conditionExpression.equals("<")
+                || conditionExpression.equals("<=")
+                || conditionExpression.equals(">")
+                || conditionExpression.equals(">=")) {
+            throw new IllegalArgumentException(
+                    "Condition must not contain whitespace: " + conditionExpression
+            );
         }
 
-        if (firstToken.startsWith("<") || firstToken.startsWith(">")) {
-            return firstToken;
-        }
-
-        throw new IllegalArgumentException("Invalid price condition: " + firstToken);
+        return conditionExpression;
     }
 
     private static TriggerConfiguration parseTrigger(String triggerText) {
