@@ -1,0 +1,54 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+import java.util.Objects;
+
+public record RangePriceCondition(
+        BigDecimal lowerTarget,
+        boolean lowerInclusive,
+        BigDecimal upperTarget,
+        boolean upperInclusive
+) implements PriceCondition {
+
+    public RangePriceCondition {
+        Objects.requireNonNull(lowerTarget, "lowerTarget");
+        Objects.requireNonNull(upperTarget, "upperTarget");
+
+        if (lowerTarget.compareTo(upperTarget) > 0) {
+            throw new IllegalArgumentException(
+                    "Range lower target must not exceed upper target: "
+                            + lowerTarget.toPlainString()
+                            + "-->"
+                            + upperTarget.toPlainString()
+            );
+        }
+    }
+
+    @Override
+    public boolean matches(BigDecimal price) {
+        int lowerComparison = price.compareTo(lowerTarget);
+        int upperComparison = price.compareTo(upperTarget);
+
+        boolean matchesLower = lowerInclusive
+                ? lowerComparison >= 0
+                : lowerComparison > 0;
+
+        boolean matchesUpper = upperInclusive
+                ? upperComparison <= 0
+                : upperComparison < 0;
+
+        return matchesLower && matchesUpper;
+    }
+
+    @Override
+    public String expression() {
+        char lowerDelimiter = lowerInclusive ? '[' : '(';
+        char upperDelimiter = upperInclusive ? ']' : ')';
+
+        return lowerDelimiter
+                + lowerTarget.toPlainString()
+                + "-->"
+                + upperTarget.toPlainString()
+                + upperDelimiter;
+    }
+}

@@ -4,11 +4,17 @@ import java.math.BigDecimal;
 
 public final class AlarmConditionParser {
 
+    private static final String RANGE_SEPARATOR = "-->";
+
     private AlarmConditionParser() {
     }
 
     public static PriceCondition parse(String conditionExpression) {
         String trimmedExpression = conditionExpression.trim();
+
+        if (trimmedExpression.startsWith("[") || trimmedExpression.startsWith("(")) {
+            return parseRange(trimmedExpression);
+        }
 
         PriceComparisonOperator operator;
         int operatorLength;
@@ -40,5 +46,46 @@ public final class AlarmConditionParser {
 
         BigDecimal target = AlarmTargetParser.parse(targetExpression);
         return new ComparisonPriceCondition(operator, target);
+    }
+
+    private static PriceCondition parseRange(String rangeExpression) {
+        char lowerDelimiter = rangeExpression.charAt(0);
+        char upperDelimiter = rangeExpression.charAt(rangeExpression.length() - 1);
+
+        if (upperDelimiter != ')' && upperDelimiter != ']') {
+            throw new IllegalArgumentException(
+                    "Range must end with ')' or ']': " + rangeExpression
+            );
+        }
+
+        String rangeBody = rangeExpression.substring(1, rangeExpression.length() - 1);
+        int separatorIndex = rangeBody.indexOf(RANGE_SEPARATOR);
+
+        if (separatorIndex < 0 || separatorIndex != rangeBody.lastIndexOf(RANGE_SEPARATOR)) {
+            throw new IllegalArgumentException(
+                    "Range must contain exactly one '" + RANGE_SEPARATOR + "': " + rangeExpression
+            );
+        }
+
+        String lowerTargetExpression = rangeBody.substring(0, separatorIndex).trim();
+        String upperTargetExpression = rangeBody
+                .substring(separatorIndex + RANGE_SEPARATOR.length())
+                .trim();
+
+        if (lowerTargetExpression.isEmpty() || upperTargetExpression.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Range must contain both a lower and an upper target: " + rangeExpression
+            );
+        }
+
+        BigDecimal lowerTarget = AlarmTargetParser.parse(lowerTargetExpression);
+        BigDecimal upperTarget = AlarmTargetParser.parse(upperTargetExpression);
+
+        return new RangePriceCondition(
+                lowerTarget,
+                lowerDelimiter == '[',
+                upperTarget,
+                upperDelimiter == ']'
+        );
     }
 }
