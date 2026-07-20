@@ -1,6 +1,21 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+
 public final class ConsoleAlarmAction implements ConfiguredAlarmAction {
+    public ConsoleAlarmAction(Path configurationDirectory) throws IOException {
+        Objects.requireNonNull(configurationDirectory, "configurationDirectory");
+        alarmIds = parseAlarmIds(
+                configurationDirectory.resolve(getConfigurationFileName())
+        );
+    }
+
     @Override
     public String getConfigurationFileName() {
         return "alarmaction_Console.conf";
@@ -8,6 +23,10 @@ public final class ConsoleAlarmAction implements ConfiguredAlarmAction {
 
     @Override
     public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
+        if (!alarmIds.contains(alarm.id())) {
+            return;
+        }
+
         System.err.println();
         System.err.println("============================================================");
         System.err.printf(
@@ -26,4 +45,45 @@ public final class ConsoleAlarmAction implements ConfiguredAlarmAction {
         System.err.println("============================================================");
         System.err.println();
     }
+
+    private static Set<Integer> parseAlarmIds(Path path) throws IOException {
+        List<String> lines = Files.readAllLines(path);
+        Set<Integer> result = new LinkedHashSet<>();
+
+        for (int lineNumber = 1; lineNumber <= lines.size(); lineNumber++) {
+            String line = removeComment(lines.get(lineNumber - 1)).trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            try {
+                if (line.chars().anyMatch(Character::isWhitespace)) {
+                    throw new IllegalArgumentException(
+                            "Expected one alarm id, but found: " + line
+                    );
+                }
+
+                int alarmId = Integer.parseInt(line);
+                if (!result.add(alarmId)) {
+                    throw new IllegalArgumentException(
+                            "Duplicate alarm id: " + alarmId
+                    );
+                }
+            } catch (RuntimeException exception) {
+                throw new IllegalArgumentException(
+                        path + ":" + lineNumber + ": " + exception.getMessage(),
+                        exception
+                );
+            }
+        }
+
+        return Set.copyOf(result);
+    }
+
+    private static String removeComment(String line) {
+        int commentStart = line.indexOf('#');
+        return commentStart < 0 ? line : line.substring(0, commentStart);
+    }
+
+    private final Set<Integer> alarmIds;
 }

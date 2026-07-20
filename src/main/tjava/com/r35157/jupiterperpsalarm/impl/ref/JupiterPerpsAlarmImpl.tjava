@@ -82,8 +82,12 @@ public final class JupiterPerpsAlarmImpl {
 
         entryPriceVariableRefreshWatcher.start();
 
+        Path alarmConfigurationDirectory = config.alarmConfiguration()
+                .toAbsolutePath()
+                .getParent();
+
         List<AlarmAction> actions = new ArrayList<>();
-        actions.add(new ConsoleAlarmAction());
+        actions.add(new ConsoleAlarmAction(alarmConfigurationDirectory));
         SolanaBlockChain sbc = new SolanaBlockChainImpl();
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
