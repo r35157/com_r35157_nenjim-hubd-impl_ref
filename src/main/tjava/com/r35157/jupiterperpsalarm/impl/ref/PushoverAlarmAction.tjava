@@ -71,14 +71,13 @@ public final class PushoverAlarmAction implements AlarmAction {
 
     private static String createMessage(OraclePrice price, ResolvedPriceAlarm alarm) {
         return String.format(
-                "%d - %s: %s%n%n%s is %s USD.%nTarget: %s %s USD.%nOracle time: %s.%nSlot: %d.",
+                "%d - %s: %s%n%n%s is %s USD.%nCondition: %s USD.%nOracle time: %s.%nSlot: %d.",
                 alarm.id(),
                 alarm.severity(),
                 alarm.note(),
                 price.asset(),
                 price.priceUsd().toPlainString(),
-                alarm.direction(),
-                alarm.target().toPlainString(),
+                alarm.condition().expression(),
                 price.oracleTime(),
                 price.slot()
         );

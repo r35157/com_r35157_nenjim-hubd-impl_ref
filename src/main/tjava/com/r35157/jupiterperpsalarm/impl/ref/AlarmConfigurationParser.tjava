@@ -52,11 +52,7 @@ public final class AlarmConfigurationParser {
                 cursor.nextToken("asset").toUpperCase(Locale.ROOT)
         );
 
-        PriceDirection direction = PriceDirection.valueOf(
-                cursor.nextToken("direction").toUpperCase(Locale.ROOT)
-        );
-
-        String targetExpression = cursor.nextToken("target");
+        String conditionExpression = parseConditionExpression(cursor);
 
         TriggerConfiguration triggerConfiguration = parseTrigger(
                 cursor.nextToken("trigger")
@@ -78,13 +74,29 @@ public final class AlarmConfigurationParser {
         return new PriceAlarmDefinition(
                 id,
                 asset,
-                direction,
-                targetExpression,
+                conditionExpression,
                 triggerConfiguration.trigger(),
                 triggerConfiguration.gracePeriod(),
                 severity,
                 note
         );
+    }
+
+    private static String parseConditionExpression(Cursor cursor) {
+        String firstToken = cursor.nextToken("condition");
+
+        if (firstToken.equals("<")
+                || firstToken.equals("<=")
+                || firstToken.equals(">")
+                || firstToken.equals(">=")) {
+            return firstToken + " " + cursor.nextToken("condition target");
+        }
+
+        if (firstToken.startsWith("<") || firstToken.startsWith(">")) {
+            return firstToken;
+        }
+
+        throw new IllegalArgumentException("Invalid price condition: " + firstToken);
     }
 
     private static TriggerConfiguration parseTrigger(String triggerText) {

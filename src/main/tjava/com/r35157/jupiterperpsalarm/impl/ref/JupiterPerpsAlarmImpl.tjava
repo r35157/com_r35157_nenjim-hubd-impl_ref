@@ -141,9 +141,8 @@ public final class JupiterPerpsAlarmImpl {
                     asset.oracleAccount()
             );
             assetDefinitions.forEach(definition -> System.out.printf(
-                    "    %s %s USD, %s, severity=%s%n",
-                    definition.direction(),
-                    definition.targetExpression(),
+                    "    %s USD, %s, severity=%s%n",
+                    definition.conditionExpression(),
                     definition.trigger(),
                     definition.severity()
             ));

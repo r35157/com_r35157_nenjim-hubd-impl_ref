@@ -6,11 +6,10 @@ public final class ConsoleAlarmAction implements AlarmAction {
         System.err.println();
         System.err.println("============================================================");
         System.err.printf(
-                "ALARM: %s is %s USD; target %s %s USD%n",
+                "ALARM: %s is %s USD; condition %s USD%n",
                 price.asset(),
                 price.priceUsd().toPlainString(),
-                alarm.direction(),
-                alarm.target().toPlainString()
+                alarm.condition().expression()
         );
         System.err.printf(
                 "Trigger: %s, oracle time: %s, slot: %d, source: %s%n",

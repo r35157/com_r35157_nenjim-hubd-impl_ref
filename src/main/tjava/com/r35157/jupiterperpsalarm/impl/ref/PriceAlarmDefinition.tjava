@@ -7,8 +7,7 @@ import java.util.Objects;
 public record PriceAlarmDefinition(
         int id,
         JupiterPerpsAsset asset,
-        PriceDirection direction,
-        String targetExpression,
+        String conditionExpression,
         AlarmTrigger trigger,
         ΩsecondsΩ triggerGracePeriod,
         AlarmSeverity severity,
@@ -16,14 +15,13 @@ public record PriceAlarmDefinition(
 ) {
     public PriceAlarmDefinition {
         Objects.requireNonNull(asset, "asset");
-        Objects.requireNonNull(direction, "direction");
-        Objects.requireNonNull(targetExpression, "targetExpression");
+        Objects.requireNonNull(conditionExpression, "conditionExpression");
         Objects.requireNonNull(trigger, "trigger");
         Objects.requireNonNull(severity, "severity");
         Objects.requireNonNull(note, "note");
 
-        if (targetExpression.isBlank()) {
-            throw new IllegalArgumentException("Target expression cannot be blank");
+        if (conditionExpression.isBlank()) {
+            throw new IllegalArgumentException("Condition expression cannot be blank");
         }
 
         if (triggerGracePeriod < 0) {

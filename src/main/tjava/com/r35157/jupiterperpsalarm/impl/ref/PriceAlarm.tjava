@@ -1,6 +1,5 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 public final class PriceAlarm {
@@ -22,24 +21,21 @@ public final class PriceAlarm {
             );
         }
 
-        BigDecimal target;
+        PriceCondition condition;
         try {
-            target = AlarmTargetParser.parse(
-                    variableResolver.resolve(definition.targetExpression())
+            condition = AlarmConditionParser.parse(
+                    variableResolver.resolve(definition.conditionExpression())
             );
         } catch (RuntimeException exception) {
             System.err.printf(
-                    "Could not resolve target for alarm %d: %s%n",
+                    "Could not resolve condition for alarm %d: %s%n",
                     definition.id(),
                     exception.getMessage()
             );
             return;
         }
 
-        boolean reached = definition.direction().reached(
-                price.priceUsd(),
-                target
-        );
+        boolean reached = condition.matches(price.priceUsd());
 
         boolean enteredTriggeredSide = previousReached == null
                 ? reached
@@ -57,13 +53,13 @@ public final class PriceAlarm {
                 return;
             }
 
-            trigger(price, target);
+            trigger(price, condition);
             return;
         }
 
         if (definition.trigger() == AlarmTrigger.PERSISTENT) {
             if (lastTriggeredAt == null || persistentGracePeriodHasPassed()) {
-                trigger(price, target);
+                trigger(price, condition);
             }
             return;
         }
@@ -95,7 +91,7 @@ public final class PriceAlarm {
         );
     }
 
-    private void trigger(OraclePrice price, BigDecimal target) {
+    private void trigger(OraclePrice price, PriceCondition condition) {
         triggerCount++;
         lastTriggeredAt = Instant.now();
 
@@ -115,8 +111,7 @@ public final class PriceAlarm {
         ResolvedPriceAlarm resolvedAlarm = new ResolvedPriceAlarm(
                 definition.id(),
                 definition.asset(),
-                definition.direction(),
-                target,
+                condition,
                 definition.trigger(),
                 definition.triggerGracePeriod(),
                 definition.severity(),

@@ -1,13 +1,11 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
 import com.r35157.jupiterperpsalarm.AlarmSeverity;
-import java.math.BigDecimal;
 
 public record ResolvedPriceAlarm(
         int id,
         JupiterPerpsAsset asset,
-        PriceDirection direction,
-        BigDecimal target,
+        PriceCondition condition,
         AlarmTrigger trigger,
         ΩsecondsΩ triggerGracePeriod,
         AlarmSeverity severity,
