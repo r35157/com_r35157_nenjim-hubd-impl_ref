@@ -1,0 +1,42 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+
+public enum PriceComparisonOperator {
+    LESS_THAN("<") {
+        @Override
+        public boolean matches(BigDecimal price, BigDecimal target) {
+            return price.compareTo(target) < 0;
+        }
+    },
+    LESS_THAN_OR_EQUAL("<=") {
+        @Override
+        public boolean matches(BigDecimal price, BigDecimal target) {
+            return price.compareTo(target) <= 0;
+        }
+    },
+    GREATER_THAN(">") {
+        @Override
+        public boolean matches(BigDecimal price, BigDecimal target) {
+            return price.compareTo(target) > 0;
+        }
+    },
+    GREATER_THAN_OR_EQUAL(">=") {
+        @Override
+        public boolean matches(BigDecimal price, BigDecimal target) {
+            return price.compareTo(target) >= 0;
+        }
+    };
+
+    PriceComparisonOperator(String symbol) {
+        this.symbol = symbol;
+    }
+
+    public abstract boolean matches(BigDecimal price, BigDecimal target);
+
+    public String symbol() {
+        return symbol;
+    }
+
+    private final String symbol;
+}

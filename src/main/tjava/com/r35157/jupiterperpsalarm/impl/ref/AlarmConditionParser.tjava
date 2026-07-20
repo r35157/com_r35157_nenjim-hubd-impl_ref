@@ -1,0 +1,44 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+
+public final class AlarmConditionParser {
+
+    private AlarmConditionParser() {
+    }
+
+    public static PriceCondition parse(String conditionExpression) {
+        String trimmedExpression = conditionExpression.trim();
+
+        PriceComparisonOperator operator;
+        int operatorLength;
+
+        if (trimmedExpression.startsWith("<=")) {
+            operator = PriceComparisonOperator.LESS_THAN_OR_EQUAL;
+            operatorLength = 2;
+        } else if (trimmedExpression.startsWith(">=")) {
+            operator = PriceComparisonOperator.GREATER_THAN_OR_EQUAL;
+            operatorLength = 2;
+        } else if (trimmedExpression.startsWith("<")) {
+            operator = PriceComparisonOperator.LESS_THAN;
+            operatorLength = 1;
+        } else if (trimmedExpression.startsWith(">")) {
+            operator = PriceComparisonOperator.GREATER_THAN;
+            operatorLength = 1;
+        } else {
+            throw new IllegalArgumentException(
+                    "Unknown price condition operator: " + conditionExpression
+            );
+        }
+
+        String targetExpression = trimmedExpression.substring(operatorLength).trim();
+        if (targetExpression.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Missing target in price condition: " + conditionExpression
+            );
+        }
+
+        BigDecimal target = AlarmTargetParser.parse(targetExpression);
+        return new ComparisonPriceCondition(operator, target);
+    }
+}

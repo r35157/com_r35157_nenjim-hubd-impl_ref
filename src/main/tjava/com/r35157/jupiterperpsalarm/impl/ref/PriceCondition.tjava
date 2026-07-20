@@ -1,0 +1,10 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+
+public interface PriceCondition {
+
+    boolean matches(BigDecimal price);
+
+    String expression();
+}
