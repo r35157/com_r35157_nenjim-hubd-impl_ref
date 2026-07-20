@@ -1,0 +1,193 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.jupiterperpsalarm.AlarmSeverity;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+public final class PushoverAlarmActionConfigurationParser {
+    public static PushoverAlarmActionConfiguration parse(Path path) throws IOException {
+        List<String> lines = Files.readAllLines(path);
+        Map<Integer, PushoverAlarmActionConfiguration.Notification> notifications =
+                new LinkedHashMap<>();
+        String applicationToken = null;
+        String userKey = null;
+
+        for (int lineNumber = 1; lineNumber <= lines.size(); lineNumber++) {
+            String line = lines.get(lineNumber - 1);
+            String trimmed = line.trim();
+
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue;
+            }
+
+            try {
+                Cursor cursor = new Cursor(line);
+                String firstToken = cursor.nextToken("setting or alarm id");
+
+                switch (firstToken.toUpperCase(Locale.ROOT)) {
+                    case "APPLICATION_TOKEN" -> {
+                        if (applicationToken != null) {
+                            throw new IllegalArgumentException("Duplicate APPLICATION_TOKEN");
+                        }
+                        applicationToken = cursor.nextToken("application token");
+                        cursor.requireEndOrComment();
+                    }
+                    case "USER_KEY" -> {
+                        if (userKey != null) {
+                            throw new IllegalArgumentException("Duplicate USER_KEY");
+                        }
+                        userKey = cursor.nextToken("user key");
+                        cursor.requireEndOrComment();
+                    }
+                    default -> parseNotification(firstToken, cursor, notifications);
+                }
+            } catch (RuntimeException exception) {
+                throw new IllegalArgumentException(
+                        path + ":" + lineNumber + ": " + exception.getMessage(),
+                        exception
+                );
+            }
+        }
+
+        if (applicationToken == null) {
+            throw new IllegalArgumentException("Missing APPLICATION_TOKEN in " + path);
+        }
+        if (userKey == null) {
+            throw new IllegalArgumentException("Missing USER_KEY in " + path);
+        }
+
+        return new PushoverAlarmActionConfiguration(
+                applicationToken,
+                userKey,
+                notifications
+        );
+    }
+
+    private static void parseNotification(
+            String alarmIdText,
+            Cursor cursor,
+            Map<Integer, PushoverAlarmActionConfiguration.Notification> notifications
+    ) {
+        int alarmId;
+        try {
+            alarmId = Integer.parseInt(alarmIdText);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    "Expected APPLICATION_TOKEN, USER_KEY, or alarm id: " + alarmIdText,
+                    exception
+            );
+        }
+
+        AlarmSeverity severity = AlarmSeverity.valueOf(
+                cursor.nextToken("severity").toUpperCase(Locale.ROOT)
+        );
+        String note = cursor.nextQuotedString("note");
+        cursor.requireEndOrComment();
+
+        PushoverAlarmActionConfiguration.Notification previous = notifications.putIfAbsent(
+                alarmId,
+                new PushoverAlarmActionConfiguration.Notification(severity, note)
+        );
+        if (previous != null) {
+            throw new IllegalArgumentException("Duplicate alarm id: " + alarmId);
+        }
+    }
+
+    private static final class Cursor {
+        private Cursor(String line) {
+            this.line = line;
+        }
+
+        private String nextToken(String fieldName) {
+            skipWhitespace();
+            if (atEnd()) {
+                throw new IllegalArgumentException("Missing " + fieldName);
+            }
+
+            int start = position;
+            while (!atEnd() && !Character.isWhitespace(current())) {
+                position++;
+            }
+            return line.substring(start, position);
+        }
+
+        private String nextQuotedString(String fieldName) {
+            skipWhitespace();
+            if (atEnd() || current() != '"') {
+                throw new IllegalArgumentException(
+                        "Missing quoted " + fieldName + "; expected \"...\""
+                );
+            }
+            position++;
+
+            StringBuilder result = new StringBuilder();
+            boolean escaped = false;
+
+            while (!atEnd()) {
+                char character = current();
+                position++;
+
+                if (escaped) {
+                    result.append(switch (character) {
+                        case 'n' -> '\n';
+                        case 'r' -> '\r';
+                        case 't' -> '\t';
+                        case '"' -> '"';
+                        case '\\' -> '\\';
+                        default -> character;
+                    });
+                    escaped = false;
+                    continue;
+                }
+
+                if (character == '\\') {
+                    escaped = true;
+                    continue;
+                }
+
+                if (character == '"') {
+                    return result.toString();
+                }
+
+                result.append(character);
+            }
+
+            throw new IllegalArgumentException("Unterminated quoted " + fieldName);
+        }
+
+        private void requireEndOrComment() {
+            skipWhitespace();
+            if (!atEnd() && current() != '#') {
+                throw new IllegalArgumentException(
+                        "Unexpected text: " + line.substring(position)
+                );
+            }
+        }
+
+        private void skipWhitespace() {
+            while (!atEnd() && Character.isWhitespace(current())) {
+                position++;
+            }
+        }
+
+        private boolean atEnd() {
+            return position >= line.length();
+        }
+
+        private char current() {
+            return line.charAt(position);
+        }
+
+        private final String line;
+        private int position;
+    }
+
+    private PushoverAlarmActionConfigurationParser() {
+    }
+}

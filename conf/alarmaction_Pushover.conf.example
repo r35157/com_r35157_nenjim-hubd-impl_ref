@@ -1,0 +1,38 @@
+# Pushover credentials
+##########################################
+APPLICATION_TOKEN  <pushover-application-token>
+USER_KEY           <pushover-user-key>
+
+
+# Id   Severity   Note
+##########################################
+
+# SOL SHORT
+1      CRITICAL   "🚨 SOL Short add 1.1x"
+2      INFO       "🌱 SOL Short add 3x"
+3      INFO       "💵 SOL Short close"
+
+# SOL LONG
+4      CRITICAL   "🚨 SOL Long add 1.1x"
+5      INFO       "🌱 SOL Long add 3x"
+6      INFO       "💵 SOL Long close"
+
+# ETH SHORT
+7      CRITICAL   "🚨 ETH Short add 1.1x"
+8      INFO       "🌱 ETH Short add 3x"
+9      INFO       "💵 ETH Short close"
+
+# ETH LONG
+10     CRITICAL   "🚨 ETH Long add 1.1x"
+11     INFO       "🌱 ETH Long add 3x"
+12     INFO       "💵 ETH Long close"
+
+# BTC SHORT
+13     CRITICAL   "🚨 BTC Short add 1.1x"
+14     INFO       "🌱 BTC Short add 3x"
+15     INFO       "💵 BTC Short close"
+
+# BTC LONG
+16     CRITICAL   "🚨 BTC Long add 1.1x"
+17     INFO       "🌱 BTC Long add 3x"
+18     INFO       "💵 BTC Long close"

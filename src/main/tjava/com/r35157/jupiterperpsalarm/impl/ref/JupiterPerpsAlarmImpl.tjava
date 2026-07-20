@@ -93,19 +93,7 @@ public final class JupiterPerpsAlarmImpl {
         ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
         SolanaWallet wallet = new SolanaWalletImpl(walletId, "evelyn-prod", sbc);
         actions.add(new JupiterPerpsPositionIncreaseAlarmAction(wallet, jupiter));
-
-        if (config.pushoverToken() != null && config.pushoverUserKey() != null) {
-            actions.add(new PushoverAlarmAction(
-                    config.pushoverToken(),
-                    config.pushoverUserKey()
-            ));
-            System.out.println("Pushover emergency alarm is enabled.");
-        } else {
-            System.out.println(
-                    "Pushover is disabled. Set PUSHOVER_APP_TOKEN and " +
-                    "PUSHOVER_USER_KEY to enable it."
-            );
-        }
+        actions.add(new PushoverAlarmAction(alarmConfigurationDirectory));
 
         AlarmAction action = new CompositeAlarmAction(actions);
         Map<JupiterPerpsAsset, List<PriceAlarmDefinition>> definitionsByAsset =
@@ -212,16 +200,12 @@ public final class JupiterPerpsAlarmImpl {
                 Environment:
                   PRICE_ALARMS_CONFIG        Alternative default configuration path
                   SOLANA_WS_URLS             Comma-separated RPC WebSocket endpoints
-                  PUSHOVER_APP_TOKEN         Pushover application token
-                  PUSHOVER_USER_KEY          Pushover user/group key
                 """);
     }
 
     private record Config(
             Path alarmConfiguration,
-            List<URI> webSocketEndpoints,
-            String pushoverToken,
-            String pushoverUserKey
+            List<URI> webSocketEndpoints
     ) {
         private static Config parse(String[] args, Map<String, String> environment) {
             Map<String, String> options = Arrays.stream(args)
@@ -261,14 +245,8 @@ public final class JupiterPerpsAlarmImpl {
 
             return new Config(
                     Path.of(configurationText),
-                    endpoints,
-                    blankToNull(environment.get("PUSHOVER_APP_TOKEN")),
-                    blankToNull(environment.get("PUSHOVER_USER_KEY"))
+                    endpoints
             );
-        }
-
-        private static String blankToNull(String value) {
-            return value == null || value.isBlank() ? null : value;
         }
     }
 

@@ -2,19 +2,24 @@ package com.r35157.jupiterperpsalarm.impl.ref;
 
 import com.r35157.jupiterperpsalarm.AlarmSeverity;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Objects;
 
 public final class PushoverAlarmAction implements ConfiguredAlarmAction {
 
-    public PushoverAlarmAction(String applicationToken, String userKey) {
-        this.applicationToken = applicationToken;
-        this.userKey = userKey;
+    public PushoverAlarmAction(Path configurationDirectory) throws IOException {
+        Objects.requireNonNull(configurationDirectory, "configurationDirectory");
+        configuration = PushoverAlarmActionConfigurationParser.parse(
+                configurationDirectory.resolve(getConfigurationFileName())
+        );
     }
 
     @Override
@@ -24,14 +29,20 @@ public final class PushoverAlarmAction implements ConfiguredAlarmAction {
 
     @Override
     public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
-        String title = "Jupiter Perps " + price.asset() + " alarm";
-        String message = createMessage(price, alarm);
+        PushoverAlarmActionConfiguration.Notification notification =
+                configuration.notifications().get(alarm.id());
+        if (notification == null) {
+            return;
+        }
 
-        String body = form("token", applicationToken) + "&" +
-                form("user", userKey) + "&" +
+        String title = "Jupiter Perps " + price.asset() + " alarm";
+        String message = createMessage(price, alarm, notification);
+
+        String body = form("token", configuration.applicationToken()) + "&" +
+                form("user", configuration.userKey()) + "&" +
                 form("title", title) + "&" +
                 form("message", message) + "&" +
-                createPushoverSeverityParameters(alarm.severity());
+                createPushoverSeverityParameters(notification.severity());
 
         HttpRequest request = HttpRequest.newBuilder(PUSHOVER_URI)
                 .timeout(Duration.ofSeconds(15))
@@ -53,7 +64,7 @@ public final class PushoverAlarmAction implements ConfiguredAlarmAction {
                                 response.body()
                         );
                     } else {
-                        System.out.println("Pushover alarm sent: " + alarm.severity());
+                        System.out.println("Pushover alarm sent: " + notification.severity());
                     }
                 });
     }
@@ -74,12 +85,16 @@ public final class PushoverAlarmAction implements ConfiguredAlarmAction {
         };
     }
 
-    private static String createMessage(OraclePrice price, ResolvedPriceAlarm alarm) {
+    private static String createMessage(
+            OraclePrice price,
+            ResolvedPriceAlarm alarm,
+            PushoverAlarmActionConfiguration.Notification notification
+    ) {
         return String.format(
                 "%d - %s: %s%n%n%s is %s USD.%nCondition: %s USD.%nOracle time: %s.%nSlot: %d.",
                 alarm.id(),
-                alarm.severity(),
-                alarm.note(),
+                notification.severity(),
+                notification.note(),
                 price.asset(),
                 price.priceUsd().toPlainString(),
                 alarm.condition().expression(),
@@ -89,8 +104,7 @@ public final class PushoverAlarmAction implements ConfiguredAlarmAction {
     }
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
-    private final String applicationToken;
-    private final String userKey;
+    private final PushoverAlarmActionConfiguration configuration;
 
     private static final URI PUSHOVER_URI =
             URI.create("https://api.pushover.net/1/messages.json");
