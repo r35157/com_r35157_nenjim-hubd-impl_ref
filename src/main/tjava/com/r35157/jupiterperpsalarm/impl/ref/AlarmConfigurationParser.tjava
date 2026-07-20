@@ -1,7 +1,5 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
-import com.r35157.jupiterperpsalarm.AlarmSeverity;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,16 +56,10 @@ public final class AlarmConfigurationParser {
                 cursor.nextToken("trigger")
         );
 
-        AlarmSeverity severity = AlarmSeverity.valueOf(
-                cursor.nextToken("severity").toUpperCase()
-        );
-
-        String note = cursor.nextQuotedString("note");
-
         cursor.skipWhitespace();
         if (!cursor.atEnd() && cursor.current() != '#') {
             throw new IllegalArgumentException(
-                    "Unexpected text after note: " + cursor.remaining()
+                    "Unexpected text after trigger: " + cursor.remaining()
             );
         }
 
@@ -76,9 +68,7 @@ public final class AlarmConfigurationParser {
                 asset,
                 conditionExpression,
                 triggerConfiguration.trigger(),
-                triggerConfiguration.gracePeriod(),
-                severity,
-                note
+                triggerConfiguration.gracePeriod()
         );
     }
 
@@ -157,50 +147,6 @@ public final class AlarmConfigurationParser {
                 position++;
             }
             return line.substring(start, position);
-        }
-
-        private String nextQuotedString(String fieldName) {
-            skipWhitespace();
-            if (atEnd() || current() != '"') {
-                throw new IllegalArgumentException(
-                        "Missing quoted " + fieldName + "; expected \"...\""
-                );
-            }
-            position++;
-
-            StringBuilder result = new StringBuilder();
-            boolean escaped = false;
-
-            while (!atEnd()) {
-                char character = current();
-                position++;
-
-                if (escaped) {
-                    result.append(switch (character) {
-                        case 'n' -> '\n';
-                        case 'r' -> '\r';
-                        case 't' -> '\t';
-                        case '"' -> '"';
-                        case '\\' -> '\\';
-                        default -> character;
-                    });
-                    escaped = false;
-                    continue;
-                }
-
-                if (character == '\\') {
-                    escaped = true;
-                    continue;
-                }
-
-                if (character == '"') {
-                    return result.toString();
-                }
-
-                result.append(character);
-            }
-
-            throw new IllegalArgumentException("Unterminated quoted " + fieldName);
         }
 
         private void skipWhitespace() {

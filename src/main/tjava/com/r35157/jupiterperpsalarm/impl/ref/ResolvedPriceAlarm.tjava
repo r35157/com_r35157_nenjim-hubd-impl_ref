@@ -1,14 +1,10 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
-import com.r35157.jupiterperpsalarm.AlarmSeverity;
-
 public record ResolvedPriceAlarm(
         int id,
         JupiterPerpsAsset asset,
         PriceCondition condition,
         AlarmTrigger trigger,
-        ΩsecondsΩ triggerGracePeriod,
-        AlarmSeverity severity,
-        String note
+        ΩsecondsΩ triggerGracePeriod
 ) {
 }

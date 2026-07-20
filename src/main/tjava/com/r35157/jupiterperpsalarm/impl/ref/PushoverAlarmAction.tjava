@@ -15,8 +15,12 @@ import java.util.Objects;
 
 public final class PushoverAlarmAction implements ConfiguredAlarmAction {
 
-    public PushoverAlarmAction(Path configurationDirectory) throws IOException {
+    public PushoverAlarmAction(
+            Path configurationDirectory,
+            AlarmVariableResolver variableResolver
+    ) throws IOException {
         Objects.requireNonNull(configurationDirectory, "configurationDirectory");
+        this.variableResolver = Objects.requireNonNull(variableResolver, "variableResolver");
         configuration = PushoverAlarmActionConfigurationParser.parse(
                 configurationDirectory.resolve(getConfigurationFileName())
         );
@@ -36,7 +40,12 @@ public final class PushoverAlarmAction implements ConfiguredAlarmAction {
         }
 
         String title = "Jupiter Perps " + price.asset() + " alarm";
-        String message = createMessage(price, alarm, notification);
+        String message = createMessage(
+                price,
+                alarm,
+                notification.severity(),
+                variableResolver.resolve(notification.note())
+        );
 
         String body = form("token", configuration.applicationToken()) + "&" +
                 form("user", configuration.userKey()) + "&" +
@@ -88,13 +97,14 @@ public final class PushoverAlarmAction implements ConfiguredAlarmAction {
     private static String createMessage(
             OraclePrice price,
             ResolvedPriceAlarm alarm,
-            PushoverAlarmActionConfiguration.Notification notification
+            AlarmSeverity severity,
+            String note
     ) {
         return String.format(
                 "%d - %s: %s%n%n%s is %s USD.%nCondition: %s USD.%nOracle time: %s.%nSlot: %d.",
                 alarm.id(),
-                notification.severity(),
-                notification.note(),
+                severity,
+                note,
                 price.asset(),
                 price.priceUsd().toPlainString(),
                 alarm.condition().expression(),
@@ -105,6 +115,7 @@ public final class PushoverAlarmAction implements ConfiguredAlarmAction {
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final PushoverAlarmActionConfiguration configuration;
+    private final AlarmVariableResolver variableResolver;
 
     private static final URI PUSHOVER_URI =
             URI.create("https://api.pushover.net/1/messages.json");

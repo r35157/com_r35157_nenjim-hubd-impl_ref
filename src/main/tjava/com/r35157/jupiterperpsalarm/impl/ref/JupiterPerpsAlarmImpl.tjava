@@ -91,7 +91,10 @@ public final class JupiterPerpsAlarmImpl {
                 solanaBlockChain,
                 jupiterPerpsService
         ));
-        actions.add(new PushoverAlarmAction(alarmConfigurationDirectory));
+        actions.add(new PushoverAlarmAction(
+                alarmConfigurationDirectory,
+                variableResolver
+        ));
 
         AlarmAction action = new CompositeAlarmAction(actions);
         Map<JupiterPerpsAsset, List<PriceAlarmDefinition>> definitionsByAsset =
@@ -135,10 +138,9 @@ public final class JupiterPerpsAlarmImpl {
                     asset.oracleAccount()
             );
             assetDefinitions.forEach(definition -> System.out.printf(
-                    "    %s USD, %s, severity=%s%n",
+                    "    %s USD, %s%n",
                     definition.conditionExpression(),
-                    definition.trigger(),
-                    definition.severity()
+                    definition.trigger()
             ));
         });
         System.out.println("RPC endpoints per asset: " + config.webSocketEndpoints().size());

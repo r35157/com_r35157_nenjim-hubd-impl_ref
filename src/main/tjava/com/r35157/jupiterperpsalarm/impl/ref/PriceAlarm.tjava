@@ -95,27 +95,12 @@ public final class PriceAlarm {
         triggerCount++;
         lastTriggeredAt = Instant.now();
 
-        String note;
-
-        try {
-            note = variableResolver.resolve(definition.note());
-        } catch (RuntimeException exception) {
-            System.err.printf(
-                    "Could not resolve note for alarm %d: %s%n",
-                    definition.id(),
-                    exception.getMessage()
-            );
-            return;
-        }
-
         ResolvedPriceAlarm resolvedAlarm = new ResolvedPriceAlarm(
                 definition.id(),
                 definition.asset(),
                 condition,
                 definition.trigger(),
-                definition.triggerGracePeriod(),
-                definition.severity(),
-                note
+                definition.triggerGracePeriod()
         );
 
         action.trigger(price, resolvedAlarm);
