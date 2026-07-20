@@ -15,14 +15,17 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
     public JupiterPerpsPositionIncreaseAlarmAction(
             Path configurationDirectory,
             SolanaBlockChain solanaBlockChain,
-            JupiterPerpsService jupiter
+            JupiterPerpsService jupiter,
+            AlarmVariableResolver variableResolver
     ) throws IOException {
         Objects.requireNonNull(configurationDirectory, "configurationDirectory");
         Objects.requireNonNull(solanaBlockChain, "solanaBlockChain");
         this.jupiter = Objects.requireNonNull(jupiter, "jupiter");
+        this.variableResolver = Objects.requireNonNull(variableResolver, "variableResolver");
 
         configuration = JupiterPerpsPositionIncreaseAlarmActionConfigurationParser.parse(
-                configurationDirectory.resolve(getConfigurationFileName())
+                configurationDirectory.resolve(getConfigurationFileName()),
+                variableResolver
         );
         wallet = new SolanaWalletImpl(
                 configuration.walletId(),
@@ -38,13 +41,16 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
 
     @Override
     public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
-        JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease positionIncrease =
+        JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease definition =
                 configuration.positionIncreases().get(alarm.id());
-        if (positionIncrease == null) {
+        if (definition == null) {
             return;
         }
 
         try {
+            JupiterPerpsPositionIncreaseAlarmActionConfiguration.ResolvedPositionIncrease
+                    positionIncrease = definition.resolve(variableResolver);
+
             SolanaUnsignedTransaction utrans =
                     jupiter.buildPositionIncreaseTransaction(
                             wallet.getAddress(),
@@ -65,4 +71,5 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
     private final JupiterPerpsPositionIncreaseAlarmActionConfiguration configuration;
     private final SolanaWallet wallet;
     private final JupiterPerpsService jupiter;
+    private final AlarmVariableResolver variableResolver;
 }

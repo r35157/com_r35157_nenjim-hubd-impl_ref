@@ -22,7 +22,8 @@ public final class PushoverAlarmAction implements ConfiguredAlarmAction {
         Objects.requireNonNull(configurationDirectory, "configurationDirectory");
         this.variableResolver = Objects.requireNonNull(variableResolver, "variableResolver");
         configuration = PushoverAlarmActionConfigurationParser.parse(
-                configurationDirectory.resolve(getConfigurationFileName())
+                configurationDirectory.resolve(getConfigurationFileName()),
+                variableResolver
         );
     }
 

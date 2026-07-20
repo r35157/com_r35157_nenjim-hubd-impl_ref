@@ -1,5 +1,6 @@
 # Pushover credentials
 ##########################################
+# Values and notes may reference {{VARIABLES}} defined in alarms.conf.
 APPLICATION_TOKEN  <pushover-application-token>
 USER_KEY           <pushover-user-key>
 

@@ -9,9 +9,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 public final class PushoverAlarmActionConfigurationParser {
-    public static PushoverAlarmActionConfiguration parse(Path path) throws IOException {
+    public static PushoverAlarmActionConfiguration parse(
+            Path path,
+            AlarmVariableResolver variableResolver
+    ) throws IOException {
+        Objects.requireNonNull(variableResolver, "variableResolver");
         List<String> lines = Files.readAllLines(path);
         Map<Integer, PushoverAlarmActionConfiguration.Notification> notifications =
                 new LinkedHashMap<>();
@@ -35,17 +40,26 @@ public final class PushoverAlarmActionConfigurationParser {
                         if (applicationToken != null) {
                             throw new IllegalArgumentException("Duplicate APPLICATION_TOKEN");
                         }
-                        applicationToken = cursor.nextToken("application token");
+                        applicationToken = variableResolver.resolve(
+                                cursor.nextToken("application token")
+                        );
                         cursor.requireEndOrComment();
                     }
                     case "USER_KEY" -> {
                         if (userKey != null) {
                             throw new IllegalArgumentException("Duplicate USER_KEY");
                         }
-                        userKey = cursor.nextToken("user key");
+                        userKey = variableResolver.resolve(
+                                cursor.nextToken("user key")
+                        );
                         cursor.requireEndOrComment();
                     }
-                    default -> parseNotification(firstToken, cursor, notifications);
+                    default -> parseNotification(
+                            firstToken,
+                            cursor,
+                            notifications,
+                            variableResolver
+                    );
                 }
             } catch (RuntimeException exception) {
                 throw new IllegalArgumentException(
@@ -72,7 +86,8 @@ public final class PushoverAlarmActionConfigurationParser {
     private static void parseNotification(
             String alarmIdText,
             Cursor cursor,
-            Map<Integer, PushoverAlarmActionConfiguration.Notification> notifications
+            Map<Integer, PushoverAlarmActionConfiguration.Notification> notifications,
+            AlarmVariableResolver variableResolver
     ) {
         int alarmId;
         try {
@@ -85,9 +100,11 @@ public final class PushoverAlarmActionConfigurationParser {
         }
 
         AlarmSeverity severity = AlarmSeverity.valueOf(
-                cursor.nextToken("severity").toUpperCase(Locale.ROOT)
+                variableResolver.resolve(cursor.nextToken("severity"))
+                        .toUpperCase(Locale.ROOT)
         );
         String note = cursor.nextQuotedString("note");
+        variableResolver.resolve(note);
         cursor.requireEndOrComment();
 
         PushoverAlarmActionConfiguration.Notification previous = notifications.putIfAbsent(

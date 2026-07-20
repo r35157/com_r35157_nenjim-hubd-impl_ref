@@ -3,6 +3,7 @@ package com.r35157.jupiterperpsalarm.impl.ref;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 
 import java.math.BigDecimal;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -25,13 +26,53 @@ public record JupiterPerpsPositionIncreaseAlarmActionConfiguration(
     }
 
     public record PositionIncrease(
+            String assetExpression,
+            String directionExpression,
+            String collateralUsdExpression,
+            String sizeUsdDeltaExpression,
+            String maxSlippageBpsExpression
+    ) {
+        public PositionIncrease {
+            requireNonBlank(assetExpression, "asset");
+            requireNonBlank(directionExpression, "direction");
+            requireNonBlank(collateralUsdExpression, "collateral");
+            requireNonBlank(sizeUsdDeltaExpression, "position size delta");
+            requireNonBlank(maxSlippageBpsExpression, "maximum slippage");
+        }
+
+        public ResolvedPositionIncrease resolve(AlarmVariableResolver variableResolver) {
+            Objects.requireNonNull(variableResolver, "variableResolver");
+
+            return new ResolvedPositionIncrease(
+                    JupiterPerpsAsset.valueOf(
+                            variableResolver.resolve(assetExpression).toUpperCase(Locale.ROOT)
+                    ),
+                    JupiterPerpsPositionDirection.valueOf(
+                            variableResolver.resolve(directionExpression)
+                                    .toUpperCase(Locale.ROOT)
+                    ),
+                    new ΩUSDCAmountΩ(variableResolver.resolve(collateralUsdExpression)),
+                    new ΩUSDCAmountΩ(variableResolver.resolve(sizeUsdDeltaExpression)),
+                    Integer.parseInt(variableResolver.resolve(maxSlippageBpsExpression))
+            );
+        }
+
+        private static void requireNonBlank(String value, String fieldName) {
+            Objects.requireNonNull(value, fieldName);
+            if (value.isBlank()) {
+                throw new IllegalArgumentException(fieldName + " cannot be blank");
+            }
+        }
+    }
+
+    public record ResolvedPositionIncrease(
             JupiterPerpsAsset asset,
             JupiterPerpsPositionDirection direction,
             ΩUSDCAmountΩ collateralUsd,
             ΩUSDCAmountΩ sizeUsdDelta,
             int maxSlippageBps
     ) {
-        public PositionIncrease {
+        public ResolvedPositionIncrease {
             Objects.requireNonNull(asset, "asset");
             Objects.requireNonNull(direction, "direction");
             Objects.requireNonNull(collateralUsd, "collateralUsd");

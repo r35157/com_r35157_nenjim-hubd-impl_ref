@@ -1,20 +1,20 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
-import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
-
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
     public static JupiterPerpsPositionIncreaseAlarmActionConfiguration parse(
-            Path path
+            Path path,
+            AlarmVariableResolver variableResolver
     ) throws IOException {
+        Objects.requireNonNull(variableResolver, "variableResolver");
         List<String> lines = Files.readAllLines(path);
         Map<Integer, JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease>
                 positionIncreases = new LinkedHashMap<>();
@@ -36,15 +36,19 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
                     if (walletId != null) {
                         throw new IllegalArgumentException("Duplicate WALLET_ID");
                     }
-                    walletId = columns[1];
+                    walletId = variableResolver.resolve(columns[1]);
                 } else if (firstColumn.equals("SIGNER_KEY_NAME")) {
                     requireColumnCount(columns, 2, "SIGNER_KEY_NAME value");
                     if (signerKeyName != null) {
                         throw new IllegalArgumentException("Duplicate SIGNER_KEY_NAME");
                     }
-                    signerKeyName = columns[1];
+                    signerKeyName = variableResolver.resolve(columns[1]);
                 } else {
-                    parsePositionIncrease(columns, positionIncreases);
+                    parsePositionIncrease(
+                            columns,
+                            positionIncreases,
+                            variableResolver
+                    );
                 }
             } catch (RuntimeException exception) {
                 throw new IllegalArgumentException(
@@ -71,7 +75,8 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
     private static void parsePositionIncrease(
             String[] columns,
             Map<Integer, JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease>
-                    positionIncreases
+                    positionIncreases,
+            AlarmVariableResolver variableResolver
     ) {
         requireColumnCount(
                 columns,
@@ -80,30 +85,21 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
         );
 
         int alarmId = Integer.parseInt(columns[0]);
-        JupiterPerpsAsset asset = JupiterPerpsAsset.valueOf(
-                columns[1].toUpperCase(Locale.ROOT)
-        );
-        JupiterPerpsPositionDirection direction = JupiterPerpsPositionDirection.valueOf(
-                columns[2].toUpperCase(Locale.ROOT)
-        );
-        ΩUSDCAmountΩ collateralUsd = new ΩUSDCAmountΩ(columns[3]);
-        ΩUSDCAmountΩ sizeUsdDelta = new ΩUSDCAmountΩ(columns[4]);
-        int maxSlippageBps = Integer.parseInt(columns[5]);
-
-        JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease previous =
-                positionIncreases.putIfAbsent(
-                        alarmId,
-                        new JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease(
-                                asset,
-                                direction,
-                                collateralUsd,
-                                sizeUsdDelta,
-                                maxSlippageBps
-                        )
-                );
-        if (previous != null) {
+        if (positionIncreases.containsKey(alarmId)) {
             throw new IllegalArgumentException("Duplicate alarm id: " + alarmId);
         }
+
+        JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease positionIncrease =
+                new JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease(
+                        columns[1],
+                        columns[2],
+                        columns[3],
+                        columns[4],
+                        columns[5]
+                );
+
+        positionIncrease.resolve(variableResolver);
+        positionIncreases.put(alarmId, positionIncrease);
     }
 
     private static void requireColumnCount(
