@@ -16,35 +16,35 @@
 #{{BTC_SHORT_LIQ_PRICE}}    63275.97
 
 
-# Id   Asset   Condition                        Trigger           Severity   Note
+# Id   Asset   Condition                                                   Trigger           Severity   Note
 #################################################################################################################################
 
 # SOL SHORT
-1      SOL     >={{SOL_SHORT_LIQ_PRICE}}-1%     PERSISTENT:60     CRITICAL   "🚨 SOL Short add 1.1x"
-2      SOL     >={{SOL_SHORT_LIQ_PRICE}}-3%     PERSISTENT:3600   INFO       "🌱 SOL Short add 3x"
-3      SOL     <={{SOL_SHORT_ENTRY_PRICE}}-3%   PERSISTENT:3600   INFO       "💵 SOL Short close"
+1      SOL     >={{SOL_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:60     CRITICAL   "🚨 SOL Add Short add 1.1x"
+2      SOL     [{{SOL_SHORT_LIQ_PRICE}}-3%-->{{SOL_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:3600   INFO       "🌱 SOL Short add 3x"
+3      SOL     <={{SOL_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:3600   INFO       "💵 SOL Short close"
 
 # SOL LONG
-4      SOL     <={{SOL_LONG_LIQ_PRICE}}+1%      PERSISTENT:60     CRITICAL   "🚨 SOL Long add 1.1x"
-5      SOL     <={{SOL_LONG_LIQ_PRICE}}+3%      PERSISTENT:3600   INFO       "🌱 SOL Long add 3x"
-6      SOL     >={{SOL_LONG_ENTRY_PRICE}}+3%    PERSISTENT:3600   INFO       "💵 SOL Long close"
+4      SOL     <={{SOL_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:60     CRITICAL   "🚨 SOL Long add 1.1x"
+5      SOL     ({{SOL_LONG_LIQ_PRICE}}+1%-->{{SOL_LONG_LIQ_PRICE}}+3%]     PERSISTENT:3600   INFO       "🌱 SOL Long add 3x"
+6      SOL     >={{SOL_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:3600   INFO       "💵 SOL Long close"
 
 # ETH SHORT
-7      ETH     >={{ETH_SHORT_LIQ_PRICE}}-1%     PERSISTENT:60     CRITICAL   "🚨 ETH Short add 1.1x"
-8      ETH     >={{ETH_SHORT_LIQ_PRICE}}-3%     PERSISTENT:3600   INFO       "🌱 ETH Short add 3x"
-9      ETH     <={{ETH_SHORT_ENTRY_PRICE}}-3%   PERSISTENT:3600   INFO       "💵 ETH Short close"
+7      ETH     >={{ETH_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:60     CRITICAL   "🚨 ETH Short add 1.1x"
+8      ETH     [{{ETH_SHORT_LIQ_PRICE}}-3%-->{{ETH_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:3600   INFO       "🌱 ETH Short add 3x"
+9      ETH     <={{ETH_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:3600   INFO       "💵 ETH Short close"
 
 # ETH LONG
-10     ETH     <={{ETH_LONG_LIQ_PRICE}}+1%      PERSISTENT:60     CRITICAL   "🚨 ETH Long add 1.1x"
-11     ETH     <={{ETH_LONG_LIQ_PRICE}}+1%      PERSISTENT:3600   INFO       "🌱 ETH Long add 3x"
-12     ETH     >={{ETH_LONG_ENTRY_PRICE}}+3%    PERSISTENT:3600   INFO       "💵 ETH Long close"
+10     ETH     <={{ETH_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:60     CRITICAL   "🚨 ETH Long add 1.1x"
+11     ETH     ({{ETH_LONG_LIQ_PRICE}}+1%-->{{ETH_LONG_LIQ_PRICE}}+3%]     PERSISTENT:3600   INFO       "🌱 ETH Long add 3x"
+12     ETH     >={{ETH_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:3600   INFO       "💵 ETH Long close"
 
 # BTC SHORT
-13     BTC     >={{BTC_SHORT_LIQ_PRICE}}-1%     PERSISTENT:60     CRITICAL   "🚨 BTC Short add 1.1x"
-14     BTC     >={{BTC_SHORT_LIQ_PRICE}}-1%     PERSISTENT:3600   INFO       "🌱 BTC Short add 3x"
-15     BTC     <={{BTC_SHORT_ENTRY_PRICE}}-3%   PERSISTENT:3600   INFO       "💵 BTC Short close"
+13     BTC     >={{BTC_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:60     CRITICAL   "🚨 BTC Short add 1.1x"
+14     BTC     [{{BTC_SHORT_LIQ_PRICE}}-3%-->{{BTC_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:3600   INFO       "🌱 BTC Short add 3x"
+15     BTC     <={{BTC_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:3600   INFO       "💵 BTC Short close"
 
 # BTC LONG
-16     BTC     <={{BTC_LONG_LIQ_PRICE}}+0.5%    PERSISTENT:60     CRITICAL   "🚨 BTC Long add 1.1x"
-17     BTC     <={{BTC_LONG_LIQ_PRICE}}+1%      PERSISTENT:3600   INFO       "🌱 BTC Long add 3x"
-18     BTC     >={{BTC_LONG_ENTRY_PRICE}}+3%    PERSISTENT:3600   INFO       "💵 BTC Long close"
+16     BTC     <={{BTC_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:60     CRITICAL   "🚨 BTC Long add 1.1x"
+17     BTC     ({{BTC_LONG_LIQ_PRICE}}+1%-->{{BTC_LONG_LIQ_PRICE}}+3%]     PERSISTENT:3600   INFO       "🌱 BTC Long add 3x"
+18     BTC     >={{BTC_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:3600   INFO       "💵 BTC Long close"
