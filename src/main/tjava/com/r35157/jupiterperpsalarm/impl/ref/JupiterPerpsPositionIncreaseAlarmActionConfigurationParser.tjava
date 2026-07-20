@@ -1,0 +1,128 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
+    public static JupiterPerpsPositionIncreaseAlarmActionConfiguration parse(
+            Path path
+    ) throws IOException {
+        List<String> lines = Files.readAllLines(path);
+        Map<Integer, JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease>
+                positionIncreases = new LinkedHashMap<>();
+        ΩSolanaWalletIdΩ walletId = null;
+        String signerKeyName = null;
+
+        for (int lineNumber = 1; lineNumber <= lines.size(); lineNumber++) {
+            String line = removeComment(lines.get(lineNumber - 1)).trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            try {
+                String[] columns = line.split("\\s+");
+                String firstColumn = columns[0].toUpperCase(Locale.ROOT);
+
+                if (firstColumn.equals("WALLET_ID")) {
+                    requireColumnCount(columns, 2, "WALLET_ID value");
+                    if (walletId != null) {
+                        throw new IllegalArgumentException("Duplicate WALLET_ID");
+                    }
+                    walletId = columns[1];
+                } else if (firstColumn.equals("SIGNER_KEY_NAME")) {
+                    requireColumnCount(columns, 2, "SIGNER_KEY_NAME value");
+                    if (signerKeyName != null) {
+                        throw new IllegalArgumentException("Duplicate SIGNER_KEY_NAME");
+                    }
+                    signerKeyName = columns[1];
+                } else {
+                    parsePositionIncrease(columns, positionIncreases);
+                }
+            } catch (RuntimeException exception) {
+                throw new IllegalArgumentException(
+                        path + ":" + lineNumber + ": " + exception.getMessage(),
+                        exception
+                );
+            }
+        }
+
+        if (walletId == null) {
+            throw new IllegalArgumentException("Missing WALLET_ID in " + path);
+        }
+        if (signerKeyName == null) {
+            throw new IllegalArgumentException("Missing SIGNER_KEY_NAME in " + path);
+        }
+
+        return new JupiterPerpsPositionIncreaseAlarmActionConfiguration(
+                walletId,
+                signerKeyName,
+                positionIncreases
+        );
+    }
+
+    private static void parsePositionIncrease(
+            String[] columns,
+            Map<Integer, JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease>
+                    positionIncreases
+    ) {
+        requireColumnCount(
+                columns,
+                6,
+                "alarm id, asset, direction, collateral, size delta, and maximum slippage"
+        );
+
+        int alarmId = Integer.parseInt(columns[0]);
+        JupiterPerpsAsset asset = JupiterPerpsAsset.valueOf(
+                columns[1].toUpperCase(Locale.ROOT)
+        );
+        JupiterPerpsPositionDirection direction = JupiterPerpsPositionDirection.valueOf(
+                columns[2].toUpperCase(Locale.ROOT)
+        );
+        ΩUSDCAmountΩ collateralUsd = new ΩUSDCAmountΩ(columns[3]);
+        ΩUSDCAmountΩ sizeUsdDelta = new ΩUSDCAmountΩ(columns[4]);
+        int maxSlippageBps = Integer.parseInt(columns[5]);
+
+        JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease previous =
+                positionIncreases.putIfAbsent(
+                        alarmId,
+                        new JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease(
+                                asset,
+                                direction,
+                                collateralUsd,
+                                sizeUsdDelta,
+                                maxSlippageBps
+                        )
+                );
+        if (previous != null) {
+            throw new IllegalArgumentException("Duplicate alarm id: " + alarmId);
+        }
+    }
+
+    private static void requireColumnCount(
+            String[] columns,
+            int expected,
+            String expectedColumns
+    ) {
+        if (columns.length != expected) {
+            throw new IllegalArgumentException(
+                    "Expected " + expectedColumns + ", but found " + columns.length + " column(s)"
+            );
+        }
+    }
+
+    private static String removeComment(String line) {
+        int commentStart = line.indexOf('#');
+        return commentStart < 0 ? line : line.substring(0, commentStart);
+    }
+
+    private JupiterPerpsPositionIncreaseAlarmActionConfigurationParser() {
+    }
+}

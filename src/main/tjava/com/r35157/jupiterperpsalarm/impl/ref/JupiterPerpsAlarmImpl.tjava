@@ -1,7 +1,5 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
-import com.r35157.cryptowallet.solana.SolanaWallet;
-import com.r35157.cryptowallet.solana.impl.ref.SolanaWalletImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.jupiter.perps.impl.anchoridl.AnchorIdlJupiterPerpsServiceImpl;
 import com.r35157.libs.objcache.ObjectCache;
@@ -88,11 +86,11 @@ public final class JupiterPerpsAlarmImpl {
 
         List<AlarmAction> actions = new ArrayList<>();
         actions.add(new ConsoleAlarmAction(alarmConfigurationDirectory));
-        SolanaBlockChain sbc = new SolanaBlockChainImpl();
-        JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
-        ΩSolanaWalletIdΩ walletId = "vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf";
-        SolanaWallet wallet = new SolanaWalletImpl(walletId, "evelyn-prod", sbc);
-        actions.add(new JupiterPerpsPositionIncreaseAlarmAction(wallet, jupiter));
+        actions.add(new JupiterPerpsPositionIncreaseAlarmAction(
+                alarmConfigurationDirectory,
+                solanaBlockChain,
+                jupiterPerpsService
+        ));
         actions.add(new PushoverAlarmAction(alarmConfigurationDirectory));
 
         AlarmAction action = new CompositeAlarmAction(actions);

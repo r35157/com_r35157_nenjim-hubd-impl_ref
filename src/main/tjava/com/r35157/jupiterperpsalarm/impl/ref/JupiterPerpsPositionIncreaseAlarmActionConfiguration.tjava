@@ -1,0 +1,58 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
+
+import java.math.BigDecimal;
+import java.util.Map;
+import java.util.Objects;
+
+public record JupiterPerpsPositionIncreaseAlarmActionConfiguration(
+        ΩSolanaWalletIdΩ walletId,
+        String signerKeyName,
+        Map<Integer, PositionIncrease> positionIncreases
+) {
+    public JupiterPerpsPositionIncreaseAlarmActionConfiguration {
+        Objects.requireNonNull(walletId, "walletId");
+        Objects.requireNonNull(signerKeyName, "signerKeyName");
+        positionIncreases = Map.copyOf(positionIncreases);
+
+        if (walletId.isBlank()) {
+            throw new IllegalArgumentException("Wallet id cannot be blank");
+        }
+        if (signerKeyName.isBlank()) {
+            throw new IllegalArgumentException("Signer key name cannot be blank");
+        }
+    }
+
+    public record PositionIncrease(
+            JupiterPerpsAsset asset,
+            JupiterPerpsPositionDirection direction,
+            ΩUSDCAmountΩ collateralUsd,
+            ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) {
+        public PositionIncrease {
+            Objects.requireNonNull(asset, "asset");
+            Objects.requireNonNull(direction, "direction");
+            Objects.requireNonNull(collateralUsd, "collateralUsd");
+            Objects.requireNonNull(sizeUsdDelta, "sizeUsdDelta");
+
+            if (collateralUsd.signum() <= 0) {
+                throw new IllegalArgumentException(
+                        "Collateral must be greater than zero: " + collateralUsd
+                );
+            }
+            if (sizeUsdDelta.signum() < 0) {
+                throw new IllegalArgumentException(
+                        "Position size delta cannot be negative: " + sizeUsdDelta
+                );
+            }
+            if (maxSlippageBps < 0 || maxSlippageBps > 10_000) {
+                throw new IllegalArgumentException(
+                        "Maximum slippage must be between 0 and 10000 basis points: "
+                                + maxSlippageBps
+                );
+            }
+        }
+    }
+}

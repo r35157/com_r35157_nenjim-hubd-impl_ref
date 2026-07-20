@@ -1,0 +1,10 @@
+# Wallet and signer used for position-increase transactions
+################################################################
+WALLET_ID        <SOLANA_WALLET_ID>
+SIGNER_KEY_NAME  <SIGNER>
+
+
+# Id   Asset   Direction   CollateralUSDC   SizeDeltaUSD   MaxSlippageBPS
+############################################################################
+#4     SOL     LONG        0.25             2.50           200
+#5     SOL     LONG        0.25             6.25           200

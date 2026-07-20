@@ -1,17 +1,35 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
 public enum JupiterPerpsAsset {
-    SOL("FYq2BWQ1V5P1WFBqr3qB2Kb5yHVvSv7upzKodgQE5zXh"),
-    ETH("AFZnHPzy4mvVCffrVwhewHbFc93uTHvDSFrVH7GtfXF1"),
-    BTC("hUqAT1KQ7eW1i6Csp9CXYtpPfSAvi835V7wKi5fRfmC");
+    SOL(
+            "FYq2BWQ1V5P1WFBqr3qB2Kb5yHVvSv7upzKodgQE5zXh",
+            "So11111111111111111111111111111111111111112"
+    ),
+    ETH(
+            "AFZnHPzy4mvVCffrVwhewHbFc93uTHvDSFrVH7GtfXF1",
+            "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs"
+    ),
+    BTC(
+            "hUqAT1KQ7eW1i6Csp9CXYtpPfSAvi835V7wKi5fRfmC",
+            "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh"
+    );
 
-    JupiterPerpsAsset(String oracleAccount) {
+    JupiterPerpsAsset(
+            String oracleAccount,
+            ΩSPLMintAddressΩ tradedTokenMint
+    ) {
         this.oracleAccount = oracleAccount;
+        this.tradedTokenMint = tradedTokenMint;
     }
 
     public String oracleAccount() {
         return oracleAccount;
     }
 
+    public ΩSPLMintAddressΩ tradedTokenMint() {
+        return tradedTokenMint;
+    }
+
     private final String oracleAccount;
+    private final ΩSPLMintAddressΩ tradedTokenMint;
 }

@@ -1,17 +1,34 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
 import com.r35157.cryptowallet.solana.SolanaWallet;
-import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
+import com.r35157.cryptowallet.solana.impl.ref.SolanaWalletImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
 
-import java.math.BigDecimal;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Objects;
 
 public final class JupiterPerpsPositionIncreaseAlarmAction implements ConfiguredAlarmAction {
-    public JupiterPerpsPositionIncreaseAlarmAction(SolanaWallet wallet, JupiterPerpsService jupiter) {
-        this.wallet = wallet;
-        this.jupiter = jupiter;
+    public JupiterPerpsPositionIncreaseAlarmAction(
+            Path configurationDirectory,
+            SolanaBlockChain solanaBlockChain,
+            JupiterPerpsService jupiter
+    ) throws IOException {
+        Objects.requireNonNull(configurationDirectory, "configurationDirectory");
+        Objects.requireNonNull(solanaBlockChain, "solanaBlockChain");
+        this.jupiter = Objects.requireNonNull(jupiter, "jupiter");
+
+        configuration = JupiterPerpsPositionIncreaseAlarmActionConfigurationParser.parse(
+                configurationDirectory.resolve(getConfigurationFileName())
+        );
+        wallet = new SolanaWalletImpl(
+                configuration.walletId(),
+                configuration.signerKeyName(),
+                solanaBlockChain
+        );
     }
 
     @Override
@@ -21,16 +38,9 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
 
     @Override
     public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
-        ΩUSDCAmountΩ inputTokenAmount = new ΩUSDCAmountΩ("0.25");
-        ΩUSDCAmountΩ sizeUsdDelta;
-
-        if(alarm.id() == 4) {
-            // Critical
-            sizeUsdDelta = new ΩUSDCAmountΩ("2.50");     // Leverage: 10x
-        } else if(alarm.id() == 5) {
-            // Info
-            sizeUsdDelta = new ΩUSDCAmountΩ("6.25");     // Leverage: 25x
-        } else {
+        JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease positionIncrease =
+                configuration.positionIncreases().get(alarm.id());
+        if (positionIncrease == null) {
             return;
         }
 
@@ -38,11 +48,11 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
             SolanaUnsignedTransaction utrans =
                     jupiter.buildPositionIncreaseTransaction(
                             wallet.getAddress(),
-                            SOL_MINT,
-                            JupiterPerpsPositionDirection.LONG,
-                            inputTokenAmount,
-                            sizeUsdDelta,
-                            200
+                            positionIncrease.asset().tradedTokenMint(),
+                            positionIncrease.direction(),
+                            positionIncrease.collateralUsd(),
+                            positionIncrease.sizeUsdDelta(),
+                            positionIncrease.maxSlippageBps()
                     );
             SolanaSignedTransaction strans = wallet.signTransaction(utrans);
             ΩSolanaTransactionSignatureΩ signature = jupiter.executePositionIncreaseTransaction(strans);
@@ -52,9 +62,7 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
         }
     }
 
-    private static final ΩSPLMintAddressΩ SOL_MINT = "So11111111111111111111111111111111111111112";
-    private static final ΩSPLMintAddressΩ BTC_MINT = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
-
-    private SolanaWallet wallet;
-    private JupiterPerpsService jupiter;
+    private final JupiterPerpsPositionIncreaseAlarmActionConfiguration configuration;
+    private final SolanaWallet wallet;
+    private final JupiterPerpsService jupiter;
 }
