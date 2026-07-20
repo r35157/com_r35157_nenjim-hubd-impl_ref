@@ -1,10 +1,10 @@
 # Jupiter Perps Price Alarm
 
-The Jupiter Perps Price Alarm monitors the Jupiter Perps aggregated oracle accounts for SOL, ETH, and BTC. It evaluates configurable price conditions and dispatches matching alarms to the console, an optional Pushover account, and the currently hard-coded Jupiter position-increase action.
+The Jupiter Perps Price Alarm monitors the Jupiter Perps aggregated oracle accounts for SOL, ETH, and BTC. It evaluates configurable price conditions and dispatches matching alarms to independently configured console, Pushover, and Jupiter position-increase actions.
 
 Oracle prices are received through Solana WebSocket `accountSubscribe` using `processed` commitment. The application does not poll prices once per second. It also fetches the current oracle account state whenever a WebSocket connection opens, reconnects automatically, and supports multiple RPC endpoints for redundancy.
 
-> **Important:** This application is not currently notification-only. Alarm IDs `4` and `5` can sign and submit real Jupiter Perps position-increase transactions. See [Automatic position increase](#automatic-position-increase) before running it.
+> **Important:** This application is not necessarily notification-only. Every active entry in `alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf` can sign and submit a real Jupiter Perps transaction. See [Automatic position increase](#automatic-position-increase) before running it.
 
 ## Startup flow
 
@@ -15,10 +15,10 @@ The application performs the following steps before it starts monitoring prices:
 3. Populate entry-price and liquidation-price variables.
 4. Resolve and validate every alarm condition.
 5. Start the periodic variable refresher and file-trigger watcher.
-6. Configure console, automatic Jupiter, and optional Pushover actions.
+6. Parse and validate the three action configuration files.
 7. Open one oracle WebSocket connection per configured asset and RPC endpoint.
 
-Startup fails before WebSockets and alarm actions are started if a condition contains an unresolved variable, invalid syntax, or an invalid range.
+Startup fails before WebSockets are opened if an alarm condition or action configuration contains an unresolved variable or invalid value.
 
 ## Requirements and build
 
@@ -60,7 +60,7 @@ java --enable-preview \
   --config=conf/alarms.conf
 ```
 
-The repository contains [the example configuration](conf/alarms.conf.example). Keep the real configuration outside version control if it contains operational wallet details.
+The repository contains example files for the alarm configuration and every action configuration. The real `conf/*.conf` files are ignored by Git; keep credentials and operational wallet details out of version control.
 
 ### Command-line options and environment variables
 
@@ -68,26 +68,42 @@ The repository contains [the example configuration](conf/alarms.conf.example). K
 |---|---|---|---|
 | Alarm configuration | `--config=<path>` | `PRICE_ALARMS_CONFIG` | `price-alarms.conf` |
 | Solana WebSocket endpoints | `--ws=<url1,url2,...>` | `SOLANA_WS_URLS` | `wss://api.mainnet-beta.solana.com` |
-| Pushover application token | — | `PUSHOVER_APP_TOKEN` | Disabled |
-| Pushover user/group key | — | `PUSHOVER_USER_KEY` | Disabled |
 
-The command-line option takes precedence over its environment variable. Pushover is enabled only when both Pushover variables are non-blank.
+The command-line option takes precedence over its environment variable.
 
 The variable-refresh file watcher uses the configuration file's parent directory. Until that is changed, use a configuration path with an explicit directory component, such as `conf/alarms.conf` or `./price-alarms.conf`, rather than relying on the bare default filename.
 
-## Configuration format
+## Configuration files
 
-Blank lines and lines beginning with `#` are ignored. The file contains variable definitions and alarm definitions.
+The application uses four configuration files:
+
+| File | Purpose |
+|---|---|
+| `alarms.conf` | Variables and price-alarm definitions |
+| `alarmaction_Console.conf` | Alarm IDs written to the console |
+| `alarmaction_Pushover.conf` | Pushover credentials and notifications |
+| `alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf` | Jupiter wallet, signer, and position increases |
+
+The three action files are resolved in the same directory as the file supplied through `--config`. All four files are required at startup, although an action can contain no alarm IDs. Blank lines and lines beginning with `#` are ignored.
+
+Example files:
+
+- [alarms.conf.example](conf/alarms.conf.example)
+- [alarmaction_Console.conf.example](conf/alarmaction_Console.conf.example)
+- [alarmaction_Pushover.conf.example](conf/alarmaction_Pushover.conf.example)
+- [alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf.example](conf/alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf.example)
+
+## Shared variables
 
 ### Variable definitions
 
-A variable definition consists of a name and a value:
+Variable definitions live in `alarms.conf`. A definition consists of a name and a single-token value:
 
 ```text
 {{JUPITER_PERPS_WALLET}}  vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf
 ```
 
-Variable names must use uppercase letters, digits, and underscores. Variables can be referenced in conditions and notes as `{{NAME}}`.
+Variable names must use uppercase letters, digits, and underscores. User-defined variables can be referenced from alarm conditions and action configuration values as `{{NAME}}`.
 
 `JUPITER_PERPS_WALLET` is required for the initial and periodic Jupiter position fetches. For open SOL, BTC, and ETH positions, the refresher supplies these dynamic variables:
 
@@ -100,33 +116,35 @@ Variable names must use uppercase letters, digits, and underscores. Variables ca
 {{ETH_SHORT_ENTRY_PRICE}}      {{ETH_SHORT_LIQ_PRICE}}
 ```
 
-Only variables for positions returned by Jupiter are populated. Startup validation fails if an alarm references a variable that is unavailable after the initial position fetch.
+The refresher replaces user-supplied variables with these names when position data is fetched. Only variables for positions returned by Jupiter are populated. Startup validation fails if a condition or action value references a variable that is unavailable after the initial position fetch.
 
-### Alarm definitions
+Alarm conditions, Pushover notes, and Jupiter position-increase rows are resolved again when an alarm triggers, so refreshed values take effect without restarting the application. Pushover credentials and severity plus the Jupiter wallet and signer are resolved during startup.
 
-Each alarm is one line with six columns:
+## Alarm definitions
+
+Each alarm is one line with four columns:
 
 ```text
-ID  ASSET  CONDITION  TRIGGER  SEVERITY  "NOTE"
+ID  ASSET  CONDITION  TRIGGER
 ```
 
 Example:
 
 ```text
-4  SOL  <={{SOL_LONG_LIQ_PRICE}}+1%  PERSISTENT:60  CRITICAL  "🚨 SOL Long add 1.1x"
-5  SOL  ({{SOL_LONG_LIQ_PRICE}}+1%-->{{SOL_LONG_LIQ_PRICE}}+3%]  PERSISTENT:3600  INFO  "🌱 SOL Long add 3x"
+4  SOL  <={{SOL_LONG_LIQ_PRICE}}+1%  PERSISTENT:60
+5  SOL  ({{SOL_LONG_LIQ_PRICE}}+1%-->{{SOL_LONG_LIQ_PRICE}}+3%]  PERSISTENT:3600
 ```
 
 Supported column values:
 
-- `ID`: integer alarm identifier. IDs should be unique. IDs `4` and `5` have special transaction behavior in the current implementation.
+- `ID`: integer alarm identifier. IDs should be unique. Action files use this ID to select alarms.
 - `ASSET`: `SOL`, `ETH`, or `BTC`.
 - `CONDITION`: a comparison or range expression. It must be one token with no whitespace.
 - `TRIGGER`: `ONETIME`, `PERSISTENT`, or `PERSISTENT:<seconds>`.
-- `SEVERITY`: `EMERGENCY`, `CRITICAL`, `WARN`, `INFO`, `SILENT`, or `GHOST`.
-- `NOTE`: quoted text. Supported escapes include `\n`, `\r`, `\t`, `\"`, and `\\`.
 
-A trailing comment is allowed after a variable value or the quoted note.
+A trailing comment is allowed after a variable value or trigger.
+
+An alarm can be listed in zero, one, or several action files. Absence means that action ignores the alarm; absence from all action files means that the condition is monitored but produces no action.
 
 ## Condition expressions
 
@@ -230,15 +248,34 @@ When a dynamic price variable changes, the application logs its old and new valu
 
 ## Alarm actions
 
+Actions are executed sequentially through `CompositeAlarmAction`. A runtime failure in one action is logged so the remaining actions can still run.
+
 ### Console
 
-Console output is always enabled. It includes the asset, current oracle price, resolved condition, trigger type, oracle time, slot, and source endpoint.
+`alarmaction_Console.conf` contains one alarm ID per line:
 
-Actions are executed sequentially through `CompositeAlarmAction`. A runtime failure in one action is logged so the remaining actions can still run.
+```text
+1
+4
+5
+```
+
+Only listed alarms are written to the console. The output includes the asset, current oracle price, resolved condition, trigger type, oracle time, slot, and source endpoint. Duplicate or non-integer IDs are rejected. An empty file disables console output for all alarms.
 
 ### Pushover
 
-Pushover is enabled when both `PUSHOVER_APP_TOKEN` and `PUSHOVER_USER_KEY` are configured.
+`alarmaction_Pushover.conf` contains the credentials followed by zero or more notification definitions:
+
+```text
+APPLICATION_TOKEN  <pushover-application-token>
+USER_KEY            <pushover-user-key>
+
+# ID  SEVERITY  "NOTE"
+4     CRITICAL  "🚨 SOL Long add 1.1x"
+5     INFO      "🌱 SOL Long add 3x"
+```
+
+The application token and user/group key are required. Only listed alarm IDs send a Pushover notification. Notes must be quoted and support `\n`, `\r`, `\t`, `\"`, and `\\` escapes.
 
 | Severity | Pushover parameters |
 |---|---|
@@ -249,26 +286,33 @@ Pushover is enabled when both `PUSHOVER_APP_TOKEN` and `PUSHOVER_USER_KEY` are c
 | `SILENT` | `priority=-1` |
 | `GHOST` | `priority=-2` |
 
-Pushover requests are sent asynchronously with a 15-second request timeout. Rejected requests and asynchronous failures are logged.
+Credentials, severity, and notes may reference shared variables. Credentials and severity are resolved during startup; notes are also resolved for every trigger so refreshed variables take effect. Pushover requests are sent asynchronously with a 15-second request timeout. Rejected requests and asynchronous failures are logged.
 
 ### Automatic position increase
 
-The current reference implementation always registers `JupiterPerpsPositionIncreaseAlarmAction`. It performs no transaction for most alarms, but alarm IDs `4` and `5` have hard-coded live behavior:
-
-| Alarm ID | Asset/direction | USDC collateral | Position-size delta | Maximum slippage |
-|---|---|---:|---:|---:|
-| `4` | SOL long | `0.25` | `2.50` USD | `200` bps |
-| `5` | SOL long | `0.25` | `6.25` USD | `200` bps |
-
-For these IDs, the action builds a Jupiter position-increase transaction, signs it by running the external `jup sign` command with key name `evelyn-prod`, verifies that the returned signer matches the hard-coded wallet address, and submits the signed transaction.
-
-The hard-coded wallet address is:
+`alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf` contains the wallet and signer followed by zero or more position increases:
 
 ```text
-vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf
+WALLET_ID        {{JUPITER_PERPS_WALLET}}
+SIGNER_KEY_NAME  <jup-key-name>
+
+# ID  ASSET  DIRECTION  COLLATERAL_USDC  SIZE_DELTA_USD  MAX_SLIPPAGE_BPS
+4     SOL    LONG       0.25             2.50            200
 ```
 
-Changing which alarm uses ID `4` or `5` does not change this action's hard-coded SOL-long behavior. Treat those IDs as operationally significant, and do not run the application unless the wallet, signer key, amounts, slippage, and conditions have been reviewed.
+Each active row can submit a real transaction when its alarm triggers. Supported values are:
+
+- `ASSET`: `SOL`, `ETH`, or `BTC`.
+- `DIRECTION`: `LONG` or `SHORT`.
+- `COLLATERAL_USDC`: greater than zero.
+- `SIZE_DELTA_USD`: zero or greater.
+- `MAX_SLIPPAGE_BPS`: from `0` to `10000`.
+
+Wallet, signer, asset, direction, amounts, and slippage may reference shared variables. Wallet and signer are resolved during startup. Every transaction row is validated during startup and resolved again at trigger time, allowing refreshed variables to change the transaction parameters without a restart.
+
+For a configured ID, the action builds a Jupiter position-increase transaction, signs it by running `jup sign -f json --key <SIGNER_KEY_NAME> --tx <serialized-transaction>`, verifies that the returned signer matches `WALLET_ID`, and submits the signed transaction. IDs absent from this file never perform a transaction.
+
+The example transaction rows are commented out. Do not activate a row until its alarm condition, wallet, signer, asset, direction, amounts, and slippage have been reviewed.
 
 ## RPC redundancy and reconnect behavior
 
@@ -289,7 +333,7 @@ Each connection:
 
 ## Validation and errors
 
-Structural configuration errors include the file path and line number. After the initial Jupiter position fetch, every condition is resolved and parsed before periodic refresh, WebSockets, and alarm actions are started.
+Structural configuration errors include the file path and line number. After the initial Jupiter position fetch, every condition is resolved and parsed. The action files are then parsed and validated before WebSockets are opened.
 
 Startup validation rejects, among other things:
 
@@ -299,9 +343,13 @@ Startup validation rejects, among other things:
 - malformed ranges or multiple `-->` separators;
 - missing range targets;
 - negative target values or percentages;
-- ranges whose lower target exceeds the upper target.
+- ranges whose lower target exceeds the upper target;
+- missing action credentials or wallet settings;
+- duplicate action IDs;
+- invalid Pushover severities;
+- invalid Jupiter assets, directions, amounts, or slippage.
 
-At runtime, a later resolution/parsing failure is logged for the affected alarm and that price event is skipped for that alarm.
+At runtime, a later condition resolution/parsing failure skips that price event for the affected alarm. A later action-variable failure is logged by the action dispatcher, and the remaining actions are still attempted.
 
 ## Current limitations
 
@@ -310,6 +358,8 @@ At runtime, a later resolution/parsing failure is logged for the affected alarm 
 - Alarm state and grace-period timestamps are kept only in memory and reset on restart.
 - Dynamic variables exist only for currently returned open positions.
 - Target expressions support only a decimal value with an optional single percentage adjustment; they are not a general expression language.
-- The automatic position-increase action is hard-coded to one wallet, signer key, asset, direction, and two alarm IDs.
+- Configuration files are read only during startup; editing an action file requires a restart.
+- Action IDs are not cross-validated against `alarms.conf`; an unknown ID is accepted but never triggered.
+- Pushover credentials and severity plus the Jupiter wallet and signer are resolved only during startup. Dynamic re-resolution applies to conditions, Pushover notes, and Jupiter transaction rows.
 - A bare default configuration path has no parent directory for the refresh watcher; use an explicit path such as `./price-alarms.conf` or `conf/alarms.conf`.
 - This application is a monitoring and automation aid, not a substitute for independent risk controls.
