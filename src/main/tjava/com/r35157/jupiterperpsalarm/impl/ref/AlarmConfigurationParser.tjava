@@ -94,6 +94,10 @@ public final class AlarmConfigurationParser {
             return new TriggerConfiguration(AlarmTrigger.ONETIME, 0);
         }
 
+        if (normalized.equals("CROSSING")) {
+            return new TriggerConfiguration(AlarmTrigger.CROSSING, 0);
+        }
+
         if (normalized.equals("PERSISTENT")) {
             return new TriggerConfiguration(AlarmTrigger.PERSISTENT, 0);
         }
@@ -126,6 +130,10 @@ public final class AlarmConfigurationParser {
 
         if (normalized.startsWith("ONETIME:")) {
             throw new IllegalArgumentException("ONETIME cannot have a grace period: " + triggerText);
+        }
+
+        if (normalized.startsWith("CROSSING:")) {
+            throw new IllegalArgumentException("CROSSING cannot have a grace period: " + triggerText);
         }
 
         throw new IllegalArgumentException("Unknown trigger: " + triggerText);

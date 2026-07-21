@@ -2,5 +2,6 @@ package com.r35157.jupiterperpsalarm.impl.ref;
 
 public enum AlarmTrigger {
     ONETIME,
+    CROSSING,
     PERSISTENT
 }

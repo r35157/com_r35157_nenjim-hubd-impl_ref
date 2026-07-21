@@ -140,7 +140,7 @@ Supported column values:
 - `ID`: integer alarm identifier. IDs should be unique. Action files use this ID to select alarms.
 - `ASSET`: `SOL`, `ETH`, or `BTC`.
 - `CONDITION`: a comparison or range expression. It must be one token with no whitespace.
-- `TRIGGER`: `ONETIME`, `PERSISTENT`, or `PERSISTENT:<seconds>`.
+- `TRIGGER`: `ONETIME`, `CROSSING`, `PERSISTENT`, or `PERSISTENT:<seconds>`.
 
 A trailing comment is allowed after a variable value or trigger.
 
@@ -210,7 +210,7 @@ At exactly `LIQ+1%`, only the first condition matches. The corresponding short-p
 
 ## Trigger behavior
 
-On the first accepted oracle price after startup or reconnect, an already-satisfied alarm can trigger immediately.
+On the first accepted oracle price after startup, an already-satisfied `ONETIME` or `PERSISTENT` alarm can trigger immediately. A `CROSSING` alarm only establishes its initial state.
 
 ### `ONETIME`
 
@@ -218,6 +218,23 @@ On the first accepted oracle price after startup or reconnect, an already-satisf
 - Triggers at most once during the current process lifetime.
 - Leaving and re-entering the condition does not re-arm it.
 - Restarting the application re-arms it because alarm state is held only in memory.
+
+### `CROSSING`
+
+- Triggers when the condition changes from not satisfied to satisfied.
+- The first accepted price establishes the initial state and never triggers the alarm.
+- Remaining inside the condition does not trigger again.
+- Leaving the condition re-arms the alarm, so the next entry triggers again.
+- A grace period is not supported; `CROSSING:<seconds>` is rejected.
+
+The condition determines the crossing direction. For example:
+
+```text
+19  SOL  >={{SOL_LONG_ENTRY_PRICE}}  CROSSING
+20  SOL  <{{SOL_LONG_ENTRY_PRICE}}   CROSSING
+```
+
+Alarm 19 triggers when the price enters the profitable side from below. Alarm 20 triggers when it enters the losing side from above. With a range condition, `CROSSING` triggers whenever the price enters the range from either side.
 
 ### `PERSISTENT`
 

@@ -41,6 +41,10 @@ public final class PriceAlarm {
                 ? reached
                 : reached && !previousReached;
 
+        boolean crossedIntoTriggeredSide = previousReached != null
+                && reached
+                && !previousReached;
+
         previousReached = reached;
 
         if (!reached) {
@@ -54,6 +58,13 @@ public final class PriceAlarm {
             }
 
             trigger(price, condition);
+            return;
+        }
+
+        if (definition.trigger() == AlarmTrigger.CROSSING) {
+            if (crossedIntoTriggeredSide) {
+                trigger(price, condition);
+            }
             return;
         }
 
