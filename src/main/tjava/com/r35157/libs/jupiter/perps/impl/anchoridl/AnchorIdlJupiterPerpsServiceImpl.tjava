@@ -5,6 +5,7 @@ import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.jupiter.perps.protocol.DecreasePositionRequest;
+import com.r35157.libs.jupiter.perps.protocol.DecreasePositionResponse;
 import com.r35157.libs.jupiter.perps.protocol.ExecuteTransactionRequest;
 import com.r35157.libs.jupiter.perps.protocol.ExecuteTransactionResponse;
 import com.r35157.libs.jupiter.perps.protocol.IncreasePositionRequest;
@@ -560,6 +561,76 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         return response;
     }
 
+    private static DecreasePositionResponse requestPositionDecrease(
+            DecreasePositionRequest request
+    ) throws IOException, InterruptedException {
+        String requestJson = OBJECT_MAPPER.writeValueAsString(request);
+
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(DECREASE_POSITION_ENDPOINT)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("x-client-platform", "nenjim-hub")
+                .POST(HttpRequest.BodyPublishers.ofString(requestJson))
+                .build();
+
+        HttpResponse<String> httpResponse = HTTP_CLIENT.send(
+                httpRequest,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        if (httpResponse.statusCode() < 200
+                || httpResponse.statusCode() >= 300) {
+            throw new IOException(
+                    "Jupiter Perps decrease-position request failed with HTTP "
+                            + httpResponse.statusCode()
+                            + ": "
+                            + httpResponse.body()
+            );
+        }
+
+        DecreasePositionResponse response = OBJECT_MAPPER.readValue(
+                httpResponse.body(),
+                DecreasePositionResponse.class
+        );
+
+        TransactionMetadata metadata = response.txMetadata();
+
+        if (metadata == null) {
+            throw new IOException(
+                    "Jupiter Perps response did not contain transaction metadata"
+            );
+        }
+
+        if (metadata.blockhash() == null || metadata.blockhash().isBlank()) {
+            throw new IOException(
+                    "Jupiter Perps response did not contain a blockhash"
+            );
+        }
+
+        long lastValidBlockHeight;
+
+        try {
+            lastValidBlockHeight =
+                    Long.parseLong(metadata.lastValidBlockHeight());
+        } catch (NumberFormatException e) {
+            throw new IOException(
+                    "Invalid lastValidBlockHeight returned by Jupiter: "
+                            + metadata.lastValidBlockHeight(),
+                    e
+            );
+        }
+
+        if (lastValidBlockHeight <= 0) {
+            throw new IOException(
+                    "Invalid lastValidBlockHeight returned by Jupiter: "
+                            + lastValidBlockHeight
+            );
+        }
+
+        return response;
+    }
+
     private static ExecuteTransactionResponse requestTransactionExecution(
             ExecuteTransactionRequest request
     ) throws IOException, InterruptedException {
@@ -603,6 +674,11 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     private static final URI EXECUTE_TRANSACTION_ENDPOINT =
             URI.create(
                     "https://perps-api.jup.ag/v2/transaction/execute"
+            );
+
+    private static final URI DECREASE_POSITION_ENDPOINT =
+            URI.create(
+                    "https://perps-api.jup.ag/v2/positions/decrease"
             );
 
     private static final ΩJupiterPerpsProgramIdΩ JUPITER_PERPS_PROGRAM_ID = "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu";
