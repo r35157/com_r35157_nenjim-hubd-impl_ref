@@ -1,0 +1,20 @@
+package com.r35157.libs.jupiter.perps.protocol;
+
+/**
+ * Jupiter Perps protocol request for constructing an unsigned
+ * position-decrease transaction.
+ *
+ * @param positionPubkey the Solana account address of the position to decrease
+ * @param receiveToken the symbol of the token to receive
+ * @param sizeUsdDelta the requested position-size decrease in micro-USD,
+ *                     encoded as a decimal string
+ * @param maxSlippageBps the maximum accepted slippage in basis points,
+ *                       encoded as a decimal string
+ */
+public record DecreasePositionRequest(
+        String positionPubkey,
+        String receiveToken,
+        String sizeUsdDelta,
+        String maxSlippageBps
+) {
+}
