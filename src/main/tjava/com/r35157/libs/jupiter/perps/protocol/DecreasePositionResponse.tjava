@@ -1,0 +1,24 @@
+package com.r35157.libs.jupiter.perps.protocol;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+/**
+ * Relevant fields returned by Jupiter after constructing an unsigned
+ * position-decrease transaction.
+ *
+ * <p>Additional response fields that are not required by the current
+ * implementation are ignored during decoding.</p>
+ *
+ * @param positionPubkey the Solana account address of the decreased position
+ * @param serializedTxBase64 the complete unsigned Solana transaction,
+ *                           encoded as Base64
+ * @param txMetadata metadata describing the transaction's blockhash
+ *                   and validity period
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record DecreasePositionResponse(
+        String positionPubkey,
+        String serializedTxBase64,
+        TransactionMetadata txMetadata
+) {
+}
