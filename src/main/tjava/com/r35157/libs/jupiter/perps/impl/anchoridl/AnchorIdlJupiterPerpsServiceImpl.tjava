@@ -242,6 +242,14 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         }
     }
 
+    @Override
+    public @NotNull ΩSolanaTransactionSignatureΩ
+    executePositionDecreaseTransaction(
+            @NotNull SolanaSignedTransaction transaction
+    ) throws IOException, InterruptedException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
     private static DecreasePositionRequest buildDecreasePositionRequest(
             ΩJupiterPerpsPositionAccountΩ positionAccount,
             ΩSPLMintAddressΩ receiveTokenMint,

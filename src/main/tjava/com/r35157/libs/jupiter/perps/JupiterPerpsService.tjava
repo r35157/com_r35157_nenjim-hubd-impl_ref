@@ -129,4 +129,27 @@ public interface JupiterPerpsService {
             @NotNull ΩUSDCAmountΩ sizeUsdDelta,
             int maxSlippageBps
     ) throws IOException, InterruptedException;
+
+    /**
+     * Executes a signed Jupiter Perps position-decrease transaction.
+     *
+     * <p>The supplied transaction must previously have been constructed by
+     * {@link #buildPositionDecreaseTransaction} and signed by its required
+     * Solana wallet.</p>
+     *
+     * <p>Unlike the build method, this operation submits the transaction and
+     * may therefore modify blockchain state.</p>
+     *
+     * @param transaction the complete signed position-decrease transaction
+     * @return the Solana transaction signature
+     * @throws IllegalArgumentException if the transaction is missing or blank
+     * @throws IOException if Jupiter rejects the transaction or its response
+     *                     cannot be decoded
+     * @throws InterruptedException if the calling thread is interrupted while
+     *                              communicating with Jupiter
+     */
+    @NotNull
+    ΩSolanaTransactionSignatureΩ executePositionDecreaseTransaction(
+            @NotNull SolanaSignedTransaction transaction
+    ) throws IOException, InterruptedException;
 }
