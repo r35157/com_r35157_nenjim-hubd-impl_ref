@@ -247,7 +247,30 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     executePositionDecreaseTransaction(
             @NotNull SolanaSignedTransaction transaction
     ) throws IOException, InterruptedException {
-        throw new UnsupportedOperationException("Not implemented yet");
+        if (transaction.serializedTransaction() == null
+                || transaction.serializedTransaction().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Signed transaction must not be blank"
+            );
+        }
+
+        ExecuteTransactionRequest request =
+                new ExecuteTransactionRequest(
+                        "decrease-position",
+                        transaction.serializedTransaction()
+                );
+
+        ExecuteTransactionResponse response =
+                requestTransactionExecution(request);
+
+        if (response.txid() == null || response.txid().isBlank()) {
+            throw new IOException(
+                    "Jupiter transaction execution response did not "
+                            + "contain a transaction signature"
+            );
+        }
+
+        return response.txid();
     }
 
     private static DecreasePositionRequest buildDecreasePositionRequest(
