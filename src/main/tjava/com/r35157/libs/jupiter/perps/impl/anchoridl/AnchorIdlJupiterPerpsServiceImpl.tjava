@@ -202,7 +202,44 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
             @NotNull ΩUSDCAmountΩ sizeUsdDelta,
             int maxSlippageBps
     ) throws IOException, InterruptedException {
-        throw new UnsupportedOperationException("Not implemented yet");
+        DecreasePositionRequest request = buildDecreasePositionRequest(
+                positionAccount,
+                receiveTokenMint,
+                sizeUsdDelta,
+                maxSlippageBps
+        );
+
+        DecreasePositionResponse response =
+                requestPositionDecrease(request);
+
+        TransactionMetadata metadata = response.txMetadata();
+
+        if (response.serializedTxBase64() == null
+                || response.serializedTxBase64().isBlank()) {
+            throw new IOException(
+                    "Jupiter Perps response did not contain a serialized transaction"
+            );
+        }
+
+        if (metadata == null) {
+            throw new IOException(
+                    "Jupiter Perps response did not contain transaction metadata"
+            );
+        }
+
+        try {
+            return new SolanaUnsignedTransaction(
+                    response.serializedTxBase64(),
+                    metadata.blockhash(),
+                    Long.parseLong(metadata.lastValidBlockHeight())
+            );
+        } catch (NumberFormatException e) {
+            throw new IOException(
+                    "Invalid lastValidBlockHeight returned by Jupiter: "
+                            + metadata.lastValidBlockHeight(),
+                    e
+            );
+        }
     }
 
     private static DecreasePositionRequest buildDecreasePositionRequest(
