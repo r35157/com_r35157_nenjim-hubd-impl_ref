@@ -103,4 +103,30 @@ public interface JupiterPerpsService {
     ΩSolanaTransactionSignatureΩ executePositionIncreaseTransaction(
             @NotNull SolanaSignedTransaction transaction
     ) throws IOException, InterruptedException;
+
+    /**
+     * Constructs an unsigned Solana transaction for decreasing
+     * an existing Jupiter Perps position.
+     *
+     * <p>This method does not sign or submit the transaction and therefore
+     * does not modify blockchain state. The returned transaction must be
+     * signed by the position owner's wallet and submitted separately.</p>
+     *
+     * @param positionAccount the Jupiter Perps position to decrease
+     * @param receiveTokenMint the mint address of the token to receive
+     * @param sizeUsdDelta the requested decrease in position size, denominated in USD
+     * @param maxSlippageBps the maximum accepted slippage, in basis points
+     * @return the complete unsigned Solana transaction
+     * @throws IllegalArgumentException if an amount, mint, or slippage value is invalid
+     * @throws IOException if Jupiter cannot construct the transaction or its response
+     *                     cannot be decoded
+     * @throws InterruptedException if the calling thread is interrupted while
+     *                              communicating with Jupiter
+     */
+    @NotNull SolanaUnsignedTransaction buildPositionDecreaseTransaction(
+            @NotNull ΩJupiterPerpsPositionAccountΩ positionAccount,
+            @NotNull ΩSPLMintAddressΩ receiveTokenMint,
+            @NotNull ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException;
 }

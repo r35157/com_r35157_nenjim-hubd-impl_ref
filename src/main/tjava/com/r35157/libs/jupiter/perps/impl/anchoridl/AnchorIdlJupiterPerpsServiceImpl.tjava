@@ -193,6 +193,16 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         return response.txid();
     }
 
+    @Override
+    public @NotNull SolanaUnsignedTransaction buildPositionDecreaseTransaction(
+            @NotNull ΩJupiterPerpsPositionAccountΩ positionAccount,
+            @NotNull ΩSPLMintAddressΩ receiveTokenMint,
+            @NotNull ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
     private JupiterPerpsPosition buildPosition(
             ΩJupiterPerpsPositionAccountΩ positionAccount,
             JupiterPerpsPositionInfo perpsPositionInfo
