@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+import com.r35157.libs.jupiter.perps.protocol.DecreasePositionRequest;
 import com.r35157.libs.jupiter.perps.protocol.ExecuteTransactionRequest;
 import com.r35157.libs.jupiter.perps.protocol.ExecuteTransactionResponse;
 import com.r35157.libs.jupiter.perps.protocol.IncreasePositionRequest;
@@ -201,6 +202,42 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
             int maxSlippageBps
     ) throws IOException, InterruptedException {
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    private static DecreasePositionRequest buildDecreasePositionRequest(
+            ΩJupiterPerpsPositionAccountΩ positionAccount,
+            ΩSPLMintAddressΩ receiveTokenMint,
+            ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) {
+        if (positionAccount.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Position account must not be blank"
+            );
+        }
+
+        if (sizeUsdDelta.signum() <= 0) {
+            throw new IllegalArgumentException(
+                    "Position size delta must be greater than zero: "
+                            + sizeUsdDelta
+            );
+        }
+
+        if (maxSlippageBps < 0 || maxSlippageBps > BASIS_POINTS_DIVISOR) {
+            throw new IllegalArgumentException(
+                    "Maximum slippage must be between 0 and "
+                            + BASIS_POINTS_DIVISOR
+                            + " basis points: "
+                            + maxSlippageBps
+            );
+        }
+
+        return new DecreasePositionRequest(
+                positionAccount,
+                toProtocolReceiveToken(receiveTokenMint),
+                toMicroAmount(sizeUsdDelta),
+                Integer.toString(maxSlippageBps)
+        );
     }
 
     private JupiterPerpsPosition buildPosition(
@@ -425,6 +462,31 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         );
     }
 
+    private static String toProtocolReceiveToken(
+            ΩSPLMintAddressΩ receiveTokenMint
+    ) {
+        if (SOL_MINT.equals(receiveTokenMint)) {
+            return "SOL";
+        }
+
+        if (BTC_MINT.equals(receiveTokenMint)) {
+            return "BTC";
+        }
+
+        if (ETH_MINT.equals(receiveTokenMint)) {
+            return "ETH";
+        }
+
+        if (USDC_MINT.equals(receiveTokenMint)) {
+            return "USDC";
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported Jupiter Perps receive-token mint: "
+                        + receiveTokenMint
+        );
+    }
+
     private static String toProtocolSide(
             JupiterPerpsPositionDirection direction
     ) {
@@ -533,9 +595,10 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         );
     }
 
-    private static final ΩSPLMintAddressΩ SOL_MINT = "So11111111111111111111111111111111111111112";
-    private static final ΩSPLMintAddressΩ BTC_MINT = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
-    private static final ΩSPLMintAddressΩ ETH_MINT = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
+    private static final ΩSPLMintAddressΩ BTC_MINT  = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
+    private static final ΩSPLMintAddressΩ ETH_MINT  = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
+    private static final ΩSPLMintAddressΩ SOL_MINT  = "So11111111111111111111111111111111111111112";
+    private static final ΩSPLMintAddressΩ USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
     private static final URI EXECUTE_TRANSACTION_ENDPOINT =
             URI.create(
