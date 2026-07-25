@@ -1,0 +1,140 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
+
+import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+
+public record JupiterPerpsPositionDecreaseAlarmActionConfiguration(
+        ΩSolanaWalletIdΩ walletId,
+        String signerKeyName,
+        Map<Integer, PositionDecrease> positionDecreases
+) {
+    public JupiterPerpsPositionDecreaseAlarmActionConfiguration {
+        Objects.requireNonNull(walletId, "walletId");
+        Objects.requireNonNull(signerKeyName, "signerKeyName");
+        positionDecreases = Map.copyOf(positionDecreases);
+
+        if (walletId.isBlank()) {
+            throw new IllegalArgumentException("Wallet id cannot be blank");
+        }
+
+        if (signerKeyName.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Signer key name cannot be blank"
+            );
+        }
+    }
+
+    public record PositionDecrease(
+            String assetExpression,
+            String directionExpression,
+            String receiveTokenExpression,
+            String sizeUsdDeltaExpression,
+            String maxSlippageBpsExpression
+    ) {
+        public PositionDecrease {
+            requireNonBlank(assetExpression, "asset");
+            requireNonBlank(directionExpression, "direction");
+            requireNonBlank(receiveTokenExpression, "receive token");
+            requireNonBlank(
+                    sizeUsdDeltaExpression,
+                    "position size delta"
+            );
+            requireNonBlank(
+                    maxSlippageBpsExpression,
+                    "maximum slippage"
+            );
+        }
+
+        public ResolvedPositionDecrease resolve(
+                AlarmVariableResolver variableResolver
+        ) {
+            Objects.requireNonNull(
+                    variableResolver,
+                    "variableResolver"
+            );
+
+            return new ResolvedPositionDecrease(
+                    JupiterPerpsAsset.valueOf(
+                            variableResolver.resolve(assetExpression)
+                                    .toUpperCase(Locale.ROOT)
+                    ),
+                    JupiterPerpsPositionDirection.valueOf(
+                            variableResolver.resolve(directionExpression)
+                                    .toUpperCase(Locale.ROOT)
+                    ),
+                    JupiterPerpsReceiveToken.valueOf(
+                            variableResolver.resolve(receiveTokenExpression)
+                                    .toUpperCase(Locale.ROOT)
+                    ),
+                    new ΩUSDCAmountΩ(
+                            variableResolver.resolve(
+                                    sizeUsdDeltaExpression
+                            )
+                    ),
+                    Integer.parseInt(
+                            variableResolver.resolve(
+                                    maxSlippageBpsExpression
+                            )
+                    )
+            );
+        }
+
+        private static void requireNonBlank(
+                String value,
+                String fieldName
+        ) {
+            Objects.requireNonNull(value, fieldName);
+
+            if (value.isBlank()) {
+                throw new IllegalArgumentException(
+                        fieldName + " cannot be blank"
+                );
+            }
+        }
+    }
+
+    public record ResolvedPositionDecrease(
+            JupiterPerpsAsset asset,
+            JupiterPerpsPositionDirection direction,
+            JupiterPerpsReceiveToken receiveToken,
+            ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) {
+        public ResolvedPositionDecrease {
+            Objects.requireNonNull(asset, "asset");
+            Objects.requireNonNull(direction, "direction");
+            Objects.requireNonNull(receiveToken, "receiveToken");
+            Objects.requireNonNull(sizeUsdDelta, "sizeUsdDelta");
+
+            if (sizeUsdDelta.signum() <= 0) {
+                throw new IllegalArgumentException(
+                        "Position size delta must be greater than zero: "
+                                + sizeUsdDelta
+                );
+            }
+
+            if (maxSlippageBps < 0 || maxSlippageBps > 10_000) {
+                throw new IllegalArgumentException(
+                        "Maximum slippage must be between 0 and "
+                                + "10000 basis points: "
+                                + maxSlippageBps
+                );
+            }
+
+            if (receiveToken != JupiterPerpsReceiveToken.USDC
+                    && !receiveToken.receiveTokenMint().equals(
+                    asset.tradedTokenMint()
+            )) {
+                throw new IllegalArgumentException(
+                        "Receive token must be USDC or match "
+                                + "the position asset: "
+                                + receiveToken
+                );
+            }
+        }
+    }
+}
