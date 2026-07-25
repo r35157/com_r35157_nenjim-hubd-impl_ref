@@ -17,5 +17,4 @@ with open(destination, "w") as f:
     f.write(json.dumps(key, separators=(",", ":")))
 
 print(f"Created {destination} with {len(key)} bytes")
-' ./H5Yrdm7B4FHhTxhPw9SVwFzQyTEL6bAPptZuTyRxcepq.json ./evelyn-prod-jup.json
-
+' $1 $2
