@@ -1,0 +1,12 @@
+# Wallet and signer used for position-decrease transactions
+################################################################
+WALLET_ID        {{JUPITER_PERPS_WALLET}}
+SIGNER_KEY_NAME  <SIGNER>
+
+
+# Id   Asset   Direction   ReceiveToken   SizeDeltaUSD   MaxSlippageBPS
+########################################################################
+# Values may reference {{VARIABLES}} defined in alarms.conf.
+# ReceiveToken must be USDC or match Asset.
+#3      SOL     SHORT       USDC           5.00           200
+#6      SOL     LONG        USDC           5.00           200
