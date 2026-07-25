@@ -92,7 +92,7 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
     public Map<ΩSPLMintAddressΩ, SPLTokenHolding> getSPLTokenHoldings(
             ΩSolanaAddressΩ ownerAddress,
             SolanaSPLTokenProgram splProgram
-    ) throws IOException, InterruptedException, IllegalStateException {
+    ) throws IOException, InterruptedException {
 
         String body = """
                 {

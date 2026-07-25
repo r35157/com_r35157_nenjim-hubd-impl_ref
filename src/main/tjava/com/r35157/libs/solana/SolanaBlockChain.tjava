@@ -55,12 +55,11 @@ public interface SolanaBlockChain {
      * @return a map of SPL mint addresses to token holding information
      * @throws IOException if the token holdings could not be fetched or parsed
      * @throws InterruptedException if the calling thread is interrupted while fetching token holdings
-     * @throws IllegalStateException if multiple token accounts for the same mint is detected, as this is not supported yet.
      */
     Map<ΩSPLMintAddressΩ, SPLTokenHolding> getSPLTokenHoldings(
             ΩSolanaAddressΩ ownerAddress,
             SolanaSPLTokenProgram splProgramId
-    ) throws IOException, InterruptedException, IllegalStateException;
+    ) throws IOException, InterruptedException;
 
     /**
      * Fetches NFT-like token mint address candidates owned by a Solana address for a specific token program.
