@@ -1,0 +1,143 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import com.r35157.cryptowallet.solana.SolanaWallet;
+import com.r35157.cryptowallet.solana.impl.ref.SolanaWalletImpl;
+import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
+import com.r35157.libs.jupiter.perps.JupiterPerpsService;
+import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaSignedTransaction;
+import com.r35157.libs.solana.SolanaUnsignedTransaction;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Objects;
+
+public final class JupiterPerpsPositionDecreaseAlarmAction
+        implements ConfiguredAlarmAction {
+    public JupiterPerpsPositionDecreaseAlarmAction(
+            Path configurationDirectory,
+            SolanaBlockChain solanaBlockChain,
+            JupiterPerpsService jupiter,
+            AlarmVariableResolver variableResolver
+    ) throws IOException {
+        Objects.requireNonNull(
+                configurationDirectory,
+                "configurationDirectory"
+        );
+        Objects.requireNonNull(solanaBlockChain, "solanaBlockChain");
+        this.jupiter = Objects.requireNonNull(jupiter, "jupiter");
+        this.variableResolver = Objects.requireNonNull(
+                variableResolver,
+                "variableResolver"
+        );
+
+        configuration =
+                JupiterPerpsPositionDecreaseAlarmActionConfigurationParser
+                        .parse(
+                                configurationDirectory.resolve(
+                                        getConfigurationFileName()
+                                ),
+                                variableResolver
+                        );
+        wallet = new SolanaWalletImpl(
+                configuration.walletId(),
+                configuration.signerKeyName(),
+                solanaBlockChain
+        );
+    }
+
+    @Override
+    public String getConfigurationFileName() {
+        return "alarmaction_JupiterPerpsPositionDecreaseAlarmAction.conf";
+    }
+
+    @Override
+    public void trigger(OraclePrice price, ResolvedPriceAlarm alarm) {
+        JupiterPerpsPositionDecreaseAlarmActionConfiguration.PositionDecrease
+                definition =
+                configuration.positionDecreases().get(alarm.id());
+        if (definition == null) {
+            return;
+        }
+
+        try {
+            JupiterPerpsPositionDecreaseAlarmActionConfiguration
+                    .ResolvedPositionDecrease positionDecrease =
+                    definition.resolve(variableResolver);
+
+            JupiterPerpsPosition position =
+                    findOpenPosition(positionDecrease);
+
+            SolanaUnsignedTransaction utrans =
+                    jupiter.buildPositionDecreaseTransaction(
+                            position.positionAccount(),
+                            positionDecrease.receiveToken()
+                                    .receiveTokenMint(),
+                            positionDecrease.sizeUsdDelta(),
+                            positionDecrease.maxSlippageBps()
+                    );
+            SolanaSignedTransaction strans =
+                    wallet.signTransaction(utrans);
+            ΩSolanaTransactionSignatureΩ signature =
+                    jupiter.executePositionDecreaseTransaction(strans);
+
+            System.out.println(
+                    "Position Decrease Signature: " + signature
+            );
+        } catch(Exception e) {
+            System.err.println("EXCEPTION: " + e.getMessage());
+        }
+    }
+
+    private JupiterPerpsPosition findOpenPosition(
+            JupiterPerpsPositionDecreaseAlarmActionConfiguration
+                    .ResolvedPositionDecrease positionDecrease
+    ) throws IOException, InterruptedException {
+        JupiterPerpsPosition matchingPosition = null;
+
+        for (JupiterPerpsPosition position
+                : jupiter.getOpenPositions(wallet.getAddress())) {
+            if (!position.tradedTokenMint().equals(
+                    positionDecrease.asset().tradedTokenMint()
+            )) {
+                continue;
+            }
+
+            if (position.direction() != positionDecrease.direction()) {
+                continue;
+            }
+
+            if (matchingPosition != null) {
+                throw new IllegalStateException(
+                        "Found multiple open "
+                                + positionDecrease.asset()
+                                + " "
+                                + positionDecrease.direction()
+                                + " positions for wallet "
+                                + wallet.getAddress()
+                );
+            }
+
+            matchingPosition = position;
+        }
+
+        if (matchingPosition == null) {
+            throw new IllegalStateException(
+                    "No open "
+                            + positionDecrease.asset()
+                            + " "
+                            + positionDecrease.direction()
+                            + " position found for wallet "
+                            + wallet.getAddress()
+            );
+        }
+
+        return matchingPosition;
+    }
+
+    private final JupiterPerpsPositionDecreaseAlarmActionConfiguration
+            configuration;
+    private final SolanaWallet wallet;
+    private final JupiterPerpsService jupiter;
+    private final AlarmVariableResolver variableResolver;
+}
