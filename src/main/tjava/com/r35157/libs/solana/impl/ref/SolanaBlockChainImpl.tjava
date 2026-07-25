@@ -92,7 +92,7 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
     public Map<ΩSPLMintAddressΩ, SPLTokenHolding> getSPLTokenHoldings(
             ΩSolanaAddressΩ ownerAddress,
             SolanaSPLTokenProgram splProgram
-    ) throws IOException, InterruptedException {
+    ) throws IOException, InterruptedException, IllegalStateException {
 
         String body = """
                 {
@@ -149,14 +149,25 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
             String uiAmountString = tokenAmount.path("uiAmountString").asText();
             BigDecimal uiAmount = new BigDecimal(uiAmountString);
 
-            result.put(mint, new SPLTokenHolding(
+            SPLTokenHolding holding = new SPLTokenHolding(
                     tokenAccount,
                     mint,
                     uiAmount,
                     rawAmount,
                     decimals,
                     splProgram.getAddress()
-            ));
+            );
+
+            SPLTokenHolding previous = result.putIfAbsent(mint, holding);
+
+            if (previous != null) {
+                throw new IllegalStateException(
+                        "Multiple SPL token accounts found for mint "
+                                + mint
+                                + " and owner "
+                                + ownerAddress
+                );
+            }
         }
 
         return result;
