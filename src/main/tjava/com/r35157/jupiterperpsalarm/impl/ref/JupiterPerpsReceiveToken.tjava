@@ -1,0 +1,20 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+public enum JupiterPerpsReceiveToken {
+    SOL(JupiterPerpsAsset.SOL.tradedTokenMint()),
+    ETH(JupiterPerpsAsset.ETH.tradedTokenMint()),
+    BTC(JupiterPerpsAsset.BTC.tradedTokenMint()),
+    USDC("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+
+    JupiterPerpsReceiveToken(
+            ΩSPLMintAddressΩ receiveTokenMint
+    ) {
+        this.receiveTokenMint = receiveTokenMint;
+    }
+
+    public ΩSPLMintAddressΩ receiveTokenMint() {
+        return receiveTokenMint;
+    }
+
+    private final ΩSPLMintAddressΩ receiveTokenMint;
+}
