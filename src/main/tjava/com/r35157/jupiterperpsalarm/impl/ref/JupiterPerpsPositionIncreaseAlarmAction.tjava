@@ -85,24 +85,34 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
         );
 
         if (usdcBalance == null) {
-            System.out.println(
-                    "Position Increase skipped: wallet has no USDC token account, but "
-                            + positionIncrease.collateralUsd()
-                            + " USDC is required."
+            System.err.println("Position Increase of "
+                    + positionIncrease.collateralUsd()
+                    + " USDC skipped: Wallet has no USDC token account!"
             );
             return false;
         }
 
-        if (usdcBalance.compareTo(positionIncrease.collateralUsd()) < 0) {
-            System.out.println(
-                    "Position Increase skipped: wallet has "
+        ΩUSDCAmountΩ collateralUsd = positionIncrease.collateralUsd();
+        ΩUSDCAmountΩ reserveUsdcLimit = configuration.reserveUsdcLimit();
+        ΩUSDCAmountΩ requiredUsdcBalance = collateralUsd.add(reserveUsdcLimit);
+
+        if (usdcBalance.compareTo(requiredUsdcBalance) < 0) {
+            System.err.println(
+                    "Position Increase of "
+                            + positionIncrease.collateralUsd()
+                            + "USDC skipped: Wallet has "
                             + usdcBalance
                             + " USDC, but "
-                            + positionIncrease.collateralUsd()
-                            + " USDC is required."
+                            + requiredUsdcBalance
+                            + " USDC is required ("
+                            + collateralUsd
+                            + " collateral + "
+                            + reserveUsdcLimit
+                            + " reserve)."
             );
             return false;
         }
+
         return true;
     }
 
