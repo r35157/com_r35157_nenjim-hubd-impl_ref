@@ -92,6 +92,12 @@ public final class JupiterPerpsAlarmImpl {
                 jupiterPerpsService,
                 variableResolver
         ));
+        actions.add(new JupiterPerpsPositionDecreaseAlarmAction(
+                alarmConfigurationDirectory,
+                solanaBlockChain,
+                jupiterPerpsService,
+                variableResolver
+        ));
         actions.add(new PushoverAlarmAction(
                 alarmConfigurationDirectory,
                 variableResolver
