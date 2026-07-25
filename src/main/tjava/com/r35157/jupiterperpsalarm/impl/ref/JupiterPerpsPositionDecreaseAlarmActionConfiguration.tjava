@@ -10,11 +10,21 @@ import java.util.Objects;
 public record JupiterPerpsPositionDecreaseAlarmActionConfiguration(
         ΩSolanaWalletIdΩ walletId,
         String signerKeyName,
+        ΩUSDCAmountΩ reservePositionSizeUsdLimit,
         Map<Integer, PositionDecrease> positionDecreases
 ) {
     public JupiterPerpsPositionDecreaseAlarmActionConfiguration {
         Objects.requireNonNull(walletId, "walletId");
         Objects.requireNonNull(signerKeyName, "signerKeyName");
+        Objects.requireNonNull(reservePositionSizeUsdLimit, "reservePositionSizeUsdLimit");
+
+        if (reservePositionSizeUsdLimit.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Position size USD reserve limit cannot be negative: "
+                            + reservePositionSizeUsdLimit
+            );
+        }
+
         positionDecreases = Map.copyOf(positionDecreases);
 
         if (walletId.isBlank()) {

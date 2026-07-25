@@ -1,8 +1,8 @@
 # Wallet and signer used for position-decrease transactions
 ################################################################
-WALLET_ID        {{JUPITER_PERPS_WALLET}}
-SIGNER_KEY_NAME  <SIGNER>
-
+WALLET_ID                         {{JUPITER_PERPS_WALLET}}
+SIGNER_KEY_NAME                   <SIGNER>
+RESERVE_POSITION_SIZE_USD_LIMIT   10
 
 # Id   Asset   Direction   ReceiveToken   SizeDeltaUSD   MaxSlippageBPS
 ########################################################################
