@@ -3,13 +3,18 @@ package com.r35157.cryptowallet.solana.impl.ref;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r35157.cryptowallet.solana.SolanaWallet;
+import com.r35157.libs.solana.SPLTokenHolding;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
+import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 
 public class SolanaWalletImpl implements SolanaWallet {
     public SolanaWalletImpl(
@@ -31,6 +36,20 @@ public class SolanaWalletImpl implements SolanaWallet {
     public @NotNull ΩSolanaAmountΩ getSolanaBalance()
             throws IOException, InterruptedException {
         return solanaBlockChain.getBalanceInSolana(address);
+    }
+
+    @Override
+    public @Nullable ΩAmountΩ getSPLTokenBalance(
+            @NotNull ΩSPLMintAddressΩ mintAddress,
+            @NotNull SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException {
+        SPLTokenHolding tokenHolding = solanaBlockChain
+                .getSPLTokenHoldings(address, splProgram)
+                .get(mintAddress);
+
+        return tokenHolding == null
+                ? null
+                : tokenHolding.uiAmount();
     }
 
     @Override

@@ -2,10 +2,13 @@ package com.r35157.cryptowallet.solana;
 
 import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
+import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 
 /**
  * A Solana wallet capable of identifying itself and signing transactions.
@@ -32,6 +35,22 @@ public interface SolanaWallet {
     @NotNull
     ΩSolanaAmountΩ getSolanaBalance()
             throws IOException, InterruptedException;
+
+    /**
+     * Returns the balance of a specific SPL token owned by this wallet.
+     *
+     * @param mintAddress the SPL token mint address
+     * @param splProgram the SPL token program containing the token
+     * @return the token balance, or {@code null} if no token account exists
+     * @throws IOException if the balance cannot be fetched or decoded
+     * @throws InterruptedException if the calling thread is interrupted
+     * @throws IllegalStateException if multiple accounts exist for the mint
+     */
+    @Nullable
+    ΩAmountΩ getSPLTokenBalance(
+            @NotNull ΩSPLMintAddressΩ mintAddress,
+            @NotNull SolanaSPLTokenProgram splProgram
+    ) throws IOException, InterruptedException;
 
     /**
      * Signs an unsigned Solana transaction.
