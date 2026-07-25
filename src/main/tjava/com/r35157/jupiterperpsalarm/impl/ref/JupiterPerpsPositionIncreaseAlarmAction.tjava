@@ -6,10 +6,14 @@ import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.util.Objects;
+
+import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.SPL_TOKEN_PROGRAM;
 
 public final class JupiterPerpsPositionIncreaseAlarmAction implements ConfiguredAlarmAction {
     public JupiterPerpsPositionIncreaseAlarmAction(
@@ -51,21 +55,52 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
             JupiterPerpsPositionIncreaseAlarmActionConfiguration.ResolvedPositionIncrease
                     positionIncrease = definition.resolve(variableResolver);
 
-            SolanaUnsignedTransaction utrans =
-                    jupiter.buildPositionIncreaseTransaction(
-                            wallet.getAddress(),
-                            positionIncrease.asset().tradedTokenMint(),
-                            positionIncrease.direction(),
-                            positionIncrease.collateralUsd(),
-                            positionIncrease.sizeUsdDelta(),
-                            positionIncrease.maxSlippageBps()
-                    );
-            SolanaSignedTransaction strans = wallet.signTransaction(utrans);
-            ΩSolanaTransactionSignatureΩ signature = jupiter.executePositionIncreaseTransaction(strans);
-            System.out.println("Position Increase Signature: " + signature);
+            if(isUSDCBalanceOk(positionIncrease)) {
+                SolanaUnsignedTransaction utrans =
+                        jupiter.buildPositionIncreaseTransaction(
+                                wallet.getAddress(),
+                                positionIncrease.asset().tradedTokenMint(),
+                                positionIncrease.direction(),
+                                positionIncrease.collateralUsd(),
+                                positionIncrease.sizeUsdDelta(),
+                                positionIncrease.maxSlippageBps()
+                        );
+                SolanaSignedTransaction strans = wallet.signTransaction(utrans);
+                ΩSolanaTransactionSignatureΩ signature = jupiter.executePositionIncreaseTransaction(strans);
+                System.out.println("Position Increase Signature: " + signature);
+            }
         } catch(Exception e) {
             System.err.println("EXCEPTION: " + e.getMessage());
         }
+    }
+
+    private boolean isUSDCBalanceOk(JupiterPerpsPositionIncreaseAlarmActionConfiguration.ResolvedPositionIncrease positionIncrease)
+            throws IOException, InterruptedException {
+        ΩAmountΩ usdcBalance = wallet.getSPLTokenBalance(
+                JupiterPerpsReceiveToken.USDC.receiveTokenMint(),
+                SPL_TOKEN_PROGRAM
+        );
+
+        if (usdcBalance == null) {
+            System.out.println(
+                    "Position Increase skipped: wallet has no USDC token account, but "
+                            + positionIncrease.collateralUsd()
+                            + " USDC is required."
+            );
+            return false;
+        }
+
+        if (usdcBalance.compareTo(positionIncrease.collateralUsd()) < 0) {
+            System.out.println(
+                    "Position Increase skipped: wallet has "
+                            + usdcBalance
+                            + " USDC, but "
+                            + positionIncrease.collateralUsd()
+                            + " USDC is required."
+            );
+            return false;
+        }
+        return true;
     }
 
     private final JupiterPerpsPositionIncreaseAlarmActionConfiguration configuration;
