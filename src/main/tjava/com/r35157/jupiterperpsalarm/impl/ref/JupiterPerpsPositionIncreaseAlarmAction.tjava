@@ -55,20 +55,23 @@ public final class JupiterPerpsPositionIncreaseAlarmAction implements Configured
             JupiterPerpsPositionIncreaseAlarmActionConfiguration.ResolvedPositionIncrease
                     positionIncrease = definition.resolve(variableResolver);
 
-            if(isUSDCBalanceOk(positionIncrease)) {
-                SolanaUnsignedTransaction utrans =
-                        jupiter.buildPositionIncreaseTransaction(
-                                wallet.getAddress(),
-                                positionIncrease.asset().tradedTokenMint(),
-                                positionIncrease.direction(),
-                                positionIncrease.collateralUsd(),
-                                positionIncrease.sizeUsdDelta(),
-                                positionIncrease.maxSlippageBps()
-                        );
-                SolanaSignedTransaction strans = wallet.signTransaction(utrans);
-                ΩSolanaTransactionSignatureΩ signature = jupiter.executePositionIncreaseTransaction(strans);
-                System.out.println("Position Increase Signature: " + signature);
+            if (!isUSDCBalanceOk(positionIncrease)) {
+                return;
             }
+
+            SolanaUnsignedTransaction utrans =
+                    jupiter.buildPositionIncreaseTransaction(
+                            wallet.getAddress(),
+                            positionIncrease.asset().tradedTokenMint(),
+                            positionIncrease.direction(),
+                            positionIncrease.collateralUsd(),
+                            positionIncrease.sizeUsdDelta(),
+                            positionIncrease.maxSlippageBps()
+                    );
+
+            SolanaSignedTransaction strans = wallet.signTransaction(utrans);
+            ΩSolanaTransactionSignatureΩ signature = jupiter.executePositionIncreaseTransaction(strans);
+            System.out.println("Position Increase Signature: " + signature);
         } catch(Exception e) {
             System.err.println("EXCEPTION: " + e.getMessage());
         }
