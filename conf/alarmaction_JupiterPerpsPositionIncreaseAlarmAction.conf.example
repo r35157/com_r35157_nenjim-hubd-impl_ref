@@ -1,8 +1,8 @@
 # Wallet and signer used for position-increase transactions
 ################################################################
-WALLET_ID        {{JUPITER_PERPS_WALLET}}
-SIGNER_KEY_NAME  <SIGNER>
-
+WALLET_ID            {{JUPITER_PERPS_WALLET}}
+SIGNER_KEY_NAME      <SIGNER>
+RESERVE_USDC_LIMIT   10
 
 # Id   Asset   Direction   CollateralUSDC   SizeDeltaUSD   MaxSlippageBPS
 ############################################################################

@@ -1,6 +1,7 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -20,6 +21,7 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
                 positionIncreases = new LinkedHashMap<>();
         ΩSolanaWalletIdΩ walletId = null;
         String signerKeyName = null;
+        ΩUSDCAmountΩ reserveUsdcLimit = null;
 
         for (int lineNumber = 1; lineNumber <= lines.size(); lineNumber++) {
             String line = removeComment(lines.get(lineNumber - 1)).trim();
@@ -43,6 +45,16 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
                         throw new IllegalArgumentException("Duplicate SIGNER_KEY_NAME");
                     }
                     signerKeyName = variableResolver.resolve(columns[1]);
+                } else if (firstColumn.equals("RESERVE_USDC_LIMIT")) {
+                    requireColumnCount(columns, 2, "RESERVE_USDC_LIMIT value");
+                    if (reserveUsdcLimit != null) {
+                        throw new IllegalArgumentException(
+                                "Duplicate RESERVE_USDC_LIMIT"
+                        );
+                    }
+                    reserveUsdcLimit = new ΩUSDCAmountΩ(
+                            variableResolver.resolve(columns[1])
+                    );
                 } else {
                     parsePositionIncrease(
                             columns,
@@ -61,13 +73,21 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
         if (walletId == null) {
             throw new IllegalArgumentException("Missing WALLET_ID in " + path);
         }
+
         if (signerKeyName == null) {
             throw new IllegalArgumentException("Missing SIGNER_KEY_NAME in " + path);
+        }
+
+        if (reserveUsdcLimit == null) {
+            throw new IllegalArgumentException(
+                    "Missing RESERVE_USDC_LIMIT in " + path
+            );
         }
 
         return new JupiterPerpsPositionIncreaseAlarmActionConfiguration(
                 walletId,
                 signerKeyName,
+                reserveUsdcLimit,
                 positionIncreases
         );
     }

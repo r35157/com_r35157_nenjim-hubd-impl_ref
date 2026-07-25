@@ -10,11 +10,13 @@ import java.util.Objects;
 public record JupiterPerpsPositionIncreaseAlarmActionConfiguration(
         ΩSolanaWalletIdΩ walletId,
         String signerKeyName,
+        ΩUSDCAmountΩ reserveUsdcLimit,
         Map<Integer, PositionIncrease> positionIncreases
 ) {
     public JupiterPerpsPositionIncreaseAlarmActionConfiguration {
         Objects.requireNonNull(walletId, "walletId");
         Objects.requireNonNull(signerKeyName, "signerKeyName");
+        Objects.requireNonNull(reserveUsdcLimit, "reserveUsdcLimit");
         positionIncreases = Map.copyOf(positionIncreases);
 
         if (walletId.isBlank()) {
@@ -22,6 +24,11 @@ public record JupiterPerpsPositionIncreaseAlarmActionConfiguration(
         }
         if (signerKeyName.isBlank()) {
             throw new IllegalArgumentException("Signer key name cannot be blank");
+        }
+        if (reserveUsdcLimit.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "USDC reserve limit cannot be negative: " + reserveUsdcLimit
+            );
         }
     }
 
