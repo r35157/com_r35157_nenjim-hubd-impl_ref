@@ -9,6 +9,7 @@ import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -68,6 +69,10 @@ public final class JupiterPerpsPositionDecreaseAlarmAction
             JupiterPerpsPosition position =
                     findOpenPosition(positionDecrease);
 
+            if (!isPositionSizeOk(position, positionDecrease)) {
+                return;
+            }
+
             SolanaUnsignedTransaction utrans =
                     jupiter.buildPositionDecreaseTransaction(
                             position.positionAccount(),
@@ -76,12 +81,14 @@ public final class JupiterPerpsPositionDecreaseAlarmAction
                             positionDecrease.sizeUsdDelta(),
                             positionDecrease.maxSlippageBps()
                     );
+
             SolanaSignedTransaction strans =
                     wallet.signTransaction(utrans);
+
             ΩSolanaTransactionSignatureΩ signature =
                     jupiter.executePositionDecreaseTransaction(strans);
 
-            System.out.println(
+            System.err.println(
                     "Position Decrease Signature: " + signature
             );
         } catch(Exception e) {
@@ -133,6 +140,39 @@ public final class JupiterPerpsPositionDecreaseAlarmAction
         }
 
         return matchingPosition;
+    }
+
+    private boolean isPositionSizeOk(
+            JupiterPerpsPosition position,
+            JupiterPerpsPositionDecreaseAlarmActionConfiguration
+                    .ResolvedPositionDecrease positionDecrease
+    ) {
+        ΩUSDCAmountΩ currentPositionSize = position.positionSize();
+        ΩUSDCAmountΩ decreaseSizeUsd = positionDecrease.sizeUsdDelta();
+        ΩUSDCAmountΩ reservePositionSizeUsdLimit =
+                configuration.reservePositionSizeUsdLimit();
+
+        ΩUSDCAmountΩ remainingPositionSize =
+                currentPositionSize.subtract(decreaseSizeUsd);
+
+        if (remainingPositionSize.compareTo(
+                reservePositionSizeUsdLimit
+        ) < 0) {
+            System.err.println(
+                    "Position Decrease of "
+                            + decreaseSizeUsd
+                            + " USD skipped: Position size is "
+                            + currentPositionSize
+                            + " USD and would become "
+                            + remainingPositionSize
+                            + " USD, which is below the "
+                            + reservePositionSizeUsdLimit
+                            + " USD reserve."
+            );
+            return false;
+        }
+
+        return true;
     }
 
     private final JupiterPerpsPositionDecreaseAlarmActionConfiguration
