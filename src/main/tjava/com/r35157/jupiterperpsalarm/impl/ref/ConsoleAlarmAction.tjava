@@ -30,7 +30,8 @@ public final class ConsoleAlarmAction implements ConfiguredAlarmAction {
         System.err.println();
         System.err.println("============================================================");
         System.err.printf(
-                "ALARM: %s is %s USD; condition %s USD%n",
+                "ALARM_%d: %s is %s USD; condition %s USD%n",
+                alarm.id(),
                 price.asset(),
                 price.priceUsd().toPlainString(),
                 alarm.condition().expression()

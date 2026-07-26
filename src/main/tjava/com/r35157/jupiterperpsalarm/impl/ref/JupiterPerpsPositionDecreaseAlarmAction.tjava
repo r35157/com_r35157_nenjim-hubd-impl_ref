@@ -88,7 +88,7 @@ public final class JupiterPerpsPositionDecreaseAlarmAction
             ΩSolanaTransactionSignatureΩ signature =
                     jupiter.executePositionDecreaseTransaction(strans);
 
-            System.err.println(
+            System.out.println(
                     "Position Decrease Signature: " + signature
             );
         } catch(Exception e) {
