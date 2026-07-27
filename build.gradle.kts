@@ -33,7 +33,7 @@ repositories {
     mavenCentral()
 }
 
-val detag by configurations.creating {
+val detag = configurations.create("detag") {
     isCanBeConsumed = false
     isCanBeResolved = true
 }
@@ -72,11 +72,11 @@ tasks.withType<JavaCompile>().configureEach {
 
 val generatedDetagMain = layout.buildDirectory.dir("generated/sources/detag/main/java")
 
-val cleanGeneratedDetagMain by tasks.registering(Delete::class) {
+val cleanGeneratedDetagMain = tasks.register<Delete>("cleanGeneratedDetagMain") {
     delete(generatedDetagMain)
 }
 
-val detagMain by tasks.registering(JavaExec::class) {
+val detagMain = tasks.register<JavaExec>("detagMain") {
     group = "build"
     description = "Generates Java sources from .tjava files"
 
