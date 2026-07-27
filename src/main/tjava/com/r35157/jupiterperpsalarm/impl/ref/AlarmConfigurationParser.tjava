@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class AlarmConfigurationParser {
 
@@ -103,31 +105,11 @@ public final class AlarmConfigurationParser {
         }
 
         if (normalized.startsWith("PERSISTENT:")) {
-            String graceText = normalized.substring("PERSISTENT:".length());
-
-            if (graceText.isEmpty()) {
-                throw new IllegalArgumentException("Missing persistent grace period: " + triggerText);
-            }
-
-            ΩsecondsΩ gracePeriodSeconds;
-            try {
-                gracePeriodSeconds = Integer.parseInt(graceText);
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException(
-                        "Invalid persistent grace period: " + triggerText,
-                        exception
-                );
-            }
-
-            if (gracePeriodSeconds < 0) {
-                throw new IllegalArgumentException(
-                        "Persistent grace period cannot be negative: " + triggerText
-                );
-            }
+            String graceText = triggerText.substring("PERSISTENT:".length());
 
             return new TriggerConfiguration(
                     AlarmTrigger.PERSISTENT,
-                    gracePeriodSeconds * 1000L
+                    parsePersistentGracePeriod(graceText)
             );
         }
 
@@ -140,6 +122,51 @@ public final class AlarmConfigurationParser {
         }
 
         throw new IllegalArgumentException("Unknown trigger: " + triggerText);
+    }
+
+    private static ΩmilliSecondsΩ parsePersistentGracePeriod(String graceText) {
+        Matcher matcher = PERSISTENT_GRACE_PERIOD_PATTERN.matcher(graceText);
+
+        if (!matcher.matches()) {
+            throw invalidPersistentGracePeriod(graceText);
+        }
+
+        try {
+            long value = Long.parseLong(matcher.group(1));
+            long millisecondsPerUnit = switch (matcher.group(2)) {
+                case "ms" -> 1L;
+                case "s" -> 1_000L;
+                case "m" -> 60_000L;
+                case "h" -> 3_600_000L;
+                case "d" -> 86_400_000L;
+                case "w" -> 604_800_000L;
+                case "M" -> 2_592_000_000L;
+                case "y" -> 31_536_000_000L;
+                default -> throw new AssertionError("Unsupported grace period suffix");
+            };
+
+            return Math.multiplyExact(value, millisecondsPerUnit);
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw invalidPersistentGracePeriod(graceText, exception);
+        }
+    }
+
+    private static IllegalArgumentException invalidPersistentGracePeriod(
+            String graceText
+    ) {
+        return invalidPersistentGracePeriod(graceText, null);
+    }
+
+    private static IllegalArgumentException invalidPersistentGracePeriod(
+            String graceText,
+            Exception cause
+    ) {
+        return new IllegalArgumentException(
+                "Invalid persistent grace period '" + graceText
+                        + "'. Expected a non-negative whole number followed by one of: "
+                        + "ms, s, m, h, d, w, M, y",
+                cause
+        );
     }
 
     private static final class Cursor {
@@ -251,6 +278,9 @@ public final class AlarmConfigurationParser {
             ΩmilliSecondsΩ gracePeriod
     ) {
     }
+
+    private static final Pattern PERSISTENT_GRACE_PERIOD_PATTERN =
+            Pattern.compile("(\\d+)(ms|s|m|h|d|w|M|y)");
 
     private AlarmConfigurationParser() {
     }
