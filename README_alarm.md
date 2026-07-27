@@ -226,15 +226,17 @@ On the first accepted oracle price after startup, an already-satisfied `ONETIME`
 - Remaining inside the condition does not trigger again.
 - Leaving the condition re-arms the alarm, so the next entry triggers again.
 - A grace period is not supported; `CROSSING:1m` is rejected.
+- Only the strict directional comparisons `<` and `>` are supported.
+- `=`, `<=`, `>=`, and range conditions are rejected during configuration parsing.
 
 The condition determines the crossing direction. For example:
 
 ```text
-19  SOL  >={{SOL_LONG_ENTRY_PRICE}}  CROSSING
-20  SOL  <{{SOL_LONG_ENTRY_PRICE}}   CROSSING
+19  SOL  >{{SOL_LONG_ENTRY_PRICE}}  CROSSING
+20  SOL  <{{SOL_LONG_ENTRY_PRICE}}  CROSSING
 ```
 
-Alarm 19 triggers when the price enters the profitable side from below. Alarm 20 triggers when it enters the losing side from above. With a range condition, `CROSSING` triggers whenever the price enters the range from either side.
+Alarm 19 triggers when the price moves from at or below the entry price to above it. Alarm 20 triggers when the price moves from at or above the entry price to below it. Landing exactly on the entry price is not a crossing.
 
 ### `PERSISTENT`
 

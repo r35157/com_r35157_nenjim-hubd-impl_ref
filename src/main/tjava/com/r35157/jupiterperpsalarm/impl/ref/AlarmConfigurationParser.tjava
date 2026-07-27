@@ -58,6 +58,11 @@ public final class AlarmConfigurationParser {
                 cursor.nextToken("trigger")
         );
 
+        validateConditionForTrigger(
+                conditionExpression,
+                triggerConfiguration.trigger()
+        );
+
         cursor.skipWhitespace();
         if (!cursor.atEnd() && cursor.current() != '#') {
             throw new IllegalArgumentException(
@@ -87,6 +92,27 @@ public final class AlarmConfigurationParser {
         }
 
         return conditionExpression;
+    }
+
+    private static void validateConditionForTrigger(
+            String conditionExpression,
+            AlarmTrigger trigger
+    ) {
+        if (trigger != AlarmTrigger.CROSSING) {
+            return;
+        }
+
+        boolean directionalCondition =
+                (conditionExpression.startsWith("<")
+                        && !conditionExpression.startsWith("<="))
+                || (conditionExpression.startsWith(">")
+                        && !conditionExpression.startsWith(">="));
+
+        if (!directionalCondition) {
+            throw new IllegalArgumentException(
+                    "CROSSING requires a '<' or '>' condition: " + conditionExpression
+            );
+        }
     }
 
     private static TriggerConfiguration parseTrigger(String triggerText) {
