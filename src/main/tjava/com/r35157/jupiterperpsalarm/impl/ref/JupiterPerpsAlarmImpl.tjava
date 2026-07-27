@@ -163,9 +163,15 @@ public final class JupiterPerpsAlarmImpl {
     ) {
         for (PriceAlarmDefinition definition : definitions) {
             try {
-                AlarmConditionParser.parse(
-                        variableResolver.resolve(definition.conditionExpression())
+                String resolvedConditionExpression = variableResolver.resolve(
+                        definition.conditionExpression()
                 );
+
+                if (definition.trigger() == AlarmTrigger.CROSSING) {
+                    AlarmConditionParser.parseCrossing(resolvedConditionExpression);
+                } else {
+                    AlarmConditionParser.parse(resolvedConditionExpression);
+                }
             } catch (RuntimeException exception) {
                 throw new IllegalArgumentException(
                         "Invalid condition for alarm "

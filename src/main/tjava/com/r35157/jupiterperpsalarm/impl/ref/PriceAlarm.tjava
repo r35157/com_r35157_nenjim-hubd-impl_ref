@@ -23,9 +23,13 @@ public final class PriceAlarm {
 
         PriceCondition condition;
         try {
-            condition = AlarmConditionParser.parse(
-                    variableResolver.resolve(definition.conditionExpression())
+            String resolvedConditionExpression = variableResolver.resolve(
+                    definition.conditionExpression()
             );
+
+            condition = definition.trigger() == AlarmTrigger.CROSSING
+                    ? AlarmConditionParser.parseCrossing(resolvedConditionExpression)
+                    : AlarmConditionParser.parse(resolvedConditionExpression);
         } catch (RuntimeException exception) {
             System.err.printf(
                     "Could not resolve condition for alarm %d: %s%n",
@@ -35,15 +39,16 @@ public final class PriceAlarm {
             return;
         }
 
+        if (definition.trigger() == AlarmTrigger.CROSSING) {
+            acceptCrossing(price, (CrossingPriceCondition) condition);
+            return;
+        }
+
         boolean reached = condition.matches(price.priceUsd());
 
         boolean enteredTriggeredSide = previousReached == null
                 ? reached
                 : reached && !previousReached;
-
-        boolean crossedIntoTriggeredSide = previousReached != null
-                && reached
-                && !previousReached;
 
         previousReached = reached;
 
@@ -61,13 +66,6 @@ public final class PriceAlarm {
             return;
         }
 
-        if (definition.trigger() == AlarmTrigger.CROSSING) {
-            if (crossedIntoTriggeredSide) {
-                trigger(price, condition);
-            }
-            return;
-        }
-
         if (definition.trigger() == AlarmTrigger.PERSISTENT) {
             if (lastTriggeredAt == null || persistentGracePeriodHasPassed()) {
                 trigger(price, condition);
@@ -76,6 +74,30 @@ public final class PriceAlarm {
         }
 
         throw new IllegalStateException("Unsupported alarm trigger: " + definition.trigger());
+    }
+
+    private void acceptCrossing(
+            OraclePrice price,
+            CrossingPriceCondition condition
+    ) {
+        boolean reached = condition.matches(price.priceUsd());
+
+        if (crossingArmed == null) {
+            crossingArmed = !reached;
+            return;
+        }
+
+        if (crossingArmed) {
+            if (reached) {
+                crossingArmed = false;
+                trigger(price, condition);
+            }
+            return;
+        }
+
+        if (condition.matchesRearmCondition(price.priceUsd())) {
+            crossingArmed = true;
+        }
     }
 
     public PriceAlarmDefinition definition() {
@@ -122,6 +144,7 @@ public final class PriceAlarm {
     private final AlarmAction action;
 
     private Instant lastTriggeredAt;
+    private Boolean crossingArmed;
     private Boolean previousReached;
     private long triggerCount;
 }

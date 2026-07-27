@@ -99,6 +99,12 @@ public final class AlarmConfigurationParser {
             AlarmTrigger trigger
     ) {
         if (trigger != AlarmTrigger.CROSSING) {
+            if (conditionExpression.contains("/")) {
+                throw new IllegalArgumentException(
+                        "Hysteresis is only supported for CROSSING conditions: "
+                                + conditionExpression
+                );
+            }
             return;
         }
 

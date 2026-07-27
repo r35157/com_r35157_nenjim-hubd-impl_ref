@@ -48,6 +48,84 @@ public final class AlarmConditionParser {
         return new ComparisonPriceCondition(operator, target);
     }
 
+    public static CrossingPriceCondition parseCrossing(String conditionExpression) {
+        String trimmedExpression = conditionExpression.trim();
+        int hysteresisSeparatorIndex = trimmedExpression.indexOf('/');
+
+        if (hysteresisSeparatorIndex != trimmedExpression.lastIndexOf('/')) {
+            throw new IllegalArgumentException(
+                    "CROSSING condition must contain at most one '/': "
+                            + conditionExpression
+            );
+        }
+
+        String comparisonExpression = hysteresisSeparatorIndex < 0
+                ? trimmedExpression
+                : trimmedExpression.substring(0, hysteresisSeparatorIndex);
+
+        PriceCondition parsedCondition = parse(comparisonExpression);
+        if (!(parsedCondition instanceof ComparisonPriceCondition comparison)
+                || (comparison.operator() != PriceComparisonOperator.LESS_THAN
+                && comparison.operator() != PriceComparisonOperator.GREATER_THAN)) {
+            throw new IllegalArgumentException(
+                    "CROSSING requires a '<' or '>' condition: " + conditionExpression
+            );
+        }
+
+        BigDecimal hysteresis = hysteresisSeparatorIndex < 0
+                ? BigDecimal.ZERO
+                : parseHysteresis(
+                        trimmedExpression.substring(hysteresisSeparatorIndex + 1),
+                        comparison.target()
+                );
+
+        return new CrossingPriceCondition(comparison, hysteresis);
+    }
+
+    private static BigDecimal parseHysteresis(
+            String hysteresisExpression,
+            BigDecimal target
+    ) {
+        String trimmedExpression = hysteresisExpression.trim();
+
+        if (trimmedExpression.isEmpty()) {
+            throw new IllegalArgumentException("Missing CROSSING hysteresis");
+        }
+
+        if (trimmedExpression.contains("+") || trimmedExpression.contains("-")) {
+            throw new IllegalArgumentException(
+                    "CROSSING hysteresis must be specified without '+' or '-': "
+                            + hysteresisExpression
+            );
+        }
+
+        boolean percentage = trimmedExpression.endsWith("%");
+        String distanceExpression = percentage
+                ? trimmedExpression.substring(0, trimmedExpression.length() - 1)
+                : trimmedExpression;
+
+        BigDecimal distance;
+        try {
+            distance = new BigDecimal(distanceExpression);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    "Invalid CROSSING hysteresis: " + hysteresisExpression,
+                    exception
+            );
+        }
+
+        if (distance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "CROSSING hysteresis must be zero or positive: "
+                            + hysteresisExpression
+            );
+        }
+
+        return percentage
+                ? target.multiply(distance).movePointLeft(2)
+                : distance;
+    }
+
     private static PriceCondition parseRange(String rangeExpression) {
         char lowerDelimiter = rangeExpression.charAt(0);
         char upperDelimiter = rangeExpression.charAt(rangeExpression.length() - 1);

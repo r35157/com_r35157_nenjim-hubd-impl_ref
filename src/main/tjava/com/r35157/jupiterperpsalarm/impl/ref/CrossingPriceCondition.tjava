@@ -1,0 +1,62 @@
+package com.r35157.jupiterperpsalarm.impl.ref;
+
+import java.math.BigDecimal;
+import java.util.Objects;
+
+public record CrossingPriceCondition(
+        ComparisonPriceCondition comparison,
+        BigDecimal hysteresis
+) implements PriceCondition {
+
+    public CrossingPriceCondition {
+        Objects.requireNonNull(comparison, "comparison");
+        Objects.requireNonNull(hysteresis, "hysteresis");
+
+        if (comparison.operator() != PriceComparisonOperator.LESS_THAN
+                && comparison.operator() != PriceComparisonOperator.GREATER_THAN) {
+            throw new IllegalArgumentException(
+                    "CROSSING requires a '<' or '>' comparison"
+            );
+        }
+
+        if (hysteresis.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "CROSSING hysteresis must be zero or positive: " + hysteresis
+            );
+        }
+    }
+
+    @Override
+    public boolean matches(BigDecimal price) {
+        return comparison.matches(price);
+    }
+
+    public boolean matchesRearmCondition(BigDecimal price) {
+        BigDecimal rearmTarget = switch (comparison.operator()) {
+            case GREATER_THAN -> comparison.target().subtract(hysteresis);
+            case LESS_THAN -> comparison.target().add(hysteresis);
+            default -> throw new IllegalStateException(
+                    "Unsupported CROSSING operator: " + comparison.operator()
+            );
+        };
+
+        return switch (comparison.operator()) {
+            case GREATER_THAN -> price.compareTo(rearmTarget) <= 0;
+            case LESS_THAN -> price.compareTo(rearmTarget) >= 0;
+            default -> throw new IllegalStateException(
+                    "Unsupported CROSSING operator: " + comparison.operator()
+            );
+        };
+    }
+
+    @Override
+    public String expression() {
+        if (hysteresis.compareTo(BigDecimal.ZERO) == 0) {
+            return comparison.expression();
+        }
+
+        return comparison.expression()
+                + "/"
+                + hysteresis.stripTrailingZeros().toPlainString();
+    }
+}
