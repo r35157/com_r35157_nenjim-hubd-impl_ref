@@ -1,10 +1,10 @@
 # Jupiter Perps Price Alarm
 
-The Jupiter Perps Price Alarm monitors the Jupiter Perps aggregated oracle accounts for SOL, ETH, and BTC. It evaluates configurable price conditions and dispatches matching alarms to independently configured console, Pushover, and Jupiter position-increase actions.
+The Jupiter Perps Price Alarm monitors the Jupiter Perps aggregated oracle accounts for SOL, ETH, and BTC. It evaluates configurable price conditions and dispatches matching alarms to independently configured console, Pushover, and Jupiter position-increase or position-decrease actions.
 
 Oracle prices are received through Solana WebSocket `accountSubscribe` using `processed` commitment. The application does not poll prices once per second. It also fetches the current oracle account state whenever a WebSocket connection opens, reconnects automatically, and supports multiple RPC endpoints for redundancy.
 
-> **Important:** This application is not necessarily notification-only. Every active entry in `alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf` can sign and submit a real Jupiter Perps transaction. See [Automatic position increase](#automatic-position-increase) before running it.
+> **Important:** This application is not necessarily notification-only. Every active entry in a Jupiter Perps position action file can sign and submit a real transaction. Review both transaction action files before running it.
 
 ## Startup flow
 
@@ -15,7 +15,7 @@ The application performs the following steps before it starts monitoring prices:
 3. Populate entry-price and liquidation-price variables.
 4. Resolve and validate every alarm condition.
 5. Start the periodic variable refresher and file-trigger watcher.
-6. Parse and validate the three action configuration files.
+6. Parse and validate the four action configuration files.
 7. Open one oracle WebSocket connection per configured asset and RPC endpoint.
 
 Startup fails before WebSockets are opened if an alarm condition or action configuration contains an unresolved variable or invalid value.
@@ -75,7 +75,7 @@ The variable-refresh file watcher uses the configuration file's parent directory
 
 ## Configuration files
 
-The application uses four configuration files:
+The application uses five configuration files:
 
 | File | Purpose |
 |---|---|
@@ -83,8 +83,9 @@ The application uses four configuration files:
 | `alarmaction_Console.conf` | Alarm IDs written to the console |
 | `alarmaction_Pushover.conf` | Pushover credentials and notifications |
 | `alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf` | Jupiter wallet, signer, and position increases |
+| `alarmaction_JupiterPerpsPositionDecreaseAlarmAction.conf` | Jupiter wallet, signer, and position decreases |
 
-The three action files are resolved in the same directory as the file supplied through `--config`. All four files are required at startup, although an action can contain no alarm IDs. Blank lines and lines beginning with `#` are ignored.
+The four action files are resolved in the same directory as the file supplied through `--config`. All five files are required at startup, although an action can contain no alarm IDs. Blank lines and lines beginning with `#` are ignored.
 
 Example files:
 
@@ -92,6 +93,26 @@ Example files:
 - [alarmaction_Console.conf.example](conf/alarmaction_Console.conf.example)
 - [alarmaction_Pushover.conf.example](conf/alarmaction_Pushover.conf.example)
 - [alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf.example](conf/alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf.example)
+- [alarmaction_JupiterPerpsPositionDecreaseAlarmAction.conf.example](conf/alarmaction_JupiterPerpsPositionDecreaseAlarmAction.conf.example)
+
+### Format version
+
+Every configuration file must declare its format version as its first actual
+configuration entry:
+
+```text
+FORMAT_VERSION=1
+```
+
+Blank lines and full-line comments may appear before it. The application
+rejects a missing, duplicate, malformed, misplaced, older, or newer version
+before parsing the remaining configuration.
+
+Each file format has an independent version. Increment only the affected
+format when making an incompatible change, and update both its parser constant
+and its runtime and example files. See
+[Configuration format versions](README.md#configuration-format-versions) for
+the project-wide policy.
 
 ## Shared variables
 
@@ -224,12 +245,14 @@ On the first accepted oracle price after startup, an already-satisfied `ONETIME`
 - Triggers when the condition changes from not satisfied to satisfied.
 - The first accepted price establishes the initial state and never triggers the alarm.
 - Remaining inside the condition does not trigger again.
-- Leaving the condition re-arms the alarm, so the next entry triggers again.
+- Without hysteresis, leaving the condition re-arms the alarm, so the next entry triggers again.
+- An optional hysteresis can be appended to the condition as `/H` or `/P%`.
+- With hysteresis, the alarm remains disarmed until the price reaches the re-arm boundary.
 - A grace period is not supported; `CROSSING:1m` is rejected.
 - Only the strict directional comparisons `<` and `>` are supported.
 - `=`, `<=`, `>=`, and range conditions are rejected during configuration parsing.
 
-The condition determines the crossing direction. For example:
+The condition determines the crossing direction. Without hysteresis:
 
 ```text
 19  SOL  >{{SOL_LONG_ENTRY_PRICE}}  CROSSING
@@ -237,6 +260,17 @@ The condition determines the crossing direction. For example:
 ```
 
 Alarm 19 triggers when the price moves from at or below the entry price to above it. Alarm 20 triggers when the price moves from at or above the entry price to below it. Landing exactly on the entry price is not a crossing.
+
+Hysteresis prevents repeated triggers when the price fluctuates around the target:
+
+```text
+21  SOL  >{{SOL_LONG_ENTRY_PRICE}}/0.25  CROSSING
+22  SOL  <{{SOL_LONG_ENTRY_PRICE}}/0.25%  CROSSING
+```
+
+Alarm 21 triggers above the entry price and re-arms only at or below `entry price - 0.25`. Alarm 22 triggers below the entry price and re-arms only at or above `entry price + 0.25%`.
+
+Percentage hysteresis is calculated from the fully resolved comparison target. Hysteresis is an unsigned distance, so a leading `+` or `-` is rejected. Hysteresis is supported only for `CROSSING` alarms.
 
 ### `PERSISTENT`
 
@@ -289,6 +323,8 @@ Actions are executed sequentially through `CompositeAlarmAction`. A runtime fail
 `alarmaction_Console.conf` contains one alarm ID per line:
 
 ```text
+FORMAT_VERSION=1
+
 1
 4
 5
@@ -301,6 +337,8 @@ Only listed alarms are written to the console. The output includes the asset, cu
 `alarmaction_Pushover.conf` contains the credentials followed by zero or more notification definitions:
 
 ```text
+FORMAT_VERSION=1
+
 APPLICATION_TOKEN  <pushover-application-token>
 USER_KEY            <pushover-user-key>
 
@@ -327,6 +365,8 @@ Credentials, severity, and notes may reference shared variables. Credentials and
 `alarmaction_JupiterPerpsPositionIncreaseAlarmAction.conf` contains the wallet and signer followed by zero or more position increases:
 
 ```text
+FORMAT_VERSION=1
+
 WALLET_ID        {{JUPITER_PERPS_WALLET}}
 SIGNER_KEY_NAME  <jup-key-name>
 

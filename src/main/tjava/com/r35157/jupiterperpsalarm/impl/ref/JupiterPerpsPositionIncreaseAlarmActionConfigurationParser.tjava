@@ -1,5 +1,7 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
+import com.r35157.libs.configuration.ConfigurationFormatVersionValidator;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -17,6 +19,11 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
     ) throws IOException {
         Objects.requireNonNull(variableResolver, "variableResolver");
         List<String> lines = Files.readAllLines(path);
+        int formatVersionLineIndex = ConfigurationFormatVersionValidator.validate(
+                path,
+                lines,
+                SUPPORTED_FORMAT_VERSION
+        );
         Map<Integer, JupiterPerpsPositionIncreaseAlarmActionConfiguration.PositionIncrease>
                 positionIncreases = new LinkedHashMap<>();
         ΩSolanaWalletIdΩ walletId = null;
@@ -24,6 +31,10 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
         ΩUSDCAmountΩ reserveUsdcLimit = null;
 
         for (int lineNumber = 1; lineNumber <= lines.size(); lineNumber++) {
+            if (lineNumber - 1 == formatVersionLineIndex) {
+                continue;
+            }
+
             String line = removeComment(lines.get(lineNumber - 1)).trim();
             if (line.isEmpty()) {
                 continue;
@@ -138,6 +149,8 @@ public final class JupiterPerpsPositionIncreaseAlarmActionConfigurationParser {
         int commentStart = line.indexOf('#');
         return commentStart < 0 ? line : line.substring(0, commentStart);
     }
+
+    private static final int SUPPORTED_FORMAT_VERSION = 1;
 
     private JupiterPerpsPositionIncreaseAlarmActionConfigurationParser() {
     }

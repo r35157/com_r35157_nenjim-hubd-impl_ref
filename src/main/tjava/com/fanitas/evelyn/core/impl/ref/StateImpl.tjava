@@ -3,17 +3,19 @@ package com.fanitas.evelyn.core.impl.ref;
 import com.fanitas.evelyn.core.State;
 import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionAccounting;
 import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionConcentrated;
+import com.r35157.libs.configuration.ConfigurationFormatVersionValidator;
 import com.r35157.libs.raydium.*;
 import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 import com.r35157.libs.valuetypes.basic.*;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -72,14 +74,26 @@ public class StateImpl implements State {
     }
 
     private void updateStateFromPersistence() throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(PATH_EVELYN_STATE, StandardCharsets.UTF_8)) {
-            iterationInterval = readIterationInterval(reader);
-            syrupOwnedByEvelyn = readSyrupOwnedByEvelyn(reader);
-            solanaAddressForEvelynIOU = readSolanaAddress(reader);
-            solanaAddressForEvelynIOUBurner = readSolanaAddress(reader);
-            raydiumPoolId = readRaydiumPoolId(reader);
-            curveWidth = readCurveWidth(reader);
-        }
+        List<String> lines = Files.readAllLines(
+                PATH_EVELYN_STATE,
+                StandardCharsets.UTF_8
+        );
+        int formatVersionLineIndex = ConfigurationFormatVersionValidator.validate(
+                PATH_EVELYN_STATE,
+                lines,
+                SUPPORTED_EVELYN_FORMAT_VERSION
+        );
+        Iterator<String> lineIterator = lines.subList(
+                formatVersionLineIndex + 1,
+                lines.size()
+        ).iterator();
+
+        iterationInterval = readIterationInterval(lineIterator);
+        syrupOwnedByEvelyn = readSyrupOwnedByEvelyn(lineIterator);
+        solanaAddressForEvelynIOU = readSolanaAddress(lineIterator);
+        solanaAddressForEvelynIOUBurner = readSolanaAddress(lineIterator);
+        raydiumPoolId = readRaydiumPoolId(lineIterator);
+        curveWidth = readCurveWidth(lineIterator);
     }
 
     private void updateStateFromRaydium() throws IOException, InterruptedException {
@@ -176,33 +190,37 @@ public class StateImpl implements State {
     private Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionAccounting> readPositionAccounting()
             throws IOException {
         Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionAccounting> result = new HashMap<>();
+        List<String> lines = Files.readAllLines(PATH_POSITIONS, StandardCharsets.UTF_8);
+        int formatVersionLineIndex = ConfigurationFormatVersionValidator.validate(
+                PATH_POSITIONS,
+                lines,
+                SUPPORTED_POSITIONS_FORMAT_VERSION
+        );
 
-        try (BufferedReader reader = Files.newBufferedReader(PATH_POSITIONS, StandardCharsets.UTF_8)) {
-            String line;
+        for (int lineIndex = formatVersionLineIndex + 1;
+             lineIndex < lines.size();
+             lineIndex++) {
+            String line = lines.get(lineIndex).trim();
 
-            while ((line = reader.readLine()) != null) {
-                line = line.trim();
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
 
-                if (line.isEmpty() || line.startsWith("#")) {
-                    continue;
-                }
+            // Remove comments at end of line
+            int index = line.indexOf('#');
+            if(index > -1) {
+                line = line.substring(0, index).trim();
+            }
 
-                // Remove comments at end of line
-                int index = line.indexOf('#');
-                if(index > -1) {
-                    line = line.substring(0, index).trim();
-                }
+            RaydiumLiquidityPoolPositionAccounting accounting = mapPositionAccounting(line);
 
-                RaydiumLiquidityPoolPositionAccounting accounting = mapPositionAccounting(line);
+            RaydiumLiquidityPoolPositionAccounting previous = result.put(
+                    accounting.nftId(),
+                    accounting
+            );
 
-                RaydiumLiquidityPoolPositionAccounting previous = result.put(
-                        accounting.nftId(),
-                        accounting
-                );
-
-                if (previous != null) {
-                    throw new IOException("Duplicate position accounting for NFT id: " + accounting.nftId());
-                }
+            if (previous != null) {
+                throw new IOException("Duplicate position accounting for NFT id: " + accounting.nftId());
             }
         }
 
@@ -234,47 +252,46 @@ public class StateImpl implements State {
         );
     }
 
-    private ΩSolanaAddressΩ readSolanaAddress(BufferedReader reader) throws IOException {
-        ΩSolanaAddressΩ sa = readLineFromFile(reader);
+    private ΩSolanaAddressΩ readSolanaAddress(Iterator<String> lineIterator) throws IOException {
+        ΩSolanaAddressΩ sa = readLineFromFile(lineIterator);
         return sa;
     }
 
-    private ΩRaydiumLiquidityPoolIdΩ readRaydiumPoolId(BufferedReader reader) throws IOException {
-        ΩRaydiumLiquidityPoolIdΩ rlpid = readLineFromFile(reader);
+    private ΩRaydiumLiquidityPoolIdΩ readRaydiumPoolId(Iterator<String> lineIterator) throws IOException {
+        ΩRaydiumLiquidityPoolIdΩ rlpid = readLineFromFile(lineIterator);
         return rlpid;
     }
 
-    private ΩCurveWidthΩ readCurveWidth(BufferedReader reader) throws IOException {
-        String cwStr = readLineFromFile(reader);
+    private ΩCurveWidthΩ readCurveWidth(Iterator<String> lineIterator) throws IOException {
+        String cwStr = readLineFromFile(lineIterator);
         ΩCurveWidthΩ cw = new ΩCurveWidthΩ(cwStr);
         return cw;
     }
 
-    private ΩmilliSecondsΩ readIterationInterval(BufferedReader reader) throws IOException {
-        String iterationIntervalStr = readLineFromFile(reader);
+    private ΩmilliSecondsΩ readIterationInterval(Iterator<String> lineIterator) throws IOException {
+        String iterationIntervalStr = readLineFromFile(lineIterator);
         ΩmilliSecondsΩ millis = Long.parseLong(iterationIntervalStr) * 1000;
         return millis;
     }
 
-    private ΩSyrupAmountΩ readSyrupOwnedByEvelyn(BufferedReader reader) throws IOException {
-        String syrupOwnedByEvelynStr = readLineFromFile(reader);
+    private ΩSyrupAmountΩ readSyrupOwnedByEvelyn(Iterator<String> lineIterator) throws IOException {
+        String syrupOwnedByEvelynStr = readLineFromFile(lineIterator);
         CurrencyType ct = WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType();
         ΩSyrupAmountΩ ma = stringToMoneyAmount(syrupOwnedByEvelynStr, ct);
         return ma;
     }
 
-    private static String readLineFromFile(BufferedReader reader) throws IOException {
-        String line;
-
-        while ((line = reader.readLine()) != null) {
+    private static String readLineFromFile(Iterator<String> lineIterator) {
+        while (lineIterator.hasNext()) {
+            String line = lineIterator.next();
             line = line.trim();
 
             if (line.isEmpty() || line.startsWith("#")) {
                 continue;
             }
-            break;
+            return line;
         }
-        return line;
+        return null;
     }
 
     private MoneyAmount bigDecimalToMoneyAmount(BigDecimal bd, CurrencyType ct) {
@@ -290,6 +307,8 @@ public class StateImpl implements State {
 
     private static final Path PATH_EVELYN_STATE = Path.of("conf/evelyn.conf");
     private static final Path PATH_POSITIONS = Path.of("conf/positions.conf");
+    private static final int SUPPORTED_EVELYN_FORMAT_VERSION = 1;
+    private static final int SUPPORTED_POSITIONS_FORMAT_VERSION = 1;
 
     private final Raydium raydium;
 

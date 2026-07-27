@@ -1,5 +1,7 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
+import com.r35157.libs.configuration.ConfigurationFormatVersionValidator;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,9 +51,18 @@ public final class ConsoleAlarmAction implements ConfiguredAlarmAction {
 
     private static Set<Integer> parseAlarmIds(Path path) throws IOException {
         List<String> lines = Files.readAllLines(path);
+        int formatVersionLineIndex = ConfigurationFormatVersionValidator.validate(
+                path,
+                lines,
+                SUPPORTED_FORMAT_VERSION
+        );
         Set<Integer> result = new LinkedHashSet<>();
 
         for (int lineNumber = 1; lineNumber <= lines.size(); lineNumber++) {
+            if (lineNumber - 1 == formatVersionLineIndex) {
+                continue;
+            }
+
             String line = removeComment(lines.get(lineNumber - 1)).trim();
             if (line.isEmpty()) {
                 continue;
@@ -85,6 +96,8 @@ public final class ConsoleAlarmAction implements ConfiguredAlarmAction {
         int commentStart = line.indexOf('#');
         return commentStart < 0 ? line : line.substring(0, commentStart);
     }
+
+    private static final int SUPPORTED_FORMAT_VERSION = 1;
 
     private final Set<Integer> alarmIds;
 }

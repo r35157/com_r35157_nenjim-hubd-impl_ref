@@ -1,3 +1,5 @@
+FORMAT_VERSION=1
+
 # Iteration interval in seconds
 3600
 

@@ -1,3 +1,5 @@
+FORMAT_VERSION=1
+
 # General configurations
 #####################################################
 {{JUPITER_PERPS_WALLET}}  vj98roDZ7744EBfxyuDFkKpEGCsKQLr7K8UFRumJNHf
@@ -20,31 +22,35 @@
 ################################################################################################
 
 # SOL SHORT
-1      SOL     >={{SOL_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:1m
-2      SOL     [{{SOL_SHORT_LIQ_PRICE}}-3%-->{{SOL_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:1h
-3      SOL     <={{SOL_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:1h
+#1      SOL     >={{SOL_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:1m
+#2      SOL     [{{SOL_SHORT_LIQ_PRICE}}-3%-->{{SOL_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:1h
+#3      SOL     <={{SOL_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:1h
 
 # SOL LONG
-4      SOL     <={{SOL_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:1m
-5      SOL     ({{SOL_LONG_LIQ_PRICE}}+1%-->{{SOL_LONG_LIQ_PRICE}}+3%]     PERSISTENT:1h
-6      SOL     >={{SOL_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:1h
+#4      SOL     <={{SOL_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:1m
+#5      SOL     ({{SOL_LONG_LIQ_PRICE}}+1%-->{{SOL_LONG_LIQ_PRICE}}+3%]     PERSISTENT:1h
+#6      SOL     >={{SOL_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:1h
 
 # ETH SHORT
-7      ETH     >={{ETH_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:1m
-8      ETH     [{{ETH_SHORT_LIQ_PRICE}}-3%-->{{ETH_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:1h
-9      ETH     <={{ETH_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:1h
+#7      ETH     >={{ETH_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:1m
+#8      ETH     [{{ETH_SHORT_LIQ_PRICE}}-3%-->{{ETH_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:1h
+#9      ETH     <={{ETH_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:1h
 
 # ETH LONG
-10     ETH     <={{ETH_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:1m
-11     ETH     ({{ETH_LONG_LIQ_PRICE}}+1%-->{{ETH_LONG_LIQ_PRICE}}+3%]     PERSISTENT:1h
-12     ETH     >={{ETH_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:1h
+#10     ETH     <={{ETH_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:1m
+#11     ETH     ({{ETH_LONG_LIQ_PRICE}}+1%-->{{ETH_LONG_LIQ_PRICE}}+3%]     PERSISTENT:1h
+#12     ETH     >={{ETH_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:1h
 
 # BTC SHORT
-13     BTC     >={{BTC_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:1m
-14     BTC     [{{BTC_SHORT_LIQ_PRICE}}-3%-->{{BTC_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:1h
-15     BTC     <={{BTC_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:1h
+#13     BTC     >={{BTC_SHORT_LIQ_PRICE}}-1%                                PERSISTENT:1m
+#14     BTC     [{{BTC_SHORT_LIQ_PRICE}}-3%-->{{BTC_SHORT_LIQ_PRICE}}-1%)   PERSISTENT:1h
+#15     BTC     <={{BTC_SHORT_ENTRY_PRICE}}-5%                              PERSISTENT:1h
 
 # BTC LONG
-16     BTC     <={{BTC_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:1m
-17     BTC     ({{BTC_LONG_LIQ_PRICE}}+1%-->{{BTC_LONG_LIQ_PRICE}}+3%]     PERSISTENT:1h
-18     BTC     >={{BTC_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:1h
+#16     BTC     <={{BTC_LONG_LIQ_PRICE}}+1%                                 PERSISTENT:1m
+#17     BTC     ({{BTC_LONG_LIQ_PRICE}}+1%-->{{BTC_LONG_LIQ_PRICE}}+3%]     PERSISTENT:1h
+#18     BTC     >={{BTC_LONG_ENTRY_PRICE}}+5%                               PERSISTENT:1h
+
+# CROSSING with hysteresis
+# Triggers above the entry price and re-arms at or below entry price minus 0.25%
+#19    SOL     >{{SOL_LONG_ENTRY_PRICE}}/0.25%                             CROSSING

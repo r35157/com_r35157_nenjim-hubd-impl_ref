@@ -1,3 +1,5 @@
+FORMAT_VERSION=1
+
 # Wallet and signer used for position-increase transactions
 ################################################################
 WALLET_ID            {{JUPITER_PERPS_WALLET}}

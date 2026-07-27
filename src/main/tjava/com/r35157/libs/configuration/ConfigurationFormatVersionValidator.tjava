@@ -1,0 +1,152 @@
+package com.r35157.libs.configuration;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public final class ConfigurationFormatVersionValidator {
+
+    public static int validate(
+            Path path,
+            List<String> lines,
+            int supportedVersion
+    ) {
+        Objects.requireNonNull(path, "path");
+        Objects.requireNonNull(lines, "lines");
+
+        if (supportedVersion <= 0) {
+            throw new IllegalArgumentException(
+                    "Supported configuration format version must be a positive integer"
+            );
+        }
+
+        int firstConfigurationEntryIndex = -1;
+        List<FormatVersionDeclaration> declarations = new ArrayList<>();
+
+        for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
+            String trimmedLine = lines.get(lineIndex).trim();
+
+            if (trimmedLine.isEmpty() || trimmedLine.startsWith("#")) {
+                continue;
+            }
+
+            if (firstConfigurationEntryIndex < 0) {
+                firstConfigurationEntryIndex = lineIndex;
+            }
+
+            if (trimmedLine.startsWith(FORMAT_VERSION_KEY)) {
+                declarations.add(parseDeclaration(path, trimmedLine, lineIndex));
+            }
+        }
+
+        if (declarations.isEmpty()) {
+            throw new IllegalArgumentException(
+                    path + ": Missing " + FORMAT_VERSION_KEY + " declaration. "
+                            + "It must be the first actual configuration entry."
+            );
+        }
+
+        if (declarations.size() > 1) {
+            String lineNumbers = declarations.stream()
+                    .map(declaration -> Integer.toString(declaration.lineIndex() + 1))
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElseThrow();
+
+            throw new IllegalArgumentException(
+                    path + ": Duplicate " + FORMAT_VERSION_KEY
+                            + " declarations on lines " + lineNumbers
+            );
+        }
+
+        FormatVersionDeclaration declaration = declarations.get(0);
+
+        if (declaration.lineIndex() != firstConfigurationEntryIndex) {
+            throw new IllegalArgumentException(
+                    path + ":" + (declaration.lineIndex() + 1) + ": "
+                            + FORMAT_VERSION_KEY
+                            + " must be the first actual configuration entry"
+            );
+        }
+
+        if (declaration.version() != supportedVersion) {
+            throw versionMismatch(
+                    path,
+                    declaration.version(),
+                    supportedVersion
+            );
+        }
+
+        return declaration.lineIndex();
+    }
+
+    private static FormatVersionDeclaration parseDeclaration(
+            Path path,
+            String trimmedLine,
+            int lineIndex
+    ) {
+        Matcher matcher = FORMAT_VERSION_PATTERN.matcher(trimmedLine);
+
+        if (!matcher.matches()) {
+            throw malformedVersion(path, lineIndex, trimmedLine, null);
+        }
+
+        try {
+            int version = Integer.parseInt(matcher.group(1));
+
+            if (version <= 0) {
+                throw malformedVersion(path, lineIndex, trimmedLine, null);
+            }
+
+            return new FormatVersionDeclaration(lineIndex, version);
+        } catch (NumberFormatException exception) {
+            throw malformedVersion(path, lineIndex, trimmedLine, exception);
+        }
+    }
+
+    private static IllegalArgumentException malformedVersion(
+            Path path,
+            int lineIndex,
+            String line,
+            Exception cause
+    ) {
+        return new IllegalArgumentException(
+                path + ":" + (lineIndex + 1) + ": Invalid "
+                        + FORMAT_VERSION_KEY + " declaration '" + line
+                        + "'. Expected " + FORMAT_VERSION_KEY
+                        + "=<positive integer>",
+                cause
+        );
+    }
+
+    private static IllegalArgumentException versionMismatch(
+            Path path,
+            int fileVersion,
+            int supportedVersion
+    ) {
+        return new IllegalArgumentException(
+                "Configuration format version mismatch in " + path + ":\n"
+                        + "File version: " + fileVersion + "\n"
+                        + "Supported version: " + supportedVersion + "\n\n"
+                        + "The configuration file and the running application "
+                        + "are not compatible.\n"
+                        + "Update the configuration file or compile and deploy "
+                        + "the correct application version."
+        );
+    }
+
+    private record FormatVersionDeclaration(
+            int lineIndex,
+            int version
+    ) {
+    }
+
+    private static final String FORMAT_VERSION_KEY = "FORMAT_VERSION";
+    private static final Pattern FORMAT_VERSION_PATTERN =
+            Pattern.compile(FORMAT_VERSION_KEY + "=(\\d+)");
+
+    private ConfigurationFormatVersionValidator() {
+    }
+}
