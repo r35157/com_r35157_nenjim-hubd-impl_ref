@@ -91,15 +91,15 @@ public final class AlarmConfigurationParser {
         String normalized = triggerText.toUpperCase(Locale.ROOT);
 
         if (normalized.equals("ONETIME")) {
-            return new TriggerConfiguration(AlarmTrigger.ONETIME, 0);
+            return new TriggerConfiguration(AlarmTrigger.ONETIME, 0L);
         }
 
         if (normalized.equals("CROSSING")) {
-            return new TriggerConfiguration(AlarmTrigger.CROSSING, 0);
+            return new TriggerConfiguration(AlarmTrigger.CROSSING, 0L);
         }
 
         if (normalized.equals("PERSISTENT")) {
-            return new TriggerConfiguration(AlarmTrigger.PERSISTENT, 0);
+            return new TriggerConfiguration(AlarmTrigger.PERSISTENT, 0L);
         }
 
         if (normalized.startsWith("PERSISTENT:")) {
@@ -125,7 +125,10 @@ public final class AlarmConfigurationParser {
                 );
             }
 
-            return new TriggerConfiguration(AlarmTrigger.PERSISTENT, gracePeriodSeconds);
+            return new TriggerConfiguration(
+                    AlarmTrigger.PERSISTENT,
+                    gracePeriodSeconds * 1000L
+            );
         }
 
         if (normalized.startsWith("ONETIME:")) {
@@ -245,7 +248,7 @@ public final class AlarmConfigurationParser {
 
     private record TriggerConfiguration(
             AlarmTrigger trigger,
-            ΩsecondsΩ gracePeriod
+            ΩmilliSecondsΩ gracePeriod
     ) {
     }
 

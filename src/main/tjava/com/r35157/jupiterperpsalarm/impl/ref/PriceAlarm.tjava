@@ -91,14 +91,14 @@ public final class PriceAlarm {
             return true;
         }
 
-        ΩsecondsΩ gracePeriod = definition.triggerGracePeriod();
+        ΩmilliSecondsΩ gracePeriod = definition.triggerGracePeriod();
 
         if (gracePeriod == 0) {
             return true;
         }
 
         return !Instant.now().isBefore(
-                lastTriggeredAt.plusSeconds(gracePeriod)
+                lastTriggeredAt.plusMillis(gracePeriod)
         );
     }
 

@@ -7,7 +7,7 @@ public record PriceAlarmDefinition(
         JupiterPerpsAsset asset,
         String conditionExpression,
         AlarmTrigger trigger,
-        ΩsecondsΩ triggerGracePeriod
+        ΩmilliSecondsΩ triggerGracePeriod
 ) {
     public PriceAlarmDefinition {
         Objects.requireNonNull(asset, "asset");

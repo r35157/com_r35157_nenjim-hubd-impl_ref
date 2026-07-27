@@ -5,6 +5,6 @@ public record ResolvedPriceAlarm(
         JupiterPerpsAsset asset,
         PriceCondition condition,
         AlarmTrigger trigger,
-        ΩsecondsΩ triggerGracePeriod
+        ΩmilliSecondsΩ triggerGracePeriod
 ) {
 }
