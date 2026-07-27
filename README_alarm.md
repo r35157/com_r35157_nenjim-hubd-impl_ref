@@ -131,8 +131,8 @@ ID  ASSET  CONDITION  TRIGGER
 Example:
 
 ```text
-4  SOL  <={{SOL_LONG_LIQ_PRICE}}+1%  PERSISTENT:60
-5  SOL  ({{SOL_LONG_LIQ_PRICE}}+1%-->{{SOL_LONG_LIQ_PRICE}}+3%]  PERSISTENT:3600
+4  SOL  <={{SOL_LONG_LIQ_PRICE}}+1%  PERSISTENT:1m
+5  SOL  ({{SOL_LONG_LIQ_PRICE}}+1%-->{{SOL_LONG_LIQ_PRICE}}+3%]  PERSISTENT:1h
 ```
 
 Supported column values:
@@ -140,7 +140,7 @@ Supported column values:
 - `ID`: integer alarm identifier. IDs should be unique. Action files use this ID to select alarms.
 - `ASSET`: `SOL`, `ETH`, or `BTC`.
 - `CONDITION`: a comparison or range expression. It must be one token with no whitespace.
-- `TRIGGER`: `ONETIME`, `CROSSING`, `PERSISTENT`, or `PERSISTENT:<seconds>`.
+- `TRIGGER`: `ONETIME`, `CROSSING`, `PERSISTENT`, or `PERSISTENT:<duration>`.
 
 A trailing comment is allowed after a variable value or trigger.
 
@@ -225,7 +225,7 @@ On the first accepted oracle price after startup, an already-satisfied `ONETIME`
 - The first accepted price establishes the initial state and never triggers the alarm.
 - Remaining inside the condition does not trigger again.
 - Leaving the condition re-arms the alarm, so the next entry triggers again.
-- A grace period is not supported; `CROSSING:<seconds>` is rejected.
+- A grace period is not supported; `CROSSING:1m` is rejected.
 
 The condition determines the crossing direction. For example:
 
@@ -240,8 +240,23 @@ Alarm 19 triggers when the price enters the profitable side from below. Alarm 20
 
 - Triggers immediately on the first accepted matching price.
 - With no grace period, it can trigger for every accepted matching price event.
-- `PERSISTENT:<seconds>` limits repeated triggering to at most once per configured interval while the condition remains satisfied.
+- `PERSISTENT:<duration>` limits repeated triggering to at most once per configured interval while the condition remains satisfied.
 - Leaving and re-entering a condition does not bypass the grace period measured from the previous trigger.
+
+A duration is a non-negative whole number followed by exactly one suffix:
+
+| Suffix | Unit |
+|---|---|
+| `ms` | millisecond |
+| `s` | second |
+| `m` | minute |
+| `h` | hour |
+| `d` | day |
+| `w` | week |
+| `M` | month (30 days) |
+| `y` | year (365 days) |
+
+Suffixes are case-sensitive, so `m` means minute and `M` means month. Combined durations such as `1w3d` are not supported.
 
 Duplicate price events received from redundant RPC endpoints are suppressed using the raw price, exponent, and oracle timestamp. Up to 512 recent event keys are retained per asset monitor.
 
