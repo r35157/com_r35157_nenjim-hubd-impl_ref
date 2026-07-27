@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <github-snapshot-branch>" >&2
+DEFAULT_BRANCH=0.1-dev
+
+if [ "$#" -gt 1 ]; then
+    echo "Usage: $0 [github-snapshot-branch]" >&2
     exit 1
 fi
 
-BRANCH="$1"
+BRANCH="${1:-$DEFAULT_BRANCH}"
 
 SOURCE="$HOME/projects/com_r35157_nenjim-hubd-impl_ref"
 TARGET="$HOME/projects/com_r35157_nenjim-hubd-impl_ref_github_snapshot"
