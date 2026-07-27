@@ -95,7 +95,7 @@ public class NenjimTestTool extends Application implements NenjimProcess {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    TreeItem<FileNode> treeItem = getTreeTableRow().getTreeItem();
+                    TreeItem<FileNode> treeItem = getTableRow().getTreeItem();
                     FileNode node = treeItem.getValue();
                         // Create checkbox
                         CheckBox checkBox = new CheckBox();
@@ -145,7 +145,7 @@ public class NenjimTestTool extends Application implements NenjimProcess {
         typeCol.setCellValueFactory(param -> param.getValue().getValue().typeProperty());
         typeCol.setPrefWidth(100);
 
-        treeTable.getColumns().setAll(nameCol, sizeCol, typeCol);
+        treeTable.getColumns().setAll(List.of(nameCol, sizeCol, typeCol));
 
         Button runButton = new Button("Execute Tests");
         runButton.setOnAction(event -> runTests());

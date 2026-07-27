@@ -174,7 +174,7 @@ public class NetworthChartController {
         TreeItem<String> item1 = new TreeItem<>("Assets");
         TreeItem<String> item2 = new TreeItem<>("Liabilities");
 
-        rootItem.getChildren().addAll(item1, item2);
+        rootItem.getChildren().addAll(List.of(item1, item2));
 
         treeView_accounts.setRoot(rootItem);
         treeView_accounts.setCellFactory(new Callback<TreeView<String>, TreeCell<String>>() {
@@ -195,7 +195,7 @@ public class NetworthChartController {
 
             {
                 // Create a custom locale for Denmark
-                Locale danishLocale = new Locale("da", "DK");
+                Locale danishLocale = Locale.of("da", "DK");
                 formatter = NumberFormat.getInstance(danishLocale);
                 formatter.setMinimumFractionDigits(2);
                 formatter.setMaximumFractionDigits(2);
@@ -233,18 +233,16 @@ public class NetworthChartController {
 
         ObservableList<XYChart.Series<String, Number>> chartData = chart.getData();
 
-        chartData.addAll(
-                //series_liability_maria,
-                //series_liability_emil,
-                //series_liability_sofie,
-                series_asset_solana
-                //series_asset_fiatdkk,
-                //series_asset_bitcoin,
-                //series_asset_ethereum,
-                //series_asset_bitcoincash,
-                //series_asset_usdollarcoin,
-                //series_asset_monero
-        );
+        //chartData.add(series_liability_maria);
+        //chartData.add(series_liability_emil);
+        //chartData.add(series_liability_sofie);
+        chartData.add(series_asset_solana);
+        //chartData.add(series_asset_fiatdkk);
+        //chartData.add(series_asset_bitcoin);
+        //chartData.add(series_asset_ethereum);
+        //chartData.add(series_asset_bitcoincash);
+        //chartData.add(series_asset_usdollarcoin);
+        //chartData.add(series_asset_monero);
 
         this.displayPeriod = ONE_DAY;
         this.timeStampForLastValueOnChart = 0L;

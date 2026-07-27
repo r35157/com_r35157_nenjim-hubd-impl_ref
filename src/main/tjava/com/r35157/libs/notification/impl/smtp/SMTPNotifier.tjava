@@ -33,7 +33,7 @@ public class SMTPNotifier implements AddressedNotifier<SMTPDestination, EmailMes
 
         ΩEmailAddressΩ emailAddress = "SomeReceiver";
         SMTPDestination destination = new SMTPDestination(emailAddress);
-        BoundNotifier boundNotifier = notifier.bind(destination);
+        BoundNotifier<EmailMessage> boundNotifier = notifier.bind(destination);
 
         EmailSubject subject = new EmailSubject("SomeSubject");
         EmailBody body = new EmailBody("SomeBody");

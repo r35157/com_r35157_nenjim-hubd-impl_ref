@@ -4,6 +4,7 @@ package crypto.r35157.cauldron;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -69,7 +70,7 @@ public class PriceFetcher {
 
     private Map<String, Number> getPrices() throws Exception {
         String urlString = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,monero,bitcoin-cash,usd-coin&vs_currencies=dkk";
-        URL url = new URL(urlString);
+        URL url = URI.create(urlString).toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
 

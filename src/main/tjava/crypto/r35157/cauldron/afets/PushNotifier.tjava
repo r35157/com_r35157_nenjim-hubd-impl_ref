@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
 
@@ -28,7 +29,7 @@ public class PushNotifier {
             byte[] postDataBytes = postData.toString().getBytes(UTF_8);
 
             // Create the connection to the Pushover API
-            URL url = new URL(ENDPOINT);
+            URL url = URI.create(ENDPOINT).toURL();
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);

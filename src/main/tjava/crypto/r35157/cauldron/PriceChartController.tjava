@@ -184,7 +184,7 @@ public class PriceChartController {
 
             {
                 // Create a custom locale for Denmark
-                Locale danishLocale = new Locale("da", "DK");
+                Locale danishLocale = Locale.of("da", "DK");
                 formatter = NumberFormat.getInstance(danishLocale);
                 formatter.setMinimumFractionDigits(2);
                 formatter.setMaximumFractionDigits(2);
