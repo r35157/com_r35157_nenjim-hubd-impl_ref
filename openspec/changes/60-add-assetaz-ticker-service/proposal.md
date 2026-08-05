@@ -5,8 +5,8 @@ AssetAZ has only empty ticker service shells, so callers cannot obtain a typed l
 ## What Changes
 
 - Define an AssetAZ ticker API that exposes the latest persisted observation by `TradingPair` using existing price ValueTypes and throws clear exceptions when no price is available.
-- Add a reference implementation for the single supported `EVE_USDC` pair, producing the hardcoded price `14.85` immediately at startup and once per minute.
-- Make an existing `.prices` file the explicit activation mechanism, load its valid history, and append new observations durably before publishing them as latest.
+- Add a reference implementation for the single supported `EVE_USDC` pair, producing the hardcoded price `14.85` immediately at startup and starting each subsequent attempt one minute after the previous attempt completes.
+- Make an existing `.prices` file the explicit activation mechanism, load its valid history, append every new observation durably, and expose the successfully persisted observation with the greatest timestamp as latest.
 - Start the ticker through NenjimHub's current temporary autorun mechanism.
 - Leave the pair unavailable when its history file is missing, reject malformed history at startup, and retain the prior published observation when a new observation cannot be persisted safely.
 

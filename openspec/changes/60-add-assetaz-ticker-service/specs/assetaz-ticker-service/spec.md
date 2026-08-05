@@ -50,15 +50,19 @@ Each data line SHALL have the form `<UTC timestamp>:<price>`, where the timestam
 - **THEN** those existing lines remain unchanged and the appended observation contains neither a comment nor extra annotation
 
 ### Requirement: New observations are durable before publication
-For enabled `EVE_USDC`, the ticker SHALL generate price `14.85` immediately at startup and once per minute. For each generated observation it SHALL validate the observation, append it to history, flush or force the data to persistent storage, and only then update the latest in-memory observation. If persistence fails, it SHALL report the failure clearly, SHALL NOT publish the attempted observation, and SHALL preserve the previously persisted latest observation. Concurrent reads SHALL never observe an unpersisted price.
+For enabled `EVE_USDC`, the ticker SHALL generate price `14.85` immediately at startup. After that startup attempt completes, and after each subsequent attempt completes, the ticker SHALL wait one minute before beginning the next attempt. It SHALL NOT use fixed-rate scheduling or perform catch-up attempts after a delay. For each generated observation it SHALL validate the observation, append it to history, and flush or force the data to persistent storage; every generated observation SHALL be persisted unless that persistence attempt fails. Only after persistence succeeds SHALL the ticker replace the in-memory latest observation, and then only if the newly persisted observation's `observedAt` timestamp is later than the current latest timestamp. If persistence fails, it SHALL report the failure clearly, SHALL NOT publish the attempted observation, and SHALL preserve the previously persisted latest observation. Concurrent reads SHALL never observe an unpersisted price, and latest SHALL always be the successfully persisted observation with the greatest `observedAt` timestamp across loaded history and newly persisted observations.
 
 #### Scenario: Startup observation is persisted
 - **WHEN** the ticker starts with an enabled writable history
-- **THEN** it appends and forces a `14.85` observation to persistent storage before exposing it as latest
+- **THEN** it appends and forces a `14.85` observation to persistent storage before considering it for latest
 
 #### Scenario: Periodic observation is persisted
-- **WHEN** one minute elapses while the enabled ticker is running
-- **THEN** it appends and forces another `14.85` observation to persistent storage before exposing it as latest
+- **WHEN** one minute has elapsed after the preceding observation attempt completed while the enabled ticker is running
+- **THEN** it begins another attempt and appends and forces its `14.85` observation to persistent storage before considering it for latest
+
+#### Scenario: Future-dated history remains latest
+- **WHEN** history contains a successfully persisted observation whose timestamp is later than a newly generated observation
+- **THEN** the newly generated observation is still persisted and the future-dated history observation remains latest
 
 #### Scenario: Persistence fails
 - **WHEN** appending or flushing a new observation fails
