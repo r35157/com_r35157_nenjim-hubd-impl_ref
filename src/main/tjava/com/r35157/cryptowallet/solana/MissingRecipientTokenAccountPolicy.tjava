@@ -1,0 +1,18 @@
+package com.r35157.cryptowallet.solana;
+
+/**
+ * Decides how an SPL-token transfer handles a missing recipient Associated
+ * Token Account.
+ */
+public enum MissingRecipientTokenAccountPolicy {
+    /**
+     * Reject the transfer without submitting a transaction.
+     */
+    FAIL,
+
+    /**
+     * Create the recipient account in the transfer transaction, paid by the
+     * sending wallet.
+     */
+    CREATE_AT_SENDER_EXPENSE
+}

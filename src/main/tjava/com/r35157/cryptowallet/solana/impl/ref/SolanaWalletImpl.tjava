@@ -3,10 +3,13 @@ package com.r35157.cryptowallet.solana.impl.ref;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r35157.cryptowallet.solana.SolanaWallet;
+import com.r35157.cryptowallet.solana.MissingRecipientTokenAccountPolicy;
+import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SPLTokenHolding;
 import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
+import com.r35157.libs.solana.SPLTokenSupply;
 import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
 import org.jetbrains.annotations.NotNull;
@@ -15,6 +18,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Objects;
 
 public class SolanaWalletImpl implements SolanaWallet {
     public SolanaWalletImpl(
@@ -50,6 +55,222 @@ public class SolanaWalletImpl implements SolanaWallet {
         return tokenHolding == null
                 ? null
                 : tokenHolding.uiAmount();
+    }
+
+    @Override
+    public @NotNull ΩSolanaTransactionSignatureΩ sendSolana(
+            @NotNull ΩSolanaWalletIdΩ recipient,
+            @NotNull ΩSolanaAmountΩ amount
+    ) throws IOException, InterruptedException {
+        SolanaUnsignedTransaction unsignedTransaction =
+                solanaBlockChain.buildSolanaTransferTransaction(
+                        address,
+                        recipient,
+                        amount
+                );
+
+        return signAndSendTransaction(unsignedTransaction);
+    }
+
+    @Override
+    public @NotNull ΩSolanaTransactionSignatureΩ sendAllSolana(
+            @NotNull ΩSolanaWalletIdΩ recipient
+    ) throws IOException, InterruptedException {
+        SolanaUnsignedTransaction unsignedTransaction =
+                solanaBlockChain.buildSolanaTransferAllTransaction(
+                        address,
+                        recipient
+                );
+
+        return signAndSendTransaction(unsignedTransaction);
+    }
+
+    @Override
+    public @NotNull ΩSolanaTransactionSignatureΩ sendSPLToken(
+            @NotNull ΩSPLMintAddressΩ mintAddress,
+            @NotNull ΩSolanaWalletIdΩ recipient,
+            @NotNull ΩAmountΩ amount,
+            @NotNull MissingRecipientTokenAccountPolicy policy
+    ) throws IOException, InterruptedException {
+        if (mintAddress == null || mintAddress.isBlank()) {
+            throw new IllegalArgumentException(
+                    "SPL token mint address must not be blank"
+            );
+        }
+        if (recipient == null
+                || recipient.isBlank()
+                || recipient.equals(address)) {
+            throw new IllegalArgumentException(
+                    "SPL token recipient must be present and different "
+                            + "from the sender"
+            );
+        }
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException(
+                    "SPL token transfer amount must be greater than zero"
+            );
+        }
+        Objects.requireNonNull(
+                policy,
+                "Missing recipient token account policy must not be null"
+        );
+
+        SolanaAccountInfo mintAccount = solanaBlockChain.getAccountInfo(
+                mintAddress
+        );
+        if (mintAccount == null) {
+            throw new IllegalStateException(
+                    "SPL token mint account does not exist: " + mintAddress
+            );
+        }
+
+        SolanaSPLTokenProgram splProgram = detectTokenProgram(mintAccount);
+        SPLTokenSupply tokenSupply = solanaBlockChain.getSPLTokenSupply(
+                mintAddress,
+                splProgram
+        );
+        SPLTokenHolding senderHolding = solanaBlockChain
+                .getSPLTokenHoldings(address, splProgram)
+                .get(mintAddress);
+
+        if (senderHolding == null) {
+            throw new IllegalStateException(
+                    "Sender does not have a token account for mint "
+                            + mintAddress
+            );
+        }
+        if (senderHolding.decimals() != tokenSupply.decimals()) {
+            throw new IllegalStateException(
+                    "Sender token account decimals do not match the mint"
+            );
+        }
+
+        ΩRawAmountΩ rawAmount;
+        try {
+            rawAmount = amount
+                    .movePointRight(tokenSupply.decimals())
+                    .toBigIntegerExact()
+                    .toString();
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(
+                    "SPL token transfer amount has more than "
+                            + tokenSupply.decimals()
+                            + " decimal places",
+                    e
+            );
+        }
+
+        if (new java.math.BigInteger(rawAmount).compareTo(
+                new java.math.BigInteger(senderHolding.rawAmount())
+        ) > 0) {
+            throw new IllegalStateException(
+                    "Sender has insufficient SPL token balance"
+            );
+        }
+
+        ΩSPLTokenAccountΩ recipientTokenAccount =
+                solanaBlockChain.findAssociatedTokenAccount(
+                        recipient,
+                        mintAddress,
+                        splProgram
+                );
+        SolanaAccountInfo recipientAccount = solanaBlockChain.getAccountInfo(
+                recipientTokenAccount
+        );
+        boolean createRecipientAccount = recipientAccount == null;
+
+        if (createRecipientAccount
+                && policy == MissingRecipientTokenAccountPolicy.FAIL) {
+            throw new IllegalStateException(
+                    "Recipient Associated Token Account does not exist: "
+                            + recipientTokenAccount
+            );
+        }
+        if (recipientAccount != null) {
+            validateRecipientTokenAccount(
+                    recipientAccount,
+                    mintAddress,
+                    recipient,
+                    splProgram
+            );
+        }
+
+        SolanaUnsignedTransaction transaction =
+                solanaBlockChain.buildSPLTokenTransferTransaction(
+                        address,
+                        senderHolding.tokenAccount(),
+                        mintAddress,
+                        recipient,
+                        recipientTokenAccount,
+                        rawAmount,
+                        tokenSupply.decimals(),
+                        splProgram,
+                        createRecipientAccount
+                );
+
+        return signAndSendTransaction(transaction);
+    }
+
+    private void validateRecipientTokenAccount(
+            SolanaAccountInfo tokenAccount,
+            ΩSPLMintAddressΩ expectedMint,
+            ΩSolanaWalletIdΩ expectedOwner,
+            SolanaSPLTokenProgram expectedProgram
+    ) {
+        if (!expectedProgram.getAddress().equals(tokenAccount.owner())) {
+            throw new IllegalStateException(
+                    "Recipient token account is owned by an unexpected program"
+            );
+        }
+
+        byte[] accountData;
+        try {
+            accountData = Base64.getDecoder().decode(tokenAccount.data());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                    "Recipient token account contains invalid Base64 data",
+                    e
+            );
+        }
+        if (accountData.length < 64) {
+            throw new IllegalStateException(
+                    "Recipient token account data is too short"
+            );
+        }
+
+        ΩSolanaAddressΩ actualMint = solanaBlockChain.encodeSolanaAddress(
+                java.util.Arrays.copyOfRange(accountData, 0, 32)
+        );
+        ΩSolanaAddressΩ actualOwner = solanaBlockChain.encodeSolanaAddress(
+                java.util.Arrays.copyOfRange(accountData, 32, 64)
+        );
+
+        if (!expectedMint.equals(actualMint)) {
+            throw new IllegalStateException(
+                    "Recipient token account belongs to an unexpected mint"
+            );
+        }
+        if (!expectedOwner.equals(actualOwner)) {
+            throw new IllegalStateException(
+                    "Recipient token account belongs to an unexpected owner"
+            );
+        }
+    }
+
+    private SolanaSPLTokenProgram detectTokenProgram(
+            SolanaAccountInfo mintAccount
+    ) {
+        for (SolanaSPLTokenProgram program
+                : SolanaSPLTokenProgram.values()) {
+            if (program.getAddress().equals(mintAccount.owner())) {
+                return program;
+            }
+        }
+
+        throw new IllegalStateException(
+                "Mint account is not owned by a supported SPL token program: "
+                        + mintAccount.owner()
+        );
     }
 
     @Override
@@ -135,6 +356,13 @@ public class SolanaWalletImpl implements SolanaWallet {
         SolanaSignedTransaction sst = new SolanaSignedTransaction(signedTransaction);
 
         return sst;
+    }
+
+    @Override
+    public @NotNull ΩSolanaTransactionSignatureΩ sendTransaction(
+            @NotNull SolanaSignedTransaction transaction
+    ) throws IOException, InterruptedException {
+        return solanaBlockChain.sendTransaction(transaction);
     }
 
     private record SignerResponse(

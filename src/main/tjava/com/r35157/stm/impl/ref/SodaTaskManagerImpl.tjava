@@ -1,0 +1,19 @@
+package com.r35157.stm.impl.ref;
+
+import com.r35157.libs.javafx.JavaFxRuntime;
+import com.r35157.stm.SodaTaskManager;
+import javafx.stage.Stage;
+
+public final class SodaTaskManagerImpl implements SodaTaskManager {
+
+    @Override
+    public void start() {
+        JavaFxRuntime.runLater(this::showWindow);
+    }
+
+    private void showWindow() {
+        Stage window = new Stage();
+        window.setTitle("Soda Task Manager");
+        window.show();
+    }
+}

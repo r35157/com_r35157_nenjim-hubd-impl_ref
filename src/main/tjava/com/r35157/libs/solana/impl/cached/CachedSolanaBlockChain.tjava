@@ -6,9 +6,11 @@ import com.r35157.libs.solana.SPLTokenHolding;
 import com.r35157.libs.solana.SPLTokenSupply;
 import com.r35157.libs.solana.SolanaAccountInfo;
 import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaLatestBlockhash;
 import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
 import com.r35157.libs.solana.SolanaProgramAddressSeed;
 import com.r35157.libs.solana.SolanaSignedTransaction;
+import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
 import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
@@ -42,6 +44,43 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
             ΩSolanaAddressΩ address
     ) throws IOException, InterruptedException {
         return delegate.getBalanceInLamport(address);
+    }
+
+    @Override
+    public SolanaLatestBlockhash getLatestBlockhash()
+            throws IOException, InterruptedException {
+        return delegate.getLatestBlockhash();
+    }
+
+    @Override
+    public ΩlamportsΩ getFeeForMessage(
+            ΩBase64StringΩ serializedMessage
+    ) throws IOException, InterruptedException {
+        return delegate.getFeeForMessage(serializedMessage);
+    }
+
+    @Override
+    public SolanaUnsignedTransaction buildSolanaTransferTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient,
+            ΩSolanaAmountΩ amount
+    ) throws IOException, InterruptedException {
+        return delegate.buildSolanaTransferTransaction(
+                sender,
+                recipient,
+                amount
+        );
+    }
+
+    @Override
+    public SolanaUnsignedTransaction buildSolanaTransferAllTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient
+    ) throws IOException, InterruptedException {
+        return delegate.buildSolanaTransferAllTransaction(
+                sender,
+                recipient
+        );
     }
 
     @Override
@@ -169,6 +208,44 @@ public final class CachedSolanaBlockChain implements SolanaBlockChain {
             SolanaSignedTransaction transaction
     ) throws IOException, InterruptedException {
         return delegate.sendTransaction(transaction);
+    }
+
+    @Override
+    public SolanaUnsignedTransaction buildSPLTokenTransferTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSPLTokenAccountΩ senderTokenAccount,
+            ΩSPLMintAddressΩ mintAddress,
+            ΩSolanaAddressΩ recipient,
+            ΩSPLTokenAccountΩ recipientTokenAccount,
+            ΩRawAmountΩ rawAmount,
+            ΩamountDecimalsΩ decimals,
+            SolanaSPLTokenProgram splProgram,
+            boolean createRecipientTokenAccount
+    ) throws IOException, InterruptedException {
+        return delegate.buildSPLTokenTransferTransaction(
+                sender,
+                senderTokenAccount,
+                mintAddress,
+                recipient,
+                recipientTokenAccount,
+                rawAmount,
+                decimals,
+                splProgram,
+                createRecipientTokenAccount
+        );
+    }
+
+    @Override
+    public ΩSPLTokenAccountΩ findAssociatedTokenAccount(
+            ΩSolanaAddressΩ owner,
+            ΩSPLMintAddressΩ mintAddress,
+            SolanaSPLTokenProgram splProgram
+    ) {
+        return delegate.findAssociatedTokenAccount(
+                owner,
+                mintAddress,
+                splProgram
+        );
     }
 
     private synchronized Set<SolanaAccountInfo> loadProgramAccounts(

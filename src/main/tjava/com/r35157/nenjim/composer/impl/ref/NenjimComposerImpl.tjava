@@ -1,0 +1,20 @@
+package com.r35157.nenjim.composer.impl.ref;
+
+import com.r35157.libs.javafx.JavaFxRuntime;
+import com.r35157.nenjim.composer.NenjimComposer;
+import javafx.stage.Stage;
+
+public final class NenjimComposerImpl implements NenjimComposer {
+
+    @Override
+    public void start() {
+        JavaFxRuntime.runLater(this::showWindow);
+    }
+
+    private void showWindow() {
+
+        var window = new Stage();
+        window.setTitle("Nenjim Composer");
+        window.show();
+    }
+}

@@ -1,5 +1,11 @@
 package com.fanitas.evelyn.core;
 
+import org.jetbrains.annotations.NotNull;
+
+import java.util.List;
+
 public interface Evelyn {
     void executeService() throws Exception;
+
+    @NotNull List<EvelynStatusIndexPoint> getStatusIndexHistory();
 }

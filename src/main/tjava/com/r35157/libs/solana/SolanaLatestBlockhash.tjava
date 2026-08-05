@@ -1,0 +1,13 @@
+package com.r35157.libs.solana;
+
+/**
+ * A recent Solana blockhash and the last block height at which it is valid.
+ *
+ * @param blockhash the recent blockhash
+ * @param lastValidBlockHeight the last block height at which the blockhash is valid
+ */
+public record SolanaLatestBlockhash(
+        ΩSolanaBlockhashΩ blockhash,
+        long lastValidBlockHeight
+) {
+}

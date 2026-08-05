@@ -1,0 +1,5 @@
+package com.r35157.nenjim.ntt;
+
+public interface NenjimTestTool {
+    void start();
+}

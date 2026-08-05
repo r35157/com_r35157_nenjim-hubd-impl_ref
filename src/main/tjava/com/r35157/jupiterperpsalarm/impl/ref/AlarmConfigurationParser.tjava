@@ -47,10 +47,6 @@ public final class AlarmConfigurationParser {
             }
         }
 
-        if (alarms.isEmpty()) {
-            throw new IllegalArgumentException("No alarms found in " + path);
-        }
-
         return new AlarmConfiguration(alarms, constants);
     }
 

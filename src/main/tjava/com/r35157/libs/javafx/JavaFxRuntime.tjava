@@ -1,0 +1,25 @@
+package com.r35157.libs.javafx;
+
+import javafx.application.Platform;
+
+public final class JavaFxRuntime {
+
+    public static void runLater(Runnable runnable) {
+        initialize();
+        Platform.runLater(runnable);
+    }
+
+    private static synchronized void initialize() {
+        if (initialized) {
+            return;
+        }
+
+        Platform.startup(() -> Platform.setImplicitExit(false));
+        initialized = true;
+    }
+
+    private JavaFxRuntime() {
+    }
+
+    private static boolean initialized;
+}

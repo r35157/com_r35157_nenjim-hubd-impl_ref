@@ -44,6 +44,100 @@ public interface SolanaBlockChain {
     ΩlamportsΩ getBalanceInLamport(ΩSolanaAddressΩ address) throws IOException, InterruptedException;
 
     /**
+     * Fetches a recent blockhash for building a new Solana transaction.
+     *
+     * @return the recent blockhash and its last valid block height
+     * @throws IOException if the blockhash could not be fetched or parsed
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    SolanaLatestBlockhash getLatestBlockhash()
+            throws IOException, InterruptedException;
+
+    /**
+     * Fetches the transaction fee for a serialized Solana message.
+     *
+     * @param serializedMessage the Base64 encoded legacy or versioned message
+     * @return the fee in lamports
+     * @throws IllegalArgumentException if the serialized message is blank
+     * @throws IOException if the fee could not be fetched or the blockhash has expired
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    ΩlamportsΩ getFeeForMessage(
+            ΩBase64StringΩ serializedMessage
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Builds an unsigned transaction that transfers a specific amount of SOL.
+     *
+     * @param sender the address that sends the SOL and pays the fee
+     * @param recipient the address that receives the SOL
+     * @param amount the amount of SOL to transfer
+     * @return the unsigned serialized transfer transaction
+     * @throws IllegalArgumentException if an address or amount is invalid
+     * @throws IOException if a recent blockhash cannot be fetched
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    SolanaUnsignedTransaction buildSolanaTransferTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient,
+            ΩSolanaAmountΩ amount
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Builds an unsigned transaction that transfers the sender's complete
+     * native SOL balance after paying the exact transaction fee.
+     *
+     * @param sender the address that sends the SOL and pays the fee
+     * @param recipient the address that receives the SOL
+     * @return the unsigned serialized transfer transaction
+     * @throws IllegalArgumentException if an address is invalid
+     * @throws IllegalStateException if the balance cannot cover a transfer
+     * @throws IOException if the balance, blockhash or fee cannot be fetched
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    SolanaUnsignedTransaction buildSolanaTransferAllTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Builds an unsigned checked SPL-token transfer.
+     *
+     * @param sender wallet owner, authority and transaction fee payer
+     * @param senderTokenAccount token account from which tokens are sent
+     * @param mintAddress token mint
+     * @param recipient recipient wallet owner
+     * @param recipientTokenAccount recipient Associated Token Account
+     * @param rawAmount amount expressed in the mint's smallest unit
+     * @param decimals decimal count read from the mint
+     * @param splProgram token program owning the mint and token accounts
+     * @param createRecipientTokenAccount whether the transaction must first
+     *        create the recipient Associated Token Account
+     * @return the unsigned serialized transaction
+     */
+    SolanaUnsignedTransaction buildSPLTokenTransferTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSPLTokenAccountΩ senderTokenAccount,
+            ΩSPLMintAddressΩ mintAddress,
+            ΩSolanaAddressΩ recipient,
+            ΩSPLTokenAccountΩ recipientTokenAccount,
+            ΩRawAmountΩ rawAmount,
+            ΩamountDecimalsΩ decimals,
+            SolanaSPLTokenProgram splProgram,
+            boolean createRecipientTokenAccount
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Derives the Associated Token Account for an owner, mint and token
+     * program.
+     */
+    ΩSPLTokenAccountΩ findAssociatedTokenAccount(
+            ΩSolanaAddressΩ owner,
+            ΩSPLMintAddressΩ mintAddress,
+            SolanaSPLTokenProgram splProgram
+    );
+
+    /**
      * Fetches SPL token holdings owned by a Solana address for a specific token program.
      *
      * <p>The supplied token program decides which token accounts are inspected. For example,

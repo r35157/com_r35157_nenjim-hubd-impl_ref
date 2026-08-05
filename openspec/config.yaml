@@ -1,0 +1,51 @@
+schema: spec-driven
+
+context: |
+  This repository is the NenjimHub reference implementation and currently
+  also acts as Cauldron for the wider r35157 ecosystem.
+
+  New module code initially lives in this repository while it is immature.
+  Packages shall nevertheless reflect the module that logically owns the code.
+
+  When a module becomes stable, its API, test contract, and implementations
+  may be extracted into separate repositories and artifacts.
+
+  The current physical location of code must therefore not be interpreted
+  as permanent module ownership.
+
+  Public APIs and reference implementations must remain separated by package,
+  even while they temporarily coexist in this repository.
+
+  Do not add automated tests unless the change explicitly requests them.
+  General implementation tests will normally belong to a separate test artifact.
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

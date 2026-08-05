@@ -8,6 +8,11 @@ import java.util.HashMap;
 
 public interface NenjimHub {
     /**
+     * Start the NenjimHub - This is the first thing to do
+     */
+    void start() throws Exception;
+
+    /**
      * Starts a process based on the provided fully qualified interface name.
      * The actual implementation that is run is binded according to the Context.
      *

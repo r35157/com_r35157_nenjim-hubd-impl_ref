@@ -11,10 +11,11 @@ import java.io.IOException;
 import java.math.BigDecimal;
 
 /**
- * A Solana wallet capable of identifying itself and signing transactions.
+ * A Solana wallet capable of identifying itself, signing transactions and
+ * submitting them to the Solana blockchain.
  *
- * <p>Signing a transaction does not submit it to the Solana blockchain.
- * Submission must be performed separately through {@code SolanaBlockChain}.</p>
+ * <p>Signing and submission can be performed separately or as one complete
+ * operation.</p>
  */
 public interface SolanaWallet {
     /**
@@ -53,6 +54,70 @@ public interface SolanaWallet {
     ) throws IOException, InterruptedException;
 
     /**
+     * Sends a specific amount of SOL to another wallet.
+     *
+     * <p>The wallet builds, signs and submits the required transaction.</p>
+     *
+     * @param recipient the wallet that should receive the SOL
+     * @param amount the amount of SOL to send
+     * @return the transaction signature returned by Solana RPC
+     * @throws IllegalArgumentException if the recipient or amount is invalid
+     * @throws IOException if the transaction cannot be built, signed or sent
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    @NotNull
+    ΩSolanaTransactionSignatureΩ sendSolana(
+            @NotNull ΩSolanaWalletIdΩ recipient,
+            @NotNull ΩSolanaAmountΩ amount
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Sends the wallet's complete native SOL balance to another wallet after
+     * paying the exact transaction fee.
+     *
+     * <p>The wallet builds, signs and submits the required transaction.</p>
+     *
+     * @param recipient the wallet that should receive the SOL
+     * @return the transaction signature returned by Solana RPC
+     * @throws IllegalArgumentException if the recipient is invalid
+     * @throws IllegalStateException if the balance cannot cover a transfer
+     * @throws IOException if the transaction cannot be built, signed or sent
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    @NotNull
+    ΩSolanaTransactionSignatureΩ sendAllSolana(
+            @NotNull ΩSolanaWalletIdΩ recipient
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Sends an SPL token to another wallet.
+     *
+     * <p>The token program is detected from the mint account. The wallet
+     * builds, signs and submits the complete transaction internally.</p>
+     *
+     * @param mintAddress the mint of the token to send
+     * @param recipient the wallet that should receive the token
+     * @param amount the token amount in its human-readable decimal unit
+     * @param missingRecipientTokenAccountPolicy how to handle a missing
+     *        recipient Associated Token Account
+     * @return the transaction signature returned by Solana RPC
+     * @throws IllegalArgumentException if an argument or amount is invalid
+     * @throws IllegalStateException if required accounts or balances are
+     *         missing or invalid
+     * @throws IOException if blockchain data cannot be read or the transaction
+     *         cannot be built, signed or sent
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    @NotNull
+    ΩSolanaTransactionSignatureΩ sendSPLToken(
+            @NotNull ΩSPLMintAddressΩ mintAddress,
+            @NotNull ΩSolanaWalletIdΩ recipient,
+            @NotNull ΩAmountΩ amount,
+            @NotNull MissingRecipientTokenAccountPolicy
+                    missingRecipientTokenAccountPolicy
+    ) throws IOException, InterruptedException;
+
+    /**
      * Signs an unsigned Solana transaction.
      *
      * <p>The configured wallet must be a required signer for the supplied
@@ -70,4 +135,35 @@ public interface SolanaWallet {
     SolanaSignedTransaction signTransaction(
             @NotNull SolanaUnsignedTransaction transaction
     ) throws IOException, InterruptedException;
+
+    /**
+     * Submits a signed Solana transaction to the Solana blockchain.
+     *
+     * @param transaction the signed transaction to submit
+     * @return the transaction signature returned by Solana RPC
+     * @throws IllegalArgumentException if the transaction is missing or blank
+     * @throws IOException if the transaction cannot be sent
+     * @throws InterruptedException if the calling thread is interrupted
+     */
+    @NotNull
+    ΩSolanaTransactionSignatureΩ sendTransaction(
+            @NotNull SolanaSignedTransaction transaction
+    ) throws IOException, InterruptedException;
+
+    /**
+     * Signs and submits an unsigned Solana transaction.
+     *
+     * @param transaction the unsigned transaction to sign and submit
+     * @return the transaction signature returned by Solana RPC
+     * @throws IllegalArgumentException if the transaction is missing or blank
+     * @throws IOException if the transaction cannot be signed or sent
+     * @throws InterruptedException if the signing process or calling thread
+     *                               is interrupted
+     */
+    @NotNull
+    default ΩSolanaTransactionSignatureΩ signAndSendTransaction(
+            @NotNull SolanaUnsignedTransaction transaction
+    ) throws IOException, InterruptedException {
+        return sendTransaction(signTransaction(transaction));
+    }
 }

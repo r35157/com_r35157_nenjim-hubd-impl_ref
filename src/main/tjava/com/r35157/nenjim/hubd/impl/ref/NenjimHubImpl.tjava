@@ -1,10 +1,23 @@
 package com.r35157.nenjim.hubd.impl.ref;
 
+import com.fanitas.evelyn.core.Evelyn;
+import com.fanitas.evelyn.core.impl.ref.EvelynImpl;
+import com.r35157.evelyn.emc.EvelynMissionControl;
+import com.r35157.evelyn.emc.impl.ref.EvelynMissionControlImpl;
 import com.r35157.jupiterperpsalarm.impl.ref.JupiterPerpsAlarmImpl;
+import com.r35157.nenjim.composer.NenjimComposer;
+import com.r35157.nenjim.composer.impl.ref.NenjimComposerImpl;
 import com.r35157.nenjim.hubd.NenjimHub;
 import com.r35157.nenjim.hubd.journal.Journal;
+import com.r35157.nenjim.npm.NenjimProcessManager;
+import com.r35157.nenjim.npm.impl.ref.NenjimProcessManagerImpl;
+import com.r35157.nenjim.ntt.NenjimTestTool;
+import com.r35157.nenjim.ntt.impl.ref.NenjimTestToolImpl;
+import com.r35157.stm.SodaTaskManager;
+import com.r35157.stm.impl.ref.SodaTaskManagerImpl;
+import com.r35157.suwimo.hub.client.SuwimoClient;
+import com.r35157.suwimo.hub.client.impl.j2fx.SuwimoClientImpl;
 import crypto.r35157.nenjim.NenjimProcess;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,13 +31,16 @@ public class NenjimHubImpl implements NenjimHub {
         nextProcessId = 1;
         //processesScope = new StructuredTaskScope.ShutdownOnFailure();
         processes = new HashMap<>();
+    }
 
+    @Override
+    public void start() throws Exception {
         log.info("Starting autorun processes:");
         startAutoRunProcesses();
         waitForAndShutdown();
     }
 
-    private void waitForAndShutdown() {
+    private void waitForAndShutdown() throws InterruptedException {
         System.out.println("Done - Now online!");
 
         /*
@@ -33,14 +49,24 @@ public class NenjimHubImpl implements NenjimHub {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-
         processesScope.close();
         */
+
+        awaitShutdown();
+
         System.out.println("Nenjim is now shutdown (stopped all processes)!");
     }
 
     private void startAutoRunProcesses() throws Exception {
         startJupiterPerpsAlarm();   // TODO: Hardcoded/hacky way to auto-start but good enough for now.
+        Evelyn evelynProd = new EvelynImpl();
+        Evelyn evelynTest = new EvelynImpl();
+        startEvelynMissionControl(evelynProd, evelynTest);
+        startNenjimComposer();
+        startNenjimProcessManager();
+        startNenjimTestTool();
+        startSodaTaskManager();
+        startSuwimoClient();
 
         // TODO: Old but more correct way to auto start plugins - but it is currently broken.
         /*
@@ -97,7 +123,7 @@ public class NenjimHubImpl implements NenjimHub {
         System.out.println("NenjimHub command: 'noop'");
     }
 
-    public void awaitShutdown() throws InterruptedException {
+    private void awaitShutdown() throws InterruptedException {
         shutdownLatch.await();
     }
 
@@ -114,6 +140,96 @@ public class NenjimHubImpl implements NenjimHub {
 
         thread.setDaemon(false);
         thread.start();
+    }
+
+    private void startEvelynMissionControl(Evelyn evelynProd, Evelyn evelynTest) {
+        Thread thread = new Thread(() -> {
+            try {
+                EvelynMissionControl emc = new EvelynMissionControlImpl(evelynProd, evelynTest);
+                emc.start();
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
+            }
+        }, "Nenjim Plugin - Evelyn Mission Control");
+
+        thread.setDaemon(false);
+        thread.start();
+
+    }
+
+    private void startNenjimComposer() {
+        Thread thread = new Thread(() -> {
+            try {
+                NenjimComposer nc = new NenjimComposerImpl();
+                nc.start();
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
+            }
+        }, "Nenjim Plugin - Nenjim Composer");
+
+        thread.setDaemon(false);
+        thread.start();
+
+    }
+
+    private void startNenjimProcessManager() {
+        Thread thread = new Thread(() -> {
+            try {
+                NenjimProcessManager npm = new NenjimProcessManagerImpl();
+                npm.start();
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
+            }
+        }, "Nenjim Plugin - Nenjim Process Manager");
+
+        thread.setDaemon(false);
+        thread.start();
+
+    }
+
+    private void startNenjimTestTool() {
+        Thread thread = new Thread(() -> {
+            try {
+                NenjimTestTool ntt = new NenjimTestToolImpl();
+                ntt.start();
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
+            }
+        }, "Nenjim Plugin - Nenjim Test Tool");
+
+        thread.setDaemon(false);
+        thread.start();
+
+    }
+
+    private void startSodaTaskManager() {
+        Thread thread = new Thread(() -> {
+            try {
+                SodaTaskManager stm = new SodaTaskManagerImpl();
+                stm.start();
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
+            }
+        }, "Nenjim Plugin - Soda Task Manager");
+
+        thread.setDaemon(false);
+        thread.start();
+
+    }
+
+    private void startSuwimoClient() {
+        Thread thread = new Thread(() -> {
+            try {
+                SuwimoClient client = new SuwimoClientImpl();
+                client.start();
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
+            }
+        }, "Nenjim Plugin - Suwimo Client");
+
+        thread.setDaemon(false);
+        thread.start();
+
     }
 
     private static final Logger log = LoggerFactory.getLogger(NenjimHubImpl.class);

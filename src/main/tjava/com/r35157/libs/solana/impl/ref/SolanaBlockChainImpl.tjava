@@ -11,6 +11,7 @@ import com.r35157.libs.valuetypes.basic.CurrencyType;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
 import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -18,6 +19,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -86,6 +89,346 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
         }
 
         return valueNode.longValue();
+    }
+
+    @Override
+    public SolanaLatestBlockhash getLatestBlockhash()
+            throws IOException, InterruptedException {
+        String jsonBody = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "getLatestBlockhash",
+                  "params": [
+                    {
+                      "commitment": "confirmed"
+                    }
+                  ]
+                }
+                """;
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RPC_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException(
+                    "Solana getLatestBlockhash RPC call failed: HTTP "
+                            + response.statusCode()
+                            + "\n"
+                            + response.body()
+            );
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode errorNode = root.get("error");
+
+        if (errorNode != null && !errorNode.isNull()) {
+            throw new IOException(
+                    "Solana getLatestBlockhash RPC error: "
+                            + errorNode.toPrettyString()
+            );
+        }
+
+        JsonNode valueNode = root.path("result").path("value");
+        JsonNode blockhashNode = valueNode.path("blockhash");
+        JsonNode lastValidBlockHeightNode =
+                valueNode.path("lastValidBlockHeight");
+
+        if (!blockhashNode.isTextual()
+                || blockhashNode.asText().isBlank()
+                || !lastValidBlockHeightNode.isIntegralNumber()) {
+            throw new IOException(
+                    "Solana getLatestBlockhash response did not contain "
+                            + "a blockhash and last valid block height: "
+                            + response.body()
+            );
+        }
+
+        ΩSolanaBlockhashΩ blockhash = blockhashNode.asText();
+
+        return new SolanaLatestBlockhash(
+                blockhash,
+                lastValidBlockHeightNode.longValue()
+        );
+    }
+
+    @Override
+    public ΩlamportsΩ getFeeForMessage(
+            ΩBase64StringΩ serializedMessage
+    ) throws IOException, InterruptedException {
+        if (serializedMessage == null || serializedMessage.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Serialized Solana message must not be blank"
+            );
+        }
+
+        ObjectNode rpcRequest = objectMapper.createObjectNode();
+        rpcRequest.put("jsonrpc", "2.0");
+        rpcRequest.put("id", 1);
+        rpcRequest.put("method", "getFeeForMessage");
+
+        ArrayNode params = rpcRequest.putArray("params");
+        params.add(serializedMessage);
+        params.addObject().put("commitment", "confirmed");
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RPC_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        objectMapper.writeValueAsString(rpcRequest)
+                ))
+                .build();
+
+        HttpResponse<String> response = sendThrottled(request);
+
+        if (response.statusCode() != 200) {
+            throw new IOException(
+                    "Solana getFeeForMessage RPC call failed: HTTP "
+                            + response.statusCode()
+                            + "\n"
+                            + response.body()
+            );
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode errorNode = root.get("error");
+
+        if (errorNode != null && !errorNode.isNull()) {
+            throw new IOException(
+                    "Solana getFeeForMessage RPC error: "
+                            + errorNode.toPrettyString()
+            );
+        }
+
+        JsonNode valueNode = root.path("result").path("value");
+
+        if (!valueNode.isIntegralNumber()) {
+            throw new IOException(
+                    "Solana getFeeForMessage response did not contain a fee; "
+                            + "the transaction blockhash may have expired: "
+                            + response.body()
+            );
+        }
+
+        return valueNode.longValue();
+    }
+
+    @Override
+    public SolanaUnsignedTransaction buildSolanaTransferTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient,
+            ΩSolanaAmountΩ amount
+    ) throws IOException, InterruptedException {
+        validateSolanaTransferAddresses(sender, recipient);
+
+        return buildSolanaTransferTransaction(
+                sender,
+                recipient,
+                getLatestBlockhash(),
+                toLamports(amount)
+        );
+    }
+
+    @Override
+    public SolanaUnsignedTransaction buildSolanaTransferAllTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient
+    ) throws IOException, InterruptedException {
+        validateSolanaTransferAddresses(sender, recipient);
+
+        ΩlamportsΩ balance = getBalanceInLamport(sender);
+
+        if (balance <= 0) {
+            throw new IllegalStateException(
+                    "Wallet does not contain any SOL to transfer"
+            );
+        }
+
+        SolanaLatestBlockhash latestBlockhash = getLatestBlockhash();
+
+        // The transfer amount is always serialized as one fixed-width u64.
+        // Replacing it with balance - fee therefore cannot change the fee.
+        SerializedSolanaTransfer feeCandidate =
+                serializeSolanaTransferTransaction(
+                        sender,
+                        recipient,
+                        latestBlockhash,
+                        balance
+                );
+
+        ΩlamportsΩ fee = getFeeForMessage(
+                feeCandidate.serializedMessage()
+        );
+
+        if (fee < 0) {
+            throw new IllegalStateException(
+                    "Solana transaction fee must not be negative"
+            );
+        }
+
+        ΩlamportsΩ transferableLamports = balance - fee;
+
+        if (transferableLamports <= 0) {
+            throw new IllegalStateException(
+                    "Wallet balance of "
+                            + balance
+                            + " lamports cannot cover the transaction fee of "
+                            + fee
+                            + " lamports and a positive transfer amount"
+            );
+        }
+
+        return buildSolanaTransferTransaction(
+                sender,
+                recipient,
+                latestBlockhash,
+                transferableLamports
+        );
+    }
+
+    @Override
+    public ΩSPLTokenAccountΩ findAssociatedTokenAccount(
+            ΩSolanaAddressΩ owner,
+            ΩSPLMintAddressΩ mintAddress,
+            SolanaSPLTokenProgram splProgram
+    ) {
+        Objects.requireNonNull(splProgram, "SPL token program must not be null");
+
+        ΩSPLTokenAccountΩ tokenAccount = findProgramAddress(
+                ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                List.of(
+                        SolanaProgramAddressSeed.solanaAddress(owner),
+                        SolanaProgramAddressSeed.solanaAddress(
+                                splProgram.getAddress()
+                        ),
+                        SolanaProgramAddressSeed.solanaAddress(mintAddress)
+                )
+        ).address();
+
+        return tokenAccount;
+    }
+
+    @Override
+    public SolanaUnsignedTransaction buildSPLTokenTransferTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSPLTokenAccountΩ senderTokenAccount,
+            ΩSPLMintAddressΩ mintAddress,
+            ΩSolanaAddressΩ recipient,
+            ΩSPLTokenAccountΩ recipientTokenAccount,
+            ΩRawAmountΩ rawAmount,
+            ΩamountDecimalsΩ decimals,
+            SolanaSPLTokenProgram splProgram,
+            boolean createRecipientTokenAccount
+    ) throws IOException, InterruptedException {
+        Objects.requireNonNull(splProgram, "SPL token program must not be null");
+
+        BigInteger transferAmount;
+        try {
+            transferAmount = new BigInteger(rawAmount);
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException(
+                    "Raw SPL token amount must be an integer",
+                    e
+            );
+        }
+        if (transferAmount.signum() <= 0
+                || transferAmount.bitLength() > 64) {
+            throw new IllegalArgumentException(
+                    "Raw SPL token amount must fit in an unsigned u64 and "
+                            + "be greater than zero"
+            );
+        }
+        if (decimals < 0 || decimals > 255) {
+            throw new IllegalArgumentException(
+                    "SPL token decimals must fit in an unsigned byte"
+            );
+        }
+
+        List<ΩSolanaAddressΩ> accountKeys = new ArrayList<>();
+        accountKeys.add(sender);
+        accountKeys.add(senderTokenAccount);
+        accountKeys.add(recipientTokenAccount);
+        accountKeys.add(mintAddress);
+
+        int tokenProgramIndex;
+        int readOnlyUnsignedAccounts;
+        if (createRecipientTokenAccount) {
+            accountKeys.add(recipient);
+            accountKeys.add(SYSTEM_PROGRAM_ADDRESS);
+            accountKeys.add(splProgram.getAddress());
+            accountKeys.add(ASSOCIATED_TOKEN_PROGRAM_ADDRESS);
+            tokenProgramIndex = 6;
+            readOnlyUnsignedAccounts = 5;
+        } else {
+            accountKeys.add(splProgram.getAddress());
+            tokenProgramIndex = 4;
+            readOnlyUnsignedAccounts = 2;
+        }
+
+        List<CompiledInstruction> instructions = new ArrayList<>();
+        if (createRecipientTokenAccount) {
+            instructions.add(new CompiledInstruction(
+                    7,
+                    new byte[] { 0, 2, 4, 3, 5, 6 },
+                    new byte[] { 1 }
+            ));
+        }
+
+        byte[] transferCheckedData = ByteBuffer
+                .allocate(10)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .put((byte) TOKEN_TRANSFER_CHECKED_INSTRUCTION)
+                .putLong(transferAmount.longValue())
+                .put((byte) decimals)
+                .array();
+        instructions.add(new CompiledInstruction(
+                tokenProgramIndex,
+                new byte[] { 1, 3, 2, 0 },
+                transferCheckedData
+        ));
+
+        SolanaLatestBlockhash latestBlockhash = getLatestBlockhash();
+        ByteArrayOutputStream message = new ByteArrayOutputStream();
+        message.write(1);
+        message.write(0);
+        message.write(readOnlyUnsignedAccounts);
+        writeCompactU16(message, accountKeys.size());
+
+        for (String accountKey : accountKeys) {
+            message.writeBytes(decodeSolanaTransferAddress(
+                    "transaction account",
+                    accountKey
+            ));
+        }
+        message.writeBytes(decodeSolanaTransferAddress(
+                "blockhash",
+                latestBlockhash.blockhash()
+        ));
+        writeCompactU16(message, instructions.size());
+
+        for (CompiledInstruction instruction : instructions) {
+            message.write(instruction.programIndex());
+            writeCompactU16(message, instruction.accountIndexes().length);
+            message.writeBytes(instruction.accountIndexes());
+            writeCompactU16(message, instruction.data().length);
+            message.writeBytes(instruction.data());
+        }
+
+        ByteArrayOutputStream transaction = new ByteArrayOutputStream();
+        writeCompactU16(transaction, 1);
+        transaction.writeBytes(new byte[SOLANA_SIGNATURE_LENGTH]);
+        transaction.writeBytes(message.toByteArray());
+
+        return new SolanaUnsignedTransaction(
+                Base64.getEncoder().encodeToString(transaction.toByteArray()),
+                latestBlockhash.blockhash(),
+                latestBlockhash.lastValidBlockHeight()
+        );
     }
 
     @Override
@@ -490,6 +833,215 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
         return objectMapper.writeValueAsString(request);
     }
 
+    private SolanaUnsignedTransaction buildSolanaTransferTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient,
+            SolanaLatestBlockhash latestBlockhash,
+            ΩlamportsΩ lamports
+    ) {
+        SerializedSolanaTransfer transfer =
+                serializeSolanaTransferTransaction(
+                        sender,
+                        recipient,
+                        latestBlockhash,
+                        lamports
+                );
+
+        return new SolanaUnsignedTransaction(
+                transfer.serializedTransaction(),
+                latestBlockhash.blockhash(),
+                latestBlockhash.lastValidBlockHeight()
+        );
+    }
+
+    private SerializedSolanaTransfer serializeSolanaTransferTransaction(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient,
+            SolanaLatestBlockhash latestBlockhash,
+            ΩlamportsΩ lamports
+    ) {
+        if (lamports <= 0) {
+            throw new IllegalArgumentException(
+                    "SOL transfer amount must be greater than zero lamports"
+            );
+        }
+
+        byte[] senderBytes = decodeSolanaTransferAddress(
+                "sender",
+                sender
+        );
+        byte[] recipientBytes = decodeSolanaTransferAddress(
+                "recipient",
+                recipient
+        );
+        byte[] systemProgramBytes = decodeSolanaTransferAddress(
+                "System Program",
+                SYSTEM_PROGRAM_ADDRESS
+        );
+        byte[] blockhashBytes = decodeSolanaTransferAddress(
+                "blockhash",
+                latestBlockhash.blockhash()
+        );
+
+        ByteArrayOutputStream message = new ByteArrayOutputStream();
+
+        message.write(1);
+        message.write(0);
+        message.write(1);
+
+        writeCompactU16(message, 3);
+        message.writeBytes(senderBytes);
+        message.writeBytes(recipientBytes);
+        message.writeBytes(systemProgramBytes);
+        message.writeBytes(blockhashBytes);
+
+        writeCompactU16(message, 1);
+        message.write(2);
+        writeCompactU16(message, 2);
+        message.write(0);
+        message.write(1);
+
+        byte[] instructionData = ByteBuffer
+                .allocate(12)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(SYSTEM_TRANSFER_INSTRUCTION)
+                .putLong(lamports)
+                .array();
+
+        writeCompactU16(message, instructionData.length);
+        message.writeBytes(instructionData);
+
+        byte[] messageBytes = message.toByteArray();
+        ByteArrayOutputStream transaction = new ByteArrayOutputStream();
+
+        writeCompactU16(transaction, 1);
+        transaction.writeBytes(new byte[SOLANA_SIGNATURE_LENGTH]);
+        transaction.writeBytes(messageBytes);
+
+        ΩBase64StringΩ serializedMessage =
+                Base64.getEncoder().encodeToString(messageBytes);
+        ΩBase64StringΩ serializedTransaction =
+                Base64.getEncoder().encodeToString(
+                        transaction.toByteArray()
+                );
+
+        return new SerializedSolanaTransfer(
+                serializedMessage,
+                serializedTransaction
+        );
+    }
+
+    private ΩlamportsΩ toLamports(ΩSolanaAmountΩ amount) {
+        if (amount == null || amount.amount() == null) {
+            throw new IllegalArgumentException(
+                    "SOL transfer amount must not be null"
+            );
+        }
+
+        if (!WellKnownCurrencyTypes.SOLANA
+                .getCurrencyType()
+                .equals(amount.currencyType())) {
+            throw new IllegalArgumentException(
+                    "SOL transfer amount must use the SOL currency type"
+            );
+        }
+
+        BigDecimal lamports =
+                amount.amount().multiply(LAMPORTS_PER_SOL);
+
+        try {
+            ΩlamportsΩ result = lamports.longValueExact();
+
+            if (result <= 0) {
+                throw new IllegalArgumentException(
+                        "SOL transfer amount must be greater than zero"
+                );
+            }
+
+            return result;
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(
+                    "SOL transfer amount must be expressible as a whole "
+                            + "number of lamports",
+                    e
+            );
+        }
+    }
+
+    private void validateSolanaTransferAddresses(
+            ΩSolanaAddressΩ sender,
+            ΩSolanaAddressΩ recipient
+    ) {
+        if (sender == null || sender.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Solana sender must not be blank"
+            );
+        }
+
+        if (recipient == null || recipient.isBlank()) {
+            throw new IllegalArgumentException(
+                    "SOL transfer recipient must not be blank"
+            );
+        }
+
+        if (recipient.equals(sender)) {
+            throw new IllegalArgumentException(
+                    "SOL transfer recipient must be different from the sender"
+            );
+        }
+    }
+
+    private byte[] decodeSolanaTransferAddress(
+            String description,
+            String address
+    ) {
+        if (address == null || address.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Solana " + description + " must not be blank"
+            );
+        }
+
+        byte[] decoded = base58Decode(address);
+
+        if (decoded.length != SOLANA_ADDRESS_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Solana "
+                            + description
+                            + " must decode to "
+                            + SOLANA_ADDRESS_LENGTH
+                            + " bytes, but was "
+                            + decoded.length
+            );
+        }
+
+        return decoded;
+    }
+
+    private void writeCompactU16(
+            ByteArrayOutputStream output,
+            int value
+    ) {
+        if (value < 0 || value > 0xffff) {
+            throw new IllegalArgumentException(
+                    "Compact-u16 value is outside the supported range: "
+                            + value
+            );
+        }
+
+        int remaining = value;
+
+        do {
+            int nextByte = remaining & 0x7f;
+            remaining >>>= 7;
+
+            if (remaining != 0) {
+                nextByte |= 0x80;
+            }
+
+            output.write(nextByte);
+        } while (remaining != 0);
+    }
+
     private String createGetProgramAccountsBody(
             ΩSolanaProgramIdΩ programId,
             Set<SolanaProgramAccountMemcmpFilter> filters
@@ -821,6 +1373,27 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
         return indexes;
     }
 
+    private record SerializedSolanaTransfer(
+            ΩBase64StringΩ serializedMessage,
+            ΩBase64StringΩ serializedTransaction
+    ) {
+    }
+
+    private record CompiledInstruction(
+            int programIndex,
+            byte[] accountIndexes,
+            byte[] data
+    ) {
+    }
+
+    private static final String SYSTEM_PROGRAM_ADDRESS =
+            "11111111111111111111111111111111";
+    private static final String ASSOCIATED_TOKEN_PROGRAM_ADDRESS =
+            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+    private static final int SYSTEM_TRANSFER_INSTRUCTION = 2;
+    private static final int TOKEN_TRANSFER_CHECKED_INSTRUCTION = 12;
+    private static final int SOLANA_ADDRESS_LENGTH = 32;
+    private static final int SOLANA_SIGNATURE_LENGTH = 64;
     private static final ΩAmountΩ LAMPORTS_PER_SOL = new BigDecimal("1000000000");
     private static final ΩmilliSecondsΩ MINIMUM_REMOTE_CALL_INTERVAL = 5000L;
     private static final byte[] PROGRAM_DERIVED_ADDRESS_MARKER = "ProgramDerivedAddress".getBytes(StandardCharsets.UTF_8);

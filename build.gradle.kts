@@ -51,6 +51,8 @@ dependencies {
     implementation("org.apache.commons:commons-collections4:4.5.0")
     implementation("org.apache.commons:commons-lang3:3.20.0")
     implementation("org.slf4j:slf4j-api:2.0.18")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
 }
 
 java {
@@ -67,6 +69,10 @@ tasks.withType<JavaCompile>().configureEach {
             "-Xlint:unchecked"
         )
     )
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 val generatedDetagMain = layout.buildDirectory.dir("generated/sources/detag/main/java")

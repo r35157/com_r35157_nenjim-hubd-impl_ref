@@ -1,0 +1,191 @@
+package com.r35157.evelyn.emc.impl.ref;
+
+import com.fanitas.evelyn.core.Evelyn;
+import com.fanitas.evelyn.core.EvelynStatusIndexPoint;
+import com.r35157.evelyn.emc.EvelynMissionControl;
+import com.r35157.libs.javafx.JavaFxRuntime;
+import javafx.scene.Scene;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
+import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
+import javafx.util.StringConverter;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Function;
+
+public final class EvelynMissionControlImpl implements EvelynMissionControl {
+
+    public EvelynMissionControlImpl(Evelyn evelynProd, Evelyn evelynTest) {
+        this.evelynProd = Objects.requireNonNull(evelynProd);
+        this.evelynTest = Objects.requireNonNull(evelynTest);
+    }
+
+    @Override
+    public void start() {
+        JavaFxRuntime.runLater(this::showWindow);
+    }
+
+    private void showWindow() {
+        Stage window = new Stage();
+        window.setTitle("Evelyn Mission Control");
+        window.setScene(new Scene(createRootTabs(), 600, 400));
+        window.show();
+    }
+
+    private TabPane createMissionControlTabs(String color, List<EvelynStatusIndexPoint> statusIndexHistory) {
+        TabPane tabs = new TabPane(
+                createOverviewTab(color, statusIndexHistory),
+                createMissionControlTab("Portfolio", color),
+                createMissionControlTab("Perps", color),
+                createMissionControlTab("Spot", color),
+                createMissionControlTab("Liquidity Pools", color),
+                createMissionControlTab("Alarms", color),
+                createMissionControlTab("Status", color),
+                createMissionControlTab("Logs", color)
+        );
+
+        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        return tabs;
+    }
+
+    private Tab createOverviewTab(String color, List<EvelynStatusIndexPoint> statusIndexHistory) {
+        StackPane content = new StackPane(createStatusIndexChart(statusIndexHistory));
+        content.setStyle("-fx-background-color: " + color + ";");
+
+        Tab tab = new Tab("Overview", content);
+        tab.setStyle("-fx-background-color: " + color + ";");
+        return tab;
+    }
+
+    private LineChart<Number, Number> createStatusIndexChart(List<EvelynStatusIndexPoint> history) {
+        long min = history.stream()
+                .mapToLong(point -> point.timestamp().toEpochMilli())
+                .min()
+                .orElse(0L);
+
+        long max = history.stream()
+                .mapToLong(point -> point.timestamp().toEpochMilli())
+                .max()
+                .orElse(0L);
+
+        double padding = 0;
+        NumberAxis xAxis = new NumberAxis(min - padding, max + padding, (max - min) / 4.0);
+        xAxis.setLabel("Time");
+        xAxis.setTickLabelFormatter(TIMESTAMP_FORMATTER);
+        xAxis.setForceZeroInRange(false);
+
+        double yBound = calculateYBound(history);
+        NumberAxis yAxis = new NumberAxis(-yBound, yBound, yBound / 5.0);
+        yAxis.setLabel("Index value");
+        yAxis.setForceZeroInRange(true);
+
+        LineChart<Number, Number> chart = new LineChart<>(xAxis, yAxis);
+        chart.setTitle("Evelyn Status Index History");
+        chart.setCreateSymbols(false);
+        chart.setAnimated(false);
+        chart.getData().add(createSeries("Evelyn Price Index", history, EvelynStatusIndexPoint::evelynPriceIndex));
+        chart.getData().add(createSeries("EVE_SYRUP Pool Depth Index", history, EvelynStatusIndexPoint::eveSyrupPoolDepthIndex));
+        chart.getData().add(createSeries("EVE_SYRUP Pool Balance Index", history, EvelynStatusIndexPoint::eveSyrupPoolBalanceIndex));
+        chart.getData().add(createSeries("AAZDKK_USDT Pool Balance Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolBalanceIndex));
+        chart.getData().add(createSeries("AAZDKK_USDT Pool Price Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolPriceIndex));
+        chart.getData().add(createSeries("AAZDKK_USDT Pool Depth Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolDepthIndex));
+        return chart;
+    }
+
+    private XYChart.Series<Number, Number> createSeries(
+            String name,
+            List<EvelynStatusIndexPoint> history,
+            Function<EvelynStatusIndexPoint, BigDecimal> valueExtractor
+    ) {
+        XYChart.Series<Number, Number> series = new XYChart.Series<>();
+        series.setName(name);
+        for (EvelynStatusIndexPoint point : history) {
+            series.getData().add(new XYChart.Data<>(
+                    point.timestamp().toEpochMilli(),
+                    valueExtractor.apply(point)
+            ));
+        }
+        return series;
+    }
+
+    private double calculateYBound(List<EvelynStatusIndexPoint> history) {
+        BigDecimal maxAbsoluteValue = BigDecimal.ZERO;
+        for (EvelynStatusIndexPoint point : history) {
+            maxAbsoluteValue = max(maxAbsoluteValue, point.evelynPriceIndex());
+            maxAbsoluteValue = max(maxAbsoluteValue, point.eveSyrupPoolDepthIndex());
+            maxAbsoluteValue = max(maxAbsoluteValue, point.eveSyrupPoolBalanceIndex());
+            maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolBalanceIndex());
+            maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolPriceIndex());
+            maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolDepthIndex());
+        }
+
+        double bound = maxAbsoluteValue.doubleValue();
+        return bound == 0.0 ? EMPTY_Y_BOUND : bound;
+    }
+
+    private BigDecimal max(BigDecimal currentMaximum, BigDecimal candidate) {
+        return currentMaximum.max(candidate.abs());
+    }
+
+    private Tab createMissionControlTab(String title, String color) {
+        StackPane content = new StackPane();
+        content.setStyle("-fx-background-color: " + color + ";");
+
+        Tab tab = new Tab(title, content);
+        tab.setStyle("-fx-background-color: " + color + ";");
+
+        return tab;
+    }
+
+    private TabPane createRootTabs() {
+        List<EvelynStatusIndexPoint> statusIndexHistoryProd = List.copyOf(evelynProd.getStatusIndexHistory());
+        List<EvelynStatusIndexPoint> statusIndexHistoryTest = List.copyOf(evelynTest.getStatusIndexHistory());
+
+        Tab productionTab = new Tab(
+                "Production",
+                createMissionControlTabs(PRODUCTION_COLOR, statusIndexHistoryProd)
+        );
+        productionTab.setStyle("-fx-background-color: " + PRODUCTION_COLOR + ";");
+
+        Tab testTab = new Tab(
+                "Test",
+                createMissionControlTabs(TEST_COLOR, statusIndexHistoryTest)
+        );
+        testTab.setStyle("-fx-background-color: " + TEST_COLOR + ";");
+
+        TabPane rootTabs = new TabPane(productionTab, testTab);
+        rootTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+
+        return rootTabs;
+    }
+
+    private static final String PRODUCTION_COLOR = "#ffd6d6";
+    private static final String TEST_COLOR = "#d8f3dc";
+    private static final double EMPTY_Y_BOUND = 1.0;
+    private static final DateTimeFormatter TIMESTAMP_TICK_FORMATTER =
+            DateTimeFormatter.ofPattern("HH:mm dd/MM/yy")
+                    .withZone(ZoneId.of("Europe/Copenhagen"));
+    private static final StringConverter<Number> TIMESTAMP_FORMATTER = new StringConverter<>() {
+        @Override
+        public String toString(Number timestamp) {
+            return TIMESTAMP_TICK_FORMATTER.format(Instant.ofEpochMilli(timestamp.longValue()));
+        }
+
+        @Override
+        public Number fromString(String value) {
+            throw new UnsupportedOperationException("Timestamp axis labels are display-only");
+        }
+    };
+
+    private final Evelyn evelynProd;
+    private final Evelyn evelynTest;
+}

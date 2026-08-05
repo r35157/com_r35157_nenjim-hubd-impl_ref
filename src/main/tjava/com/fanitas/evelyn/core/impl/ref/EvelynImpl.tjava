@@ -13,8 +13,10 @@ import com.r35157.libs.solana.SolanaConstants;
 import com.r35157.libs.valuetypes.basic.AssetPrice;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
 import com.r35157.libs.valuetypes.basic.TradingPair;
+import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,7 +29,7 @@ import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.T
 
 public class EvelynImpl implements Evelyn {
 
-    public EvelynImpl(
+    /*public EvelynImpl(
             State state,
             DesiredPositionCalculator desiredPositionCalculator,
             Raydium raydium,
@@ -37,13 +39,47 @@ public class EvelynImpl implements Evelyn {
         this.desiredPositionCalculator = desiredPositionCalculator;
         this.raydium = raydium;
         this.solanaChain = solanaChain;
+    }*/
+    public EvelynImpl() {
     }
 
     @Override
     public void executeService() throws Exception {
-        handleRebalancingProposal();
+        //handleRebalancingProposal();
     }
 
+    @Override
+    public @NotNull List<EvelynStatusIndexPoint> getStatusIndexHistory() {
+        return List.of(
+                statusIndexPoint("2026-08-02T12:00:00Z", "-0.20", "-0.35", "0.15", "0.30", "-0.10", "0.25"),
+                statusIndexPoint("2026-08-03T12:00:00Z", "-0.10", "-0.20", "0.10", "0.20", "-0.05", "0.15"),
+                statusIndexPoint("2026-08-04T12:00:00Z", "0.00", "-0.10", "0.05", "0.10", "0.00", "0.05"),
+                statusIndexPoint("2026-08-05T12:00:00Z", "0.10", "0.05", "-0.05", "0.00", "0.05", "-0.10"),
+                statusIndexPoint("2026-08-06T12:00:00Z", "0.20", "0.15", "-0.10", "-0.10", "0.10", "-0.20")
+        );
+    }
+
+    private static EvelynStatusIndexPoint statusIndexPoint(
+            String timestamp,
+            String evelynPriceIndex,
+            String eveSyrupPoolDepthIndex,
+            String eveSyrupPoolBalanceIndex,
+            String aazdkkUsdtPoolBalanceIndex,
+            String aazdkkUsdtPoolPriceIndex,
+            String aazdkkUsdtPoolDepthIndex
+    ) {
+        return new EvelynStatusIndexPoint(
+                Instant.parse(timestamp),
+                new BigDecimal(evelynPriceIndex),
+                new BigDecimal(eveSyrupPoolDepthIndex),
+                new BigDecimal(eveSyrupPoolBalanceIndex),
+                new BigDecimal(aazdkkUsdtPoolBalanceIndex),
+                new BigDecimal(aazdkkUsdtPoolPriceIndex),
+                new BigDecimal(aazdkkUsdtPoolDepthIndex)
+        );
+    }
+
+    /*
     private SPLTokenHolding getSPLHolding(ΩSolanaAddressΩ ownerAddress, ΩSPLMintAddressΩ splMintAddress) throws Exception {
         Map<ΩSPLMintAddressΩ, SPLTokenHolding> holdings = new HashMap<>();
 
@@ -263,4 +299,5 @@ public class EvelynImpl implements Evelyn {
     private final DesiredPositionCalculator desiredPositionCalculator;
     private final Raydium raydium;
     private final SolanaBlockChain solanaChain;
+    */
 }

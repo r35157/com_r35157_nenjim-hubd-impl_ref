@@ -1,6 +1,7 @@
 package com.r35157.libs.jupiter.perps.impl.anchoridl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.r35157.cryptowallet.solana.SolanaWallet;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
@@ -30,6 +31,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 import static java.math.BigDecimal.ZERO;
@@ -37,9 +39,14 @@ import static java.math.BigDecimal.ZERO;
 public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
     public AnchorIdlJupiterPerpsServiceImpl(
-            SolanaBlockChain solanaBlockChain
+            SolanaBlockChain solanaBlockChain,
+            SolanaWallet wallet
     ) {
-        this.solanaBlockChain = solanaBlockChain;
+        this.solanaBlockChain = Objects.requireNonNull(
+                solanaBlockChain,
+                "solanaBlockChain"
+        );
+        this.wallet = Objects.requireNonNull(wallet, "wallet");
         this.positionDecoder = new AnchorIdlJupiterPerpsPositionDecoder();
         this.custodyDecoder = new AnchorIdlJupiterPerpsCustodyDecoder();
     }
@@ -114,7 +121,30 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     }
 
     @Override
-    public @NotNull SolanaUnsignedTransaction buildPositionIncreaseTransaction(
+    public @NotNull ΩSolanaTransactionSignatureΩ executePositionIncrease(
+            @NotNull ΩSPLMintAddressΩ tradedTokenMint,
+            @NotNull JupiterPerpsPositionDirection direction,
+            @NotNull ΩUSDCAmountΩ inputTokenAmount,
+            @NotNull ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException {
+        SolanaUnsignedTransaction unsignedTransaction =
+                buildPositionIncreaseTransaction(
+                        wallet.getAddress(),
+                        tradedTokenMint,
+                        direction,
+                        inputTokenAmount,
+                        sizeUsdDelta,
+                        maxSlippageBps
+                );
+
+        SolanaSignedTransaction signedTransaction =
+                wallet.signTransaction(unsignedTransaction);
+
+        return executePositionIncreaseTransaction(signedTransaction);
+    }
+
+    private @NotNull SolanaUnsignedTransaction buildPositionIncreaseTransaction(
             @NotNull ΩSolanaWalletIdΩ owner,
             @NotNull ΩSPLMintAddressΩ tradedTokenMint,
             @NotNull JupiterPerpsPositionDirection direction,
@@ -164,8 +194,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         }
     }
 
-    @Override
-    public @NotNull ΩSolanaTransactionSignatureΩ
+    private @NotNull ΩSolanaTransactionSignatureΩ
     executePositionIncreaseTransaction(
             @NotNull SolanaSignedTransaction transaction
     ) throws IOException, InterruptedException {
@@ -196,7 +225,27 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     }
 
     @Override
-    public @NotNull SolanaUnsignedTransaction buildPositionDecreaseTransaction(
+    public @NotNull ΩSolanaTransactionSignatureΩ executePositionDecrease(
+            @NotNull ΩJupiterPerpsPositionAccountΩ positionAccount,
+            @NotNull ΩSPLMintAddressΩ receiveTokenMint,
+            @NotNull ΩUSDCAmountΩ sizeUsdDelta,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException {
+        SolanaUnsignedTransaction unsignedTransaction =
+                buildPositionDecreaseTransaction(
+                        positionAccount,
+                        receiveTokenMint,
+                        sizeUsdDelta,
+                        maxSlippageBps
+                );
+
+        SolanaSignedTransaction signedTransaction =
+                wallet.signTransaction(unsignedTransaction);
+
+        return executePositionDecreaseTransaction(signedTransaction);
+    }
+
+    private @NotNull SolanaUnsignedTransaction buildPositionDecreaseTransaction(
             @NotNull ΩJupiterPerpsPositionAccountΩ positionAccount,
             @NotNull ΩSPLMintAddressΩ receiveTokenMint,
             @NotNull ΩUSDCAmountΩ sizeUsdDelta,
@@ -242,8 +291,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         }
     }
 
-    @Override
-    public @NotNull ΩSolanaTransactionSignatureΩ
+    private @NotNull ΩSolanaTransactionSignatureΩ
     executePositionDecreaseTransaction(
             @NotNull SolanaSignedTransaction transaction
     ) throws IOException, InterruptedException {
@@ -762,6 +810,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     private static final int USDC_DECIMALS = 6;
 
     private final SolanaBlockChain solanaBlockChain;
+    private final SolanaWallet wallet;
     private final AnchorIdlJupiterPerpsPositionDecoder positionDecoder;
     private final AnchorIdlJupiterPerpsCustodyDecoder custodyDecoder;
 }

@@ -1,0 +1,5 @@
+package com.r35157.stm;
+
+public interface SodaTaskManager {
+    void start();
+}

@@ -1,0 +1,25 @@
+package com.fanitas.evelyn.core;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Objects;
+
+public record EvelynStatusIndexPoint(
+        Instant timestamp,
+        BigDecimal evelynPriceIndex,
+        BigDecimal eveSyrupPoolDepthIndex,
+        BigDecimal eveSyrupPoolBalanceIndex,
+        BigDecimal aazdkkUsdtPoolBalanceIndex,
+        BigDecimal aazdkkUsdtPoolPriceIndex,
+        BigDecimal aazdkkUsdtPoolDepthIndex
+) {
+    public EvelynStatusIndexPoint {
+        Objects.requireNonNull(timestamp);
+        Objects.requireNonNull(evelynPriceIndex);
+        Objects.requireNonNull(eveSyrupPoolDepthIndex);
+        Objects.requireNonNull(eveSyrupPoolBalanceIndex);
+        Objects.requireNonNull(aazdkkUsdtPoolBalanceIndex);
+        Objects.requireNonNull(aazdkkUsdtPoolPriceIndex);
+        Objects.requireNonNull(aazdkkUsdtPoolDepthIndex);
+    }
+}

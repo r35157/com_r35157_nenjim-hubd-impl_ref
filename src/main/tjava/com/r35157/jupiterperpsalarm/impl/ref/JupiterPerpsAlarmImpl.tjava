@@ -1,5 +1,7 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
+import com.r35157.cryptowallet.solana.SolanaWallet;
+import com.r35157.cryptowallet.solana.impl.ref.SolanaWalletImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
 import com.r35157.libs.jupiter.perps.impl.anchoridl.AnchorIdlJupiterPerpsServiceImpl;
 import com.r35157.libs.objcache.ObjectCache;
@@ -49,6 +51,10 @@ public final class JupiterPerpsAlarmImpl {
                 alarmConfiguration.variables()
         );
 
+        Path alarmConfigurationDirectory = config.alarmConfiguration()
+                .toAbsolutePath()
+                .getParent();
+
         System.out.print("Initializing dependencies... ");
         ObjectCache objectCache = new ObjectCacheImpl();
         SolanaBlockChain realSolanaBlockChain = new SolanaBlockChainImpl();
@@ -57,9 +63,57 @@ public final class JupiterPerpsAlarmImpl {
                 objectCache
         );
 
-        JupiterPerpsService jupiterPerpsService = new AnchorIdlJupiterPerpsServiceImpl(solanaBlockChain);
+        JupiterPerpsPositionIncreaseAlarmActionConfiguration
+                positionIncreaseConfiguration =
+                JupiterPerpsPositionIncreaseAlarmActionConfigurationParser
+                        .parse(
+                                alarmConfigurationDirectory.resolve(
+                                        JupiterPerpsPositionIncreaseAlarmAction
+                                                .CONFIGURATION_FILE_NAME
+                                ),
+                                variableResolver
+                        );
+
+        SolanaWallet positionIncreaseWallet = new SolanaWalletImpl(
+                positionIncreaseConfiguration.walletId(),
+                positionIncreaseConfiguration.signerKeyName(),
+                solanaBlockChain
+        );
+
+        JupiterPerpsService positionIncreaseJupiter =
+                new AnchorIdlJupiterPerpsServiceImpl(
+                        solanaBlockChain,
+                        positionIncreaseWallet
+                );
+
+        JupiterPerpsPositionDecreaseAlarmActionConfiguration
+                positionDecreaseConfiguration =
+                JupiterPerpsPositionDecreaseAlarmActionConfigurationParser
+                        .parse(
+                                alarmConfigurationDirectory.resolve(
+                                        JupiterPerpsPositionDecreaseAlarmAction
+                                                .CONFIGURATION_FILE_NAME
+                                ),
+                                variableResolver
+                        );
+
+        SolanaWallet positionDecreaseWallet = new SolanaWalletImpl(
+                positionDecreaseConfiguration.walletId(),
+                positionDecreaseConfiguration.signerKeyName(),
+                solanaBlockChain
+        );
+
+        JupiterPerpsService positionDecreaseJupiter =
+                new AnchorIdlJupiterPerpsServiceImpl(
+                        solanaBlockChain,
+                        positionDecreaseWallet
+                );
+
         JupiterPerpsEntryPriceVariableRefresher entryPriceVariableRefresher =
-                new JupiterPerpsEntryPriceVariableRefresher(alarmConfiguration.variables(), jupiterPerpsService);
+                new JupiterPerpsEntryPriceVariableRefresher(
+                        alarmConfiguration.variables(),
+                        positionIncreaseJupiter
+                );
         System.out.println("Done.");
 
         System.out.println("Executing first pre-run data fetch:");
@@ -80,22 +134,18 @@ public final class JupiterPerpsAlarmImpl {
 
         entryPriceVariableRefreshWatcher.start();
 
-        Path alarmConfigurationDirectory = config.alarmConfiguration()
-                .toAbsolutePath()
-                .getParent();
-
         List<AlarmAction> actions = new ArrayList<>();
         actions.add(new ConsoleAlarmAction(alarmConfigurationDirectory));
         actions.add(new JupiterPerpsPositionIncreaseAlarmAction(
-                alarmConfigurationDirectory,
-                solanaBlockChain,
-                jupiterPerpsService,
+                positionIncreaseConfiguration,
+                positionIncreaseWallet,
+                positionIncreaseJupiter,
                 variableResolver
         ));
         actions.add(new JupiterPerpsPositionDecreaseAlarmAction(
-                alarmConfigurationDirectory,
-                solanaBlockChain,
-                jupiterPerpsService,
+                positionDecreaseConfiguration,
+                positionDecreaseWallet,
+                positionDecreaseJupiter,
                 variableResolver
         ));
         actions.add(new PushoverAlarmAction(

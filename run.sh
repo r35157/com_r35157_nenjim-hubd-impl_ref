@@ -12,6 +12,7 @@ fi
 CLASSPATH=$(IFS=:; echo "${jars[*]}")
 
 exec java \
+  --enable-native-access=javafx.graphics \
   --enable-preview \
   -Dlog4j.configurationFile=conf/log4j2.xml \
   -cp "$CLASSPATH" \

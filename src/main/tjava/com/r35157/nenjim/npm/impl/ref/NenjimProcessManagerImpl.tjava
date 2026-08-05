@@ -1,0 +1,31 @@
+package com.r35157.nenjim.npm.impl.ref;
+
+import com.r35157.libs.javafx.JavaFxRuntime;
+import com.r35157.nenjim.npm.NenjimProcessManager;
+import javafx.scene.Scene;
+import javafx.scene.control.ListView;
+import javafx.scene.control.SelectionMode;
+import javafx.stage.Stage;
+
+public final class NenjimProcessManagerImpl implements NenjimProcessManager {
+
+    @Override
+    public void start() {
+        JavaFxRuntime.runLater(this::showWindow);
+    }
+
+    private void showWindow() {
+        var processes = new ListView<String>();
+        processes.getItems().addAll(
+                "Nenjim Composer",
+                "Nenjim Process Manager (this)",
+                "Evelyn Mission Control"
+        );
+        processes.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+        var window = new Stage();
+        window.setTitle("Nenjim Process Manager");
+        window.setScene(new Scene(processes, 500, 400));
+        window.show();
+    }
+}

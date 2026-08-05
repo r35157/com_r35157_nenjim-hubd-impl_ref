@@ -25,7 +25,8 @@ public class Main {
 
     // TODO: Consider if we really need a Main class or we just need to move the main method to NenjimHubImpl?
     static void main(String[] args) throws Exception {
-        NenjimHubImpl nenjimHub = new NenjimHubImpl();
+        NenjimHub nenjimHub = new NenjimHubImpl();
+        nenjimHub.start();
 
         /*SolanaBlockChain sbc = new SolanaBlockChainImpl();
         JupiterPerpsService jupiter = new AnchorIdlJupiterPerpsServiceImpl(sbc);
@@ -39,7 +40,6 @@ public class Main {
             ΩUSDCAmountΩ a = pos.borrowFeesDue();
         }*/
         //int i = 0;
-        nenjimHub.awaitShutdown();
 
         /*        try {
             log.info("Auto-starting 2 Nenjim application(s)...");

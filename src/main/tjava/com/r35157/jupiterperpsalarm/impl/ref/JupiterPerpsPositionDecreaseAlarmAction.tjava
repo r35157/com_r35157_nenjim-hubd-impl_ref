@@ -1,55 +1,36 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
 import com.r35157.cryptowallet.solana.SolanaWallet;
-import com.r35157.cryptowallet.solana.impl.ref.SolanaWalletImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
-import com.r35157.libs.solana.SolanaBlockChain;
-import com.r35157.libs.solana.SolanaSignedTransaction;
-import com.r35157.libs.solana.SolanaUnsignedTransaction;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Path;
 import java.util.Objects;
 
 public final class JupiterPerpsPositionDecreaseAlarmAction
         implements ConfiguredAlarmAction {
     public JupiterPerpsPositionDecreaseAlarmAction(
-            Path configurationDirectory,
-            SolanaBlockChain solanaBlockChain,
+            JupiterPerpsPositionDecreaseAlarmActionConfiguration configuration,
+            SolanaWallet wallet,
             JupiterPerpsService jupiter,
             AlarmVariableResolver variableResolver
-    ) throws IOException {
-        Objects.requireNonNull(
-                configurationDirectory,
-                "configurationDirectory"
+    ) {
+        this.configuration = Objects.requireNonNull(
+                configuration,
+                "configuration"
         );
-        Objects.requireNonNull(solanaBlockChain, "solanaBlockChain");
+        this.wallet = Objects.requireNonNull(wallet, "wallet");
         this.jupiter = Objects.requireNonNull(jupiter, "jupiter");
         this.variableResolver = Objects.requireNonNull(
                 variableResolver,
                 "variableResolver"
         );
-
-        configuration =
-                JupiterPerpsPositionDecreaseAlarmActionConfigurationParser
-                        .parse(
-                                configurationDirectory.resolve(
-                                        getConfigurationFileName()
-                                ),
-                                variableResolver
-                        );
-        wallet = new SolanaWalletImpl(
-                configuration.walletId(),
-                configuration.signerKeyName(),
-                solanaBlockChain
-        );
     }
 
     @Override
     public String getConfigurationFileName() {
-        return "alarmaction_JupiterPerpsPositionDecreaseAlarmAction.conf";
+        return CONFIGURATION_FILE_NAME;
     }
 
     @Override
@@ -73,20 +54,14 @@ public final class JupiterPerpsPositionDecreaseAlarmAction
                 return;
             }
 
-            SolanaUnsignedTransaction utrans =
-                    jupiter.buildPositionDecreaseTransaction(
+            ΩSolanaTransactionSignatureΩ signature =
+                    jupiter.executePositionDecrease(
                             position.positionAccount(),
                             positionDecrease.receiveToken()
                                     .receiveTokenMint(),
                             positionDecrease.sizeUsdDelta(),
                             positionDecrease.maxSlippageBps()
                     );
-
-            SolanaSignedTransaction strans =
-                    wallet.signTransaction(utrans);
-
-            ΩSolanaTransactionSignatureΩ signature =
-                    jupiter.executePositionDecreaseTransaction(strans);
 
             System.out.println(
                     "Position Decrease Signature: " + signature
@@ -180,4 +155,7 @@ public final class JupiterPerpsPositionDecreaseAlarmAction
     private final SolanaWallet wallet;
     private final JupiterPerpsService jupiter;
     private final AlarmVariableResolver variableResolver;
+
+    static final String CONFIGURATION_FILE_NAME =
+            "alarmaction_JupiterPerpsPositionDecreaseAlarmAction.conf";
 }

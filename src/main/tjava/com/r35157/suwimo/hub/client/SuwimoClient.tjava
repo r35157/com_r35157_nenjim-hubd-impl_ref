@@ -1,0 +1,5 @@
+package com.r35157.suwimo.hub.client;
+
+public interface SuwimoClient {
+    void start();
+}
