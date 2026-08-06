@@ -1,0 +1,19 @@
+package com.r35157.assetaz.core.service.ticker;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+/**
+ * Receives raw typed observations from price sources.
+ */
+@FunctionalInterface
+public interface PriceSink {
+
+    void announce(
+            @NotNull PriceSource source,
+            @NotNull ΩPriceΩ price,
+            @NotNull Instant observedAt
+    );
+}

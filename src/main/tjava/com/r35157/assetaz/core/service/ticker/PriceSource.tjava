@@ -1,0 +1,18 @@
+package com.r35157.assetaz.core.service.ticker;
+
+import com.r35157.libs.valuetypes.basic.TradingPair;
+import org.jetbrains.annotations.NotNull;
+
+/**
+ * Obtains prices for one trading pair and announces them to a {@link PriceSink}.
+ */
+public interface PriceSource {
+
+    @NotNull TradingPair getTradingPair();
+
+    @NotNull ΩPriceSourceNameΩ getSourceName();
+
+    void start();
+
+    void stop();
+}

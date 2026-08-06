@@ -1,0 +1,114 @@
+package com.r35157.assetaz.core.service.ticker.impl.ref;
+
+import com.r35157.assetaz.core.service.ticker.PriceSink;
+import com.r35157.assetaz.core.service.ticker.PriceSource;
+import com.r35157.libs.valuetypes.basic.TradingPair;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static com.r35157.libs.valuetypes.basic.WellKnownTradingPairs.EVE_USDC;
+
+/**
+ * Temporary reference source that produces a constant EVE/USDC price.
+ */
+public final class HardcodedPriceSource implements PriceSource {
+    public HardcodedPriceSource(@NotNull PriceSink priceSink) {
+        this(priceSink, Clock.systemUTC(), OBSERVATION_DELAY_MINUTES, TimeUnit.MINUTES);
+    }
+
+    HardcodedPriceSource(
+            @NotNull PriceSink priceSink,
+            @NotNull Clock clock,
+            long observationDelay,
+            @NotNull TimeUnit observationDelayUnit
+    ) {
+        this.priceSink = Objects.requireNonNull(priceSink, "priceSink");
+        this.clock = Objects.requireNonNull(clock, "clock");
+        if (observationDelay <= 0) {
+            throw new IllegalArgumentException("observationDelay must be positive");
+        }
+        this.observationDelay = observationDelay;
+        this.observationDelayUnit = Objects.requireNonNull(
+                observationDelayUnit,
+                "observationDelayUnit"
+        );
+    }
+
+    @Override
+    public @NotNull TradingPair getTradingPair() {
+        return EVE_USDC.getTradingPair();
+    }
+
+    @Override
+    public @NotNull ΩPriceSourceNameΩ getSourceName() {
+        return SOURCE_NAME;
+    }
+
+    @Override
+    public synchronized void start() {
+        if (scheduler != null) {
+            throw new IllegalStateException("Hardcoded price source is already started");
+        }
+
+        announcePrice();
+
+        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "assetaz-hardcoded-price-source");
+            thread.setDaemon(true);
+            return thread;
+        });
+        scheduler.scheduleWithFixedDelay(
+                this::announcePriceSafely,
+                observationDelay,
+                observationDelay,
+                observationDelayUnit
+        );
+    }
+
+    @Override
+    public synchronized void stop() {
+        if (scheduler == null) {
+            return;
+        }
+
+        scheduler.shutdownNow();
+        scheduler = null;
+    }
+
+    private void announcePrice() {
+        priceSink.announce(
+                this,
+                new ΩPriceΩ(HARDCODED_PRICE),
+                clock.instant().truncatedTo(ChronoUnit.MILLIS)
+        );
+    }
+
+    private void announcePriceSafely() {
+        try {
+            announcePrice();
+        } catch (RuntimeException exception) {
+            log.error("Hardcoded price source failed to announce EVE_USDC price", exception);
+        }
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(HardcodedPriceSource.class);
+    private static final ΩPriceSourceNameΩ SOURCE_NAME = "Hardcoded";
+    private static final String HARDCODED_PRICE = "14.85";
+    private static final long OBSERVATION_DELAY_MINUTES = 1;
+
+    private final PriceSink priceSink;
+    private final Clock clock;
+    private final long observationDelay;
+    private final TimeUnit observationDelayUnit;
+
+    private ScheduledExecutorService scheduler;
+}

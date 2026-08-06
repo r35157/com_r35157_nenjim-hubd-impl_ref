@@ -2,6 +2,7 @@ package com.r35157.nenjim.hubd.impl.ref;
 
 import com.fanitas.evelyn.core.Evelyn;
 import com.fanitas.evelyn.core.impl.ref.EvelynImpl;
+import com.r35157.assetaz.core.service.ticker.impl.ref.HardcodedPriceSource;
 import com.r35157.assetaz.core.service.ticker.impl.ref.TickerServiceImpl;
 import com.r35157.evelyn.emc.EvelynMissionControl;
 import com.r35157.evelyn.emc.impl.ref.EvelynMissionControlImpl;
@@ -60,15 +61,15 @@ public class NenjimHubImpl implements NenjimHub {
 
     private void startAutoRunProcesses() throws Exception {
         startAssetAZTickerService();
-        startJupiterPerpsAlarm();   // TODO: Hardcoded/hacky way to auto-start but good enough for now.
-        Evelyn evelynProd = new EvelynImpl();
-        Evelyn evelynTest = new EvelynImpl();
-        startEvelynMissionControl(evelynProd, evelynTest);
-        startNenjimComposer();
-        startNenjimProcessManager();
-        startNenjimTestTool();
-        startSodaTaskManager();
-        startSuwimoClient();
+        //startJupiterPerpsAlarm();   // TODO: Hardcoded/hacky way to auto-start but good enough for now.
+        //Evelyn evelynProd = new EvelynImpl();
+        //Evelyn evelynTest = new EvelynImpl();
+        //startEvelynMissionControl(evelynProd, evelynTest);
+        //startNenjimComposer();
+        //startNenjimProcessManager();
+        //startNenjimTestTool();
+        //startSodaTaskManager();
+        //startSuwimoClient();
 
         // TODO: Old but more correct way to auto start plugins - but it is currently broken.
         /*
@@ -89,7 +90,10 @@ public class NenjimHubImpl implements NenjimHub {
     }
 
     private void startAssetAZTickerService() throws Exception {
-        new TickerServiceImpl().start();
+        TickerServiceImpl tickerService = new TickerServiceImpl();
+        HardcodedPriceSource priceSource = new HardcodedPriceSource(tickerService);
+        tickerService.addPriceSource(priceSource);
+        tickerService.start();
     }
 
     @Override

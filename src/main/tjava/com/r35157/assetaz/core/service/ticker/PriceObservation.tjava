@@ -8,10 +8,12 @@ import java.util.Objects;
 
 public record PriceObservation(
         @NotNull AssetPrice price,
-        @NotNull Instant observedAt
+        @NotNull Instant observedAt,
+        @NotNull ΩPriceSourceNameΩ sourceName
 ) {
     public PriceObservation {
         Objects.requireNonNull(price, "price");
         Objects.requireNonNull(observedAt, "observedAt");
+        Objects.requireNonNull(sourceName, "sourceName");
     }
 }
