@@ -61,15 +61,15 @@ public class NenjimHubImpl implements NenjimHub {
 
     private void startAutoRunProcesses() throws Exception {
         startAssetAZTickerService();
-        //startJupiterPerpsAlarm();   // TODO: Hardcoded/hacky way to auto-start but good enough for now.
-        //Evelyn evelynProd = new EvelynImpl();
-        //Evelyn evelynTest = new EvelynImpl();
-        //startEvelynMissionControl(evelynProd, evelynTest);
-        //startNenjimComposer();
-        //startNenjimProcessManager();
-        //startNenjimTestTool();
-        //startSodaTaskManager();
-        //startSuwimoClient();
+        startJupiterPerpsAlarm();   // TODO: Hardcoded/hacky way to auto-start but good enough for now.
+        Evelyn evelynProd = new EvelynImpl();
+        Evelyn evelynTest = new EvelynImpl();
+        startEvelynMissionControl(evelynProd, evelynTest);
+        startNenjimComposer();
+        startNenjimProcessManager();
+        startNenjimTestTool();
+        startSodaTaskManager();
+        startSuwimoClient();
 
         // TODO: Old but more correct way to auto start plugins - but it is currently broken.
         /*

@@ -70,6 +70,18 @@ public final class TickerServiceImpl implements TickerService, PriceSink {
             );
         }
 
+        SourceRegistration existingHistoryRegistration =
+                registrationsByHistoryPath.get(historyPath);
+        if (existingHistoryRegistration != null) {
+            throw new IllegalArgumentException(
+                    "Price source history is already registered: " + historyPath
+                            + " is used by "
+                            + existingHistoryRegistration.key.tradingPair()
+                            + " source "
+                            + existingHistoryRegistration.key.sourceName()
+            );
+        }
+
         SourceRegistration registration = new SourceRegistration(
                 priceSource,
                 key,
@@ -77,6 +89,7 @@ public final class TickerServiceImpl implements TickerService, PriceSink {
         );
         registrationsByKey.put(key, registration);
         registrationsByInstance.put(priceSource, registration);
+        registrationsByHistoryPath.put(historyPath, registration);
     }
 
     @Override
@@ -472,6 +485,7 @@ public final class TickerServiceImpl implements TickerService, PriceSink {
     private static ΩPriceSourceNameΩ validateSourceName(ΩPriceSourceNameΩ sourceName) {
         Objects.requireNonNull(sourceName, "priceSource.sourceName");
         if (sourceName.isBlank()
+                || sourceName.equals(".")
                 || sourceName.contains("/")
                 || sourceName.contains("\\")
                 || sourceName.contains("..")
@@ -580,6 +594,8 @@ public final class TickerServiceImpl implements TickerService, PriceSink {
             new LinkedHashMap<>();
     private final Map<PriceSource, SourceRegistration> registrationsByInstance =
             new IdentityHashMap<>();
+    private final Map<Path, SourceRegistration> registrationsByHistoryPath =
+            new LinkedHashMap<>();
     private final Map<TradingPair, AtomicReference<PriceObservation>> latestByPair =
             new ConcurrentHashMap<>();
     private final ReentrantReadWriteLock callbackLock = new ReentrantReadWriteLock();
