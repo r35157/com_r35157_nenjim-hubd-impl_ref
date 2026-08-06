@@ -8,3 +8,4 @@ logs/*.log
 logs/*.log.gz
 conf/*.conf
 conf/*.xml
+data
