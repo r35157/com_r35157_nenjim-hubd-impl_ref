@@ -11,6 +11,24 @@ import java.util.UUID;
  */
 public enum WellKnownCurrencyTypes {
     /**
+     * EVE currency.
+     */
+    EVE(new CurrencyType(
+            UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff301"),
+            "EVE",
+            "EVE")
+    ),
+
+    /**
+     * USD Coin currency.
+     */
+    USDC(new CurrencyType(
+            UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff302"),
+            "USD Coin",
+            "USDC")
+    ),
+
+    /**
      * Native Solana currency.
      */
     SOLANA(new CurrencyType(

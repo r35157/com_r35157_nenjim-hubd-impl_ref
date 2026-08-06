@@ -1,6 +1,278 @@
 package com.r35157.assetaz.core.service.ticker.impl.ref;
 
+import com.r35157.assetaz.core.service.ticker.PriceObservation;
 import com.r35157.assetaz.core.service.ticker.TickerService;
+import com.r35157.libs.valuetypes.basic.AssetPrice;
+import com.r35157.libs.valuetypes.basic.TradingPair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class TickerServiceImpl implements TickerService {
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoUnit;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static com.r35157.libs.valuetypes.basic.WellKnownTradingPairs.EVE_USDC;
+
+public final class TickerServiceImpl implements TickerService {
+    public TickerServiceImpl() {
+        this(PRICE_HISTORY_PATH, Clock.systemUTC());
+    }
+
+    TickerServiceImpl(Path priceHistoryPath, Clock clock) {
+        this.priceHistoryPath = Objects.requireNonNull(priceHistoryPath, "priceHistoryPath");
+        this.clock = Objects.requireNonNull(clock, "clock");
+    }
+
+    @Override
+    public synchronized void start() throws IOException {
+        if (started) {
+            throw new IllegalStateException("Ticker service has already been started");
+        }
+
+        started = true;
+
+        if (!Files.exists(priceHistoryPath)) {
+            log.warn(
+                    "Ticker pair {} is inactive because its history file is missing: {}",
+                    SUPPORTED_PAIR,
+                    priceHistoryPath
+            );
+            return;
+        }
+
+        PriceObservation loadedLatest;
+        try {
+            loadedLatest = loadLatestObservation();
+        } catch (IOException | RuntimeException exception) {
+            started = false;
+            throw exception;
+        }
+
+        latest.set(loadedLatest);
+        active = true;
+
+        persistGeneratedObservation();
+
+        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "assetaz-ticker-EVE_USDC");
+            thread.setDaemon(true);
+            return thread;
+        });
+        scheduler.scheduleWithFixedDelay(
+                this::persistPeriodicObservation,
+                OBSERVATION_DELAY_MINUTES,
+                OBSERVATION_DELAY_MINUTES,
+                TimeUnit.MINUTES
+        );
+    }
+
+    @Override
+    public PriceObservation getLatestPrice(TradingPair tradingPair) {
+        Objects.requireNonNull(tradingPair, "tradingPair");
+
+        if (!SUPPORTED_PAIR.equals(tradingPair)) {
+            throw new IllegalArgumentException(
+                    "Ticker price is unavailable for unsupported trading pair: " + tradingPair
+            );
+        }
+        if (!active) {
+            throw new IllegalStateException(
+                    "Ticker price is unavailable for inactive trading pair: " + tradingPair
+            );
+        }
+
+        PriceObservation observation = latest.get();
+        if (observation == null) {
+            throw new IllegalStateException(
+                    "No persisted price is available for trading pair: " + tradingPair
+            );
+        }
+
+        return observation;
+    }
+
+    private PriceObservation loadLatestObservation() throws IOException {
+        PriceObservation loadedLatest = null;
+
+        try (BufferedReader reader = Files.newBufferedReader(
+                priceHistoryPath,
+                StandardCharsets.UTF_8
+        )) {
+            String rawLine;
+            int lineNumber = 0;
+
+            while ((rawLine = reader.readLine()) != null) {
+                lineNumber++;
+                String data = removeComment(rawLine).trim();
+                if (data.isEmpty()) {
+                    continue;
+                }
+
+                PriceObservation observation = parseObservation(data, rawLine, lineNumber);
+                if (loadedLatest == null
+                        || observation.observedAt().isAfter(loadedLatest.observedAt())) {
+                    loadedLatest = observation;
+                }
+            }
+        }
+
+        return loadedLatest;
+    }
+
+    private PriceObservation parseObservation(
+            String data,
+            String rawLine,
+            int lineNumber
+    ) throws IOException {
+        int separator = data.indexOf(':');
+        if (separator <= 0 || separator != data.lastIndexOf(':')
+                || separator == data.length() - 1) {
+            throw malformedHistory(lineNumber, rawLine, null);
+        }
+
+        try {
+            LocalDateTime localDateTime = LocalDateTime.parse(
+                    data.substring(0, separator),
+                    TIMESTAMP_FORMATTER
+            );
+            Instant observedAt = localDateTime.toInstant(ZoneOffset.UTC);
+            ΩPriceΩ price = new ΩPriceΩ(data.substring(separator + 1));
+
+            return new PriceObservation(
+                    new AssetPrice(price, SUPPORTED_PAIR),
+                    observedAt
+            );
+        } catch (RuntimeException exception) {
+            throw malformedHistory(lineNumber, rawLine, exception);
+        }
+    }
+
+    private IOException malformedHistory(
+            int lineNumber,
+            String rawLine,
+            RuntimeException cause
+    ) {
+        return new IOException(
+                "Malformed ticker history in " + priceHistoryPath
+                        + " at line " + lineNumber + ": " + rawLine,
+                cause
+        );
+    }
+
+    private synchronized void persistGeneratedObservation() {
+        PriceObservation observation = new PriceObservation(
+                new AssetPrice(new ΩPriceΩ(HARDCODED_PRICE), SUPPORTED_PAIR),
+                clock.instant().truncatedTo(ChronoUnit.MILLIS)
+        );
+
+        try {
+            persist(observation);
+            latest.updateAndGet(current -> current == null
+                    || observation.observedAt().isAfter(current.observedAt())
+                    ? observation
+                    : current);
+        } catch (IOException exception) {
+            log.error(
+                    "Failed to persist ticker observation for {} to {}; retaining prior latest observation",
+                    SUPPORTED_PAIR,
+                    priceHistoryPath,
+                    exception
+            );
+        }
+    }
+
+    private void persistPeriodicObservation() {
+        try {
+            persistGeneratedObservation();
+        } catch (RuntimeException exception) {
+            log.error("Unexpected failure generating ticker observation for {}", SUPPORTED_PAIR, exception);
+        }
+    }
+
+    private void persist(PriceObservation observation) throws IOException {
+        String encodedObservation = TIMESTAMP_FORMATTER.format(
+                LocalDateTime.ofInstant(observation.observedAt(), ZoneOffset.UTC)
+        ) + ":" + observation.price().price().toPlainString() + "\n";
+
+        try (FileChannel channel = FileChannel.open(
+                priceHistoryPath,
+                StandardOpenOption.READ,
+                StandardOpenOption.WRITE
+        )) {
+            long size = channel.size();
+            boolean needsLineSeparator = size > 0 && !endsWithLineSeparator(channel, size);
+            channel.position(size);
+
+            if (needsLineSeparator) {
+                writeFully(channel, ByteBuffer.wrap(new byte[] {'\n'}));
+            }
+            writeFully(
+                    channel,
+                    ByteBuffer.wrap(encodedObservation.getBytes(StandardCharsets.UTF_8))
+            );
+            channel.force(true);
+        }
+    }
+
+    private boolean endsWithLineSeparator(FileChannel channel, long size) throws IOException {
+        ByteBuffer finalByte = ByteBuffer.allocate(1);
+        channel.position(size - 1);
+        if (channel.read(finalByte) != 1) {
+            throw new IOException("Could not read final byte of ticker history: " + priceHistoryPath);
+        }
+
+        return finalByte.array()[0] == '\n' || finalByte.array()[0] == '\r';
+    }
+
+    private static void writeFully(FileChannel channel, ByteBuffer bytes) throws IOException {
+        while (bytes.hasRemaining()) {
+            channel.write(bytes);
+        }
+    }
+
+    private static String removeComment(String line) {
+        int commentStart = line.indexOf('#');
+        return commentStart < 0 ? line : line.substring(0, commentStart);
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(TickerServiceImpl.class);
+    private static final TradingPair SUPPORTED_PAIR = EVE_USDC.getTradingPair();
+    private static final Path PRICE_HISTORY_PATH = Path.of(
+            "data",
+            "assetaz",
+            "ticker",
+            "EVE_USDC.prices"
+    );
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter
+            .ofPattern("uuuuMMddHHmmssSSS'Z'", Locale.ROOT)
+            .withResolverStyle(ResolverStyle.STRICT);
+    private static final String HARDCODED_PRICE = "14.85";
+    private static final long OBSERVATION_DELAY_MINUTES = 1;
+
+    private final AtomicReference<PriceObservation> latest = new AtomicReference<>();
+    private final Path priceHistoryPath;
+    private final Clock clock;
+
+    private volatile boolean active;
+    private boolean started;
+    private ScheduledExecutorService scheduler;
 }

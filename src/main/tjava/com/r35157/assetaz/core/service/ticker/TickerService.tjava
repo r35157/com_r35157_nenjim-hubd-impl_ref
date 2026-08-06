@@ -1,4 +1,11 @@
 package com.r35157.assetaz.core.service.ticker;
 
+import com.r35157.libs.valuetypes.basic.TradingPair;
+
+import java.io.IOException;
+
 public interface TickerService {
+    void start() throws IOException;
+
+    PriceObservation getLatestPrice(TradingPair tradingPair);
 }

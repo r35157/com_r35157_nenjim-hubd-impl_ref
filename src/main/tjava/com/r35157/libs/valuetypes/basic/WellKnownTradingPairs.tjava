@@ -1,10 +1,13 @@
 package com.r35157.libs.valuetypes.basic;
 
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.EVE;
 import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SOLANA;
 import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SYRUPUSDC;
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.USDC;
 
 public enum WellKnownTradingPairs {
-    SOL_SYRUPUSDC(new TradingPair(SOLANA.getCurrencyType(), SYRUPUSDC.getCurrencyType()));
+    SOL_SYRUPUSDC(new TradingPair(SOLANA.getCurrencyType(), SYRUPUSDC.getCurrencyType())),
+    EVE_USDC(new TradingPair(EVE.getCurrencyType(), USDC.getCurrencyType()));
 
     WellKnownTradingPairs(TradingPair tradingPair) {
         this.tradingPair = tradingPair;

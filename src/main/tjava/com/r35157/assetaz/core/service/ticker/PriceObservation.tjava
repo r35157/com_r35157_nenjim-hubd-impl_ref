@@ -1,0 +1,17 @@
+package com.r35157.assetaz.core.service.ticker;
+
+import com.r35157.libs.valuetypes.basic.AssetPrice;
+import org.jetbrains.annotations.NotNull;
+
+import java.time.Instant;
+import java.util.Objects;
+
+public record PriceObservation(
+        @NotNull AssetPrice price,
+        @NotNull Instant observedAt
+) {
+    public PriceObservation {
+        Objects.requireNonNull(price, "price");
+        Objects.requireNonNull(observedAt, "observedAt");
+    }
+}

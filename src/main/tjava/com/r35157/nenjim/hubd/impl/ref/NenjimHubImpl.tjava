@@ -2,6 +2,7 @@ package com.r35157.nenjim.hubd.impl.ref;
 
 import com.fanitas.evelyn.core.Evelyn;
 import com.fanitas.evelyn.core.impl.ref.EvelynImpl;
+import com.r35157.assetaz.core.service.ticker.impl.ref.TickerServiceImpl;
 import com.r35157.evelyn.emc.EvelynMissionControl;
 import com.r35157.evelyn.emc.impl.ref.EvelynMissionControlImpl;
 import com.r35157.jupiterperpsalarm.impl.ref.JupiterPerpsAlarmImpl;
@@ -58,6 +59,7 @@ public class NenjimHubImpl implements NenjimHub {
     }
 
     private void startAutoRunProcesses() throws Exception {
+        startAssetAZTickerService();
         startJupiterPerpsAlarm();   // TODO: Hardcoded/hacky way to auto-start but good enough for now.
         Evelyn evelynProd = new EvelynImpl();
         Evelyn evelynTest = new EvelynImpl();
@@ -84,6 +86,10 @@ public class NenjimHubImpl implements NenjimHub {
             startProcess(processInterfaceName);
         }
         */
+    }
+
+    private void startAssetAZTickerService() throws Exception {
+        new TickerServiceImpl().start();
     }
 
     @Override
