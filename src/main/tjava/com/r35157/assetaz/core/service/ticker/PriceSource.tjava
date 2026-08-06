@@ -12,7 +12,7 @@ public interface PriceSource {
 
     @NotNull ΩPriceSourceNameΩ getSourceName();
 
-    void start();
+    void start(@NotNull PriceSink priceSink);
 
     void stop();
 }

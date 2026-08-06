@@ -9,13 +9,6 @@ import org.jetbrains.annotations.NotNull;
 public interface TickerService {
 
     /**
-     * Registers a source before this service starts.
-     *
-     * @param priceSource source to register
-     */
-    void addPriceSource(@NotNull PriceSource priceSource);
-
-    /**
      * Starts the ticker service.
      *
      * @throws IllegalStateException if the service cannot be started

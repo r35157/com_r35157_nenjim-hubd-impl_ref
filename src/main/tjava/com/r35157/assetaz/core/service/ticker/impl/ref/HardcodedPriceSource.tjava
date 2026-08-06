@@ -21,17 +21,15 @@ import static com.r35157.libs.valuetypes.basic.WellKnownTradingPairs.EVE_USDC;
  * Temporary reference source that produces a constant EVE/USDC price.
  */
 public final class HardcodedPriceSource implements PriceSource {
-    public HardcodedPriceSource(@NotNull PriceSink priceSink) {
-        this(priceSink, Clock.systemUTC(), OBSERVATION_DELAY_MINUTES, TimeUnit.MINUTES);
+    public HardcodedPriceSource() {
+        this(Clock.systemUTC(), OBSERVATION_DELAY_MINUTES, TimeUnit.MINUTES);
     }
 
     HardcodedPriceSource(
-            @NotNull PriceSink priceSink,
             @NotNull Clock clock,
             long observationDelay,
             @NotNull TimeUnit observationDelayUnit
     ) {
-        this.priceSink = Objects.requireNonNull(priceSink, "priceSink");
         this.clock = Objects.requireNonNull(clock, "clock");
         if (observationDelay <= 0) {
             throw new IllegalArgumentException("observationDelay must be positive");
@@ -54,7 +52,9 @@ public final class HardcodedPriceSource implements PriceSource {
     }
 
     @Override
-    public synchronized void start() {
+    public synchronized void start(@NotNull PriceSink priceSink) {
+        this.priceSink = Objects.requireNonNull(priceSink, "priceSink");
+
         if (scheduler != null) {
             throw new IllegalStateException("Hardcoded price source is already started");
         }
@@ -105,7 +105,7 @@ public final class HardcodedPriceSource implements PriceSource {
     private static final String HARDCODED_PRICE = "14.85";
     private static final long OBSERVATION_DELAY_MINUTES = 1;
 
-    private final PriceSink priceSink;
+    private PriceSink priceSink;
     private final Clock clock;
     private final long observationDelay;
     private final TimeUnit observationDelayUnit;

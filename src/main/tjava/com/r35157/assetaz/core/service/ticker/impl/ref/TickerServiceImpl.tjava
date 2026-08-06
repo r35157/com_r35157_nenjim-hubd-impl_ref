@@ -37,59 +37,16 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public final class TickerServiceImpl implements TickerService, PriceSink {
-    public TickerServiceImpl() {
+    public TickerServiceImpl(PriceSource... priceSources) {
         this(DATA_ROOT);
+
+        for (PriceSource priceSource : priceSources) {
+            addPriceSource(priceSource);
+        }
     }
 
     TickerServiceImpl(@NotNull Path dataRoot) {
         this.dataRoot = Objects.requireNonNull(dataRoot, "dataRoot");
-    }
-
-    @Override
-    public synchronized void addPriceSource(@NotNull PriceSource priceSource) {
-        Objects.requireNonNull(priceSource, "priceSource");
-        if (state != LifecycleState.NEW) {
-            throw new IllegalStateException(
-                    "Price sources must be registered before the Ticker service is started"
-            );
-        }
-        if (registrationsByInstance.containsKey(priceSource)) {
-            throw new IllegalArgumentException("Price source instance is already registered");
-        }
-
-        TradingPair tradingPair = validateTradingPair(priceSource.getTradingPair());
-        ΩPriceSourceNameΩ sourceName = validateSourceName(priceSource.getSourceName());
-        SourceKey key = new SourceKey(tradingPair, sourceName);
-        Path historyPath = historyPath(tradingPair, sourceName);
-
-        if (registrationsByKey.containsKey(key)) {
-            throw new IllegalArgumentException(
-                    "Duplicate price source registration for " + tradingPair
-                            + " source " + sourceName
-                            + " addresses history " + historyPath
-            );
-        }
-
-        SourceRegistration existingHistoryRegistration =
-                registrationsByHistoryPath.get(historyPath);
-        if (existingHistoryRegistration != null) {
-            throw new IllegalArgumentException(
-                    "Price source history is already registered: " + historyPath
-                            + " is used by "
-                            + existingHistoryRegistration.key.tradingPair()
-                            + " source "
-                            + existingHistoryRegistration.key.sourceName()
-            );
-        }
-
-        SourceRegistration registration = new SourceRegistration(
-                priceSource,
-                key,
-                historyPath
-        );
-        registrationsByKey.put(key, registration);
-        registrationsByInstance.put(priceSource, registration);
-        registrationsByHistoryPath.put(historyPath, registration);
     }
 
     @Override
@@ -203,6 +160,52 @@ public final class TickerServiceImpl implements TickerService, PriceSink {
         }
     }
 
+    private synchronized void addPriceSource(@NotNull PriceSource priceSource) {
+        Objects.requireNonNull(priceSource, "priceSource");
+        if (state != LifecycleState.NEW) {
+            throw new IllegalStateException(
+                    "Price sources must be registered before the Ticker service is started"
+            );
+        }
+        if (registrationsByInstance.containsKey(priceSource)) {
+            throw new IllegalArgumentException("Price source instance is already registered");
+        }
+
+        TradingPair tradingPair = validateTradingPair(priceSource.getTradingPair());
+        ΩPriceSourceNameΩ sourceName = validateSourceName(priceSource.getSourceName());
+        SourceKey key = new SourceKey(tradingPair, sourceName);
+        Path historyPath = historyPath(tradingPair, sourceName);
+
+        if (registrationsByKey.containsKey(key)) {
+            throw new IllegalArgumentException(
+                    "Duplicate price source registration for " + tradingPair
+                            + " source " + sourceName
+                            + " addresses history " + historyPath
+            );
+        }
+
+        SourceRegistration existingHistoryRegistration =
+                registrationsByHistoryPath.get(historyPath);
+        if (existingHistoryRegistration != null) {
+            throw new IllegalArgumentException(
+                    "Price source history is already registered: " + historyPath
+                            + " is used by "
+                            + existingHistoryRegistration.key.tradingPair()
+                            + " source "
+                            + existingHistoryRegistration.key.sourceName()
+            );
+        }
+
+        SourceRegistration registration = new SourceRegistration(
+                priceSource,
+                key,
+                historyPath
+        );
+        registrationsByKey.put(key, registration);
+        registrationsByInstance.put(priceSource, registration);
+        registrationsByHistoryPath.put(historyPath, registration);
+    }
+
     private void activateAndLoadHistories() throws IOException {
         for (SourceRegistration registration : registrationsByKey.values()) {
             validateRegistrationMetadata(registration);
@@ -244,7 +247,7 @@ public final class TickerServiceImpl implements TickerService, PriceSink {
             }
 
             registration.started = true;
-            registration.source.start();
+            registration.source.start(this);
         }
     }
 
