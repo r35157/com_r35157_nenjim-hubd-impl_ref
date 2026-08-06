@@ -1,11 +1,29 @@
 package com.r35157.assetaz.core.service.ticker;
 
 import com.r35157.libs.valuetypes.basic.TradingPair;
+import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
-
+/**
+ * Provides price observations for trading pairs.
+ */
 public interface TickerService {
-    void start() throws IOException;
 
-    PriceObservation getLatestPrice(TradingPair tradingPair);
+    /**
+     * Starts the ticker service.
+     *
+     * @throws IllegalStateException if the service cannot be started
+     */
+    void start();
+
+    /**
+     * Returns the latest available price observation for a trading pair.
+     *
+     * @param tradingPair the requested trading pair
+     * @return the latest available price observation
+     *
+     * @throws NullPointerException     if {@code tradingPair} is {@code null}
+     * @throws IllegalArgumentException if the trading pair is not supported
+     * @throws IllegalStateException    if no price observation is available
+     */
+    @NotNull PriceObservation getLatestPrice(@NotNull TradingPair tradingPair);
 }

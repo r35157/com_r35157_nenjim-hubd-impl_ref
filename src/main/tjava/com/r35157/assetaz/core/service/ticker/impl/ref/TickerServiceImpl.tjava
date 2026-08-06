@@ -4,6 +4,7 @@ import com.r35157.assetaz.core.service.ticker.PriceObservation;
 import com.r35157.assetaz.core.service.ticker.TickerService;
 import com.r35157.libs.valuetypes.basic.AssetPrice;
 import com.r35157.libs.valuetypes.basic.TradingPair;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,13 +38,49 @@ public final class TickerServiceImpl implements TickerService {
         this(PRICE_HISTORY_PATH, Clock.systemUTC());
     }
 
-    TickerServiceImpl(Path priceHistoryPath, Clock clock) {
+    TickerServiceImpl(@NotNull Path priceHistoryPath, Clock clock) {
         this.priceHistoryPath = Objects.requireNonNull(priceHistoryPath, "priceHistoryPath");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     @Override
-    public synchronized void start() throws IOException {
+    public synchronized void start() {
+        try {
+            startInternal();
+        } catch (IOException exception) {
+            throw new IllegalStateException(
+                    "Could not start Ticker service using history file: " + priceHistoryPath,
+                    exception
+            );
+        }
+    }
+
+    @Override
+    public @NotNull PriceObservation getLatestPrice(@NotNull TradingPair tradingPair) {
+        Objects.requireNonNull(tradingPair, "tradingPair");
+
+        if (!SUPPORTED_PAIR.equals(tradingPair)) {
+            throw new IllegalArgumentException(
+                    "Ticker price is unavailable for unsupported trading pair: " + tradingPair
+            );
+        }
+        if (!active) {
+            throw new IllegalStateException(
+                    "Ticker price is unavailable for inactive trading pair: " + tradingPair
+            );
+        }
+
+        PriceObservation observation = latest.get();
+        if (observation == null) {
+            throw new IllegalStateException(
+                    "No persisted price is available for trading pair: " + tradingPair
+            );
+        }
+
+        return observation;
+    }
+
+    private synchronized void startInternal() throws IOException {
         if (started) {
             throw new IllegalStateException("Ticker service has already been started");
         }
@@ -83,31 +120,6 @@ public final class TickerServiceImpl implements TickerService {
                 OBSERVATION_DELAY_MINUTES,
                 TimeUnit.MINUTES
         );
-    }
-
-    @Override
-    public PriceObservation getLatestPrice(TradingPair tradingPair) {
-        Objects.requireNonNull(tradingPair, "tradingPair");
-
-        if (!SUPPORTED_PAIR.equals(tradingPair)) {
-            throw new IllegalArgumentException(
-                    "Ticker price is unavailable for unsupported trading pair: " + tradingPair
-            );
-        }
-        if (!active) {
-            throw new IllegalStateException(
-                    "Ticker price is unavailable for inactive trading pair: " + tradingPair
-            );
-        }
-
-        PriceObservation observation = latest.get();
-        if (observation == null) {
-            throw new IllegalStateException(
-                    "No persisted price is available for trading pair: " + tradingPair
-            );
-        }
-
-        return observation;
     }
 
     private PriceObservation loadLatestObservation() throws IOException {

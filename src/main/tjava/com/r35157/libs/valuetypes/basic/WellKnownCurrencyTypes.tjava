@@ -3,15 +3,14 @@ package com.r35157.libs.valuetypes.basic;
 import java.util.UUID;
 
 /**
- * Defines well-known currency types used by the Solana integration.
+ * Defines well-known currencies used across the system.
  *
- * <p>Each enum value wraps a {@link CurrencyType} with a stable identifier and a
- * human-readable currency name. These predefined values are intended for common
- * currencies that the Solana-related modules need to reference consistently.</p>
+ * <p>Each enum value provides a stable {@link CurrencyType} identity for a
+ * currency that may be referenced by multiple services and integrations.</p>
  */
 public enum WellKnownCurrencyTypes {
     /**
-     * EVE currency.
+     * Evelyn IOU Token
      */
     EVE(new CurrencyType(
             UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff301"),
@@ -20,7 +19,7 @@ public enum WellKnownCurrencyTypes {
     ),
 
     /**
-     * USD Coin currency.
+     * USD Coin
      */
     USDC(new CurrencyType(
             UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff302"),
@@ -29,7 +28,7 @@ public enum WellKnownCurrencyTypes {
     ),
 
     /**
-     * Native Solana currency.
+     * Native Solana currency
      */
     SOLANA(new CurrencyType(
             UUID.fromString("019e0116-fce5-792f-a647-fa6da4dffec5"),
@@ -38,7 +37,7 @@ public enum WellKnownCurrencyTypes {
     ),
 
     /**
-     * Syrup USDC token currency.
+     * SyrupUSDC currency
      */
     SYRUPUSDC(new CurrencyType(
             UUID.fromString("019e1d51-0600-7956-8231-f3b7058a91c2"),
@@ -47,16 +46,16 @@ public enum WellKnownCurrencyTypes {
     );
 
     /**
-     * Creates a well-known currency type entry.
+     * Creates a well-known currency entry.
      *
-     * @param currencyType the currency type represented by this enum value
+     * @param currencyType the stable currency identity represented by the entry
      */
     WellKnownCurrencyTypes(CurrencyType currencyType) {
         this.currencyType = currencyType;
     }
 
     /**
-     * Returns the currency type represented by this enum value.
+     * Returns the represented currency type.
      *
      * @return the represented currency type
      */
