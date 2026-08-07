@@ -3,9 +3,10 @@ package com.fanitas.evelyn.core.impl.ref;
 import com.fanitas.evelyn.core.State;
 import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionAccounting;
 import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionConcentrated;
+import com.r35157.assetaz.services.cis.CurrencyIdentityService;
+import com.r35157.assetaz.valuetypes.CurrencyType;
 import com.r35157.libs.configuration.ConfigurationFormatVersionValidator;
 import com.r35157.libs.raydium.*;
-import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 import com.r35157.libs.valuetypes.basic.*;
 
 import java.io.IOException;
@@ -17,12 +18,23 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+
+import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SOLANA_ID;
+import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SYRUPUSDC_ID;
 
 public class StateImpl implements State {
 
-    public StateImpl(Raydium raydium) throws IOException, InterruptedException {
+    public StateImpl(
+            Raydium raydium,
+            CurrencyIdentityService currencyIdentityService
+    ) throws IOException, InterruptedException {
         this.raydium = raydium;
+        this.currencyIdentityService = Objects.requireNonNull(
+                currencyIdentityService,
+                "currencyIdentityService"
+        );
         update();
     }
 
@@ -114,8 +126,8 @@ public class StateImpl implements State {
             RaydiumConcentratedPoolState poolState =
                     raydium.fetchConcentratedPoolState(positionState.poolId());
 
-            CurrencyType ctSol = WellKnownCurrencyTypes.SOLANA.getCurrencyType();
-            CurrencyType ctSyrup = WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType();
+            CurrencyType ctSol = currencyIdentityService.resolve(SOLANA_ID);
+            CurrencyType ctSyrup = currencyIdentityService.resolve(SYRUPUSDC_ID);
 
             int mintBDecimals = poolInfo.mintBDecimals();
             Range<AssetPrice> priceRange = raydium.calculateConcentratedPositionPriceRange(
@@ -276,7 +288,7 @@ public class StateImpl implements State {
 
     private ΩSyrupAmountΩ readSyrupOwnedByEvelyn(Iterator<String> lineIterator) throws IOException {
         String syrupOwnedByEvelynStr = readLineFromFile(lineIterator);
-        CurrencyType ct = WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType();
+        CurrencyType ct = currencyIdentityService.resolve(SYRUPUSDC_ID);
         ΩSyrupAmountΩ ma = stringToMoneyAmount(syrupOwnedByEvelynStr, ct);
         return ma;
     }
@@ -309,8 +321,8 @@ public class StateImpl implements State {
     private static final Path PATH_POSITIONS = Path.of("conf/positions.conf");
     private static final int SUPPORTED_EVELYN_FORMAT_VERSION = 1;
     private static final int SUPPORTED_POSITIONS_FORMAT_VERSION = 1;
-
     private final Raydium raydium;
+    private final CurrencyIdentityService currencyIdentityService;
 
     private ΩmilliSecondsΩ iterationInterval;
     private ΩSyrupAmountΩ syrupOwnedByEvelyn;

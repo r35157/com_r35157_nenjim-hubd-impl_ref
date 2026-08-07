@@ -1,0 +1,48 @@
+package com.r35157.assetaz.valuetypes;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Objects;
+import java.util.UUID;
+
+/**
+ * Immutable AssetAZ currency identity and its current display metadata.
+ *
+ * <p>The {@link #id()} UUID is the complete and stable identity. The
+ * {@link #name()} and {@link #symbol()} values may change without creating a
+ * different currency. Equality and hash codes therefore depend only on the
+ * UUID, and callers must use {@link #equals(Object)} rather than reference
+ * comparison.</p>
+ *
+ * @param id the stable AssetAZ currency UUID; never {@code null}
+ * @param name the current human-readable currency name; never {@code null}
+ * @param symbol the current display symbol; never {@code null}     // TODO: Does this conflict with its @Nullable status?
+ */
+public record CurrencyType(
+        @NotNull UUID id,
+        @NotNull String name,
+        @Nullable String symbol         // TODO: Find out if we can make this NotNull as well
+) {
+    public CurrencyType {
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(name, "name");
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        return this == object
+                || object instanceof CurrencyType other
+                && id.equals(other.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return id.hashCode();
+    }
+
+    @Override
+    public @NotNull String toString() {
+        return symbol;
+    }
+}

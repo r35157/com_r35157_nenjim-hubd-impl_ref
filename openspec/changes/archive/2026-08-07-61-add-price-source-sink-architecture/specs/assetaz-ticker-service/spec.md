@@ -1,10 +1,4 @@
-# assetaz-ticker-service Specification
-
-## Purpose
-
-Provide AssetAZ callers with typed latest prices backed by explicitly enabled, durable observation histories.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Price sources are discovered and lifecycle-managed
 Nenjim SHALL be able to construct each price source independently in an initialized but unstarted state without supplying a ticker or sink. The ticker SHALL obtain `PriceSource` plugins from its Nenjim context, while ordinary ticker clients SHALL NOT receive a public operation for adding or managing sources. The ticker SHALL identify each obtained source by its `TradingPair` and stable source name, reject duplicate identities clearly, start each active source by passing itself as `PriceSink`, and stop every source it started. Source names SHALL be non-empty safe directory components and SHALL reject `/`, `\`, `..`, and control characters without rewriting them. A source SHALL announce typed prices and timestamps only through the sink received at start and SHALL remain unaware of its persistence path. A repeated source start SHALL reject the call before replacing its existing sink.
@@ -40,6 +34,8 @@ Nenjim SHALL be able to construct each price source independently in an initiali
 #### Scenario: Repeated source start preserves existing sink
 - **WHEN** an already-started source receives another start call with a different sink
 - **THEN** it rejects the call before replacing the sink from the successful start
+
+## MODIFIED Requirements
 
 ### Requirement: Ticker exposes typed latest prices
 The ticker SHALL expose the latest successfully persisted `PriceObservation` for a requested `TradingPair` across all active context-provided sources for that pair. A `PriceObservation` SHALL contain exactly an `AssetPrice`, its observation `Instant`, and the stable source name; the `AssetPrice` SHALL contain both its `ΩPriceΩ` value and `TradingPair`. If several active sources provide a pair, latest SHALL be the observation with the greatest `observedAt` timestamp, and its source name SHALL identify its source. A request for a pair with no obtained sources, no active sources, or no successfully persisted observation SHALL throw a clear exception rather than return `null`.

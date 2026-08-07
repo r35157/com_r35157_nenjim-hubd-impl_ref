@@ -1,0 +1,60 @@
+package com.r35157.assetaz.services.cis;
+
+import com.r35157.assetaz.valuetypes.CurrencyType;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * Resolves AssetAZ currency identities and their identifiers in external
+ * systems.
+ *
+ * <p>An AssetAZ currency is identified by its stable {@link UUID}. An external
+ * currency is identified by the combination of
+ * {@link ExternalCurrencyReference#namespace() namespace} and
+ * {@link ExternalCurrencyReference#externalId() external ID}; its symbol is
+ * metadata and does not participate in resolution.</p>
+ *
+ * <p>This interface is read-only. Implementations may reuse returned
+ * {@link CurrencyType} instances, but callers must compare currency values with
+ * {@link Object#equals(Object)} rather than reference identity.</p>
+ */
+public interface CurrencyIdentityService {
+    /**
+     * Resolves an AssetAZ currency UUID to its current currency metadata.
+     *
+     * @param currencyTypeId the stable AssetAZ currency UUID
+     * @return the current currency value for {@code currencyTypeId}
+     * @throws NullPointerException if {@code currencyTypeId} is {@code null}
+     * @throws IllegalArgumentException if {@code currencyTypeId} is unknown
+     */
+    @NotNull CurrencyType resolve(@NotNull UUID currencyTypeId);
+
+    /**
+     * Resolves a namespaced external currency identifier.
+     *
+     * <p>Resolution uses only the reference namespace and external ID. The
+     * supplied symbol is descriptive metadata and is not a lookup key.</p>
+     *
+     * @param externalReference the namespaced external identifier to resolve
+     * @return the AssetAZ currency mapped to the external identifier
+     * @throws NullPointerException if {@code externalReference} is {@code null}
+     * @throws IllegalArgumentException if the external identity is unknown
+     */
+    @NotNull CurrencyType resolve(
+            @NotNull ExternalCurrencyReference externalReference
+    );
+
+    /**
+     * Finds every external reference associated with an AssetAZ currency.
+     *
+     * @param currencyTypeId the stable AssetAZ currency UUID
+     * @return an immutable, possibly empty set of external references
+     * @throws NullPointerException if {@code currencyTypeId} is {@code null}
+     * @throws IllegalArgumentException if {@code currencyTypeId} is unknown
+     */
+    @NotNull Set<ExternalCurrencyReference> findExternalReferences(
+            @NotNull UUID currencyTypeId
+    );
+}

@@ -1,5 +1,6 @@
 package com.r35157.jupiterperpsalarm.impl.ref;
 
+import com.r35157.assetaz.services.cis.CurrencyIdentityService;
 import com.r35157.cryptowallet.solana.SolanaWallet;
 import com.r35157.cryptowallet.solana.impl.ref.SolanaWalletImpl;
 import com.r35157.libs.jupiter.perps.JupiterPerpsService;
@@ -21,7 +22,10 @@ import java.util.concurrent.CountDownLatch;
 
 public final class JupiterPerpsAlarmImpl {
 
-    public static void main(String[] args) throws Exception {
+    public static void start(
+            String[] args,
+            CurrencyIdentityService currencyIdentityService
+    ) throws Exception {
         Config config;
         System.out.println("Starting Jupiter Perps Alarms...");
         try {
@@ -57,7 +61,9 @@ public final class JupiterPerpsAlarmImpl {
 
         System.out.print("Initializing dependencies... ");
         ObjectCache objectCache = new ObjectCacheImpl();
-        SolanaBlockChain realSolanaBlockChain = new SolanaBlockChainImpl();
+        SolanaBlockChain realSolanaBlockChain = new SolanaBlockChainImpl(
+                currencyIdentityService
+        );
         SolanaBlockChain solanaBlockChain = new CachedSolanaBlockChain(
                 realSolanaBlockChain,
                 objectCache
@@ -83,7 +89,8 @@ public final class JupiterPerpsAlarmImpl {
         JupiterPerpsService positionIncreaseJupiter =
                 new AnchorIdlJupiterPerpsServiceImpl(
                         solanaBlockChain,
-                        positionIncreaseWallet
+                        positionIncreaseWallet,
+                        currencyIdentityService
                 );
 
         JupiterPerpsPositionDecreaseAlarmActionConfiguration
@@ -106,7 +113,8 @@ public final class JupiterPerpsAlarmImpl {
         JupiterPerpsService positionDecreaseJupiter =
                 new AnchorIdlJupiterPerpsServiceImpl(
                         solanaBlockChain,
-                        positionDecreaseWallet
+                        positionDecreaseWallet,
+                        currencyIdentityService
                 );
 
         JupiterPerpsEntryPriceVariableRefresher entryPriceVariableRefresher =
