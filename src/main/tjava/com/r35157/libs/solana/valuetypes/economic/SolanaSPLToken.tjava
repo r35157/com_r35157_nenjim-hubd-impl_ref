@@ -1,6 +1,6 @@
 package com.r35157.libs.solana.valuetypes.economic;
 
-import com.r35157.libs.valuetypes.basic.CurrencyType;
+import com.r35157.assetaz.valuetypes.CurrencyType;
 
 /**
  * Represents an SPL token known to the Solana integration.

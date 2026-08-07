@@ -1,0 +1,37 @@
+package com.r35157.assetaz.services.cis;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Objects;
+
+/**
+ * Identifies a currency in an external identification system.
+ *
+ * <p>The semantic identity is the combination of {@link #namespace()} and
+ * {@link #externalId()}. {@link #symbol()} is optional display metadata and
+ * must not be used as a lookup key. Consequently, the record's structural
+ * equality, which includes the symbol, must not be used as the identity key by
+ * a {@link CurrencyIdentityService} implementation.</p>
+ *
+ * @param namespace the external identification system, such as
+ *                  {@value #SOLANA_MINT_NAMESPACE}; never {@code null}
+ * @param externalId the identifier within the namespace, such as a token mint
+ *                   address; never {@code null}
+ * @param symbol optional symbol metadata supplied by the external system
+ */
+public record ExternalCurrencyReference(
+        @NotNull String namespace,
+        @NotNull String externalId,
+        @Nullable String symbol
+) {
+    public ExternalCurrencyReference {
+        Objects.requireNonNull(namespace, "namespace");
+        Objects.requireNonNull(externalId, "externalId");
+    }
+
+    /**
+     * Namespace for tokens identified by their Solana mint address.
+     */
+    public static final String SOLANA_MINT_NAMESPACE = "solana-mint";
+}

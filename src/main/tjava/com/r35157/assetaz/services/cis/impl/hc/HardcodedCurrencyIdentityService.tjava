@@ -1,0 +1,157 @@
+package com.r35157.assetaz.services.cis.impl.hc;
+
+import com.r35157.assetaz.services.cis.CurrencyIdentityService;
+import com.r35157.assetaz.services.cis.ExternalCurrencyReference;
+import com.r35157.assetaz.valuetypes.CurrencyType;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+
+import static com.r35157.assetaz.services.cis.ExternalCurrencyReference.SOLANA_MINT_NAMESPACE;
+
+public final class HardcodedCurrencyIdentityService implements CurrencyIdentityService {
+    public HardcodedCurrencyIdentityService() {
+        this(List.of(
+                entry(EVE_ID, "Evelyn IOU", "EVE"),
+                entry(USDC_ID, "USD Coin", "USDC",
+                        solanaMint("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "USDC")),
+                entry(SOLANA_ID, "Solana", "SOL",
+                        solanaMint("So11111111111111111111111111111111111111112", "SOL")),
+                entry(SYRUPUSDC_ID, "SyrupUSDC", "SyrupUSDC",
+                        solanaMint("AvZZF1YaZDziPY2RCK4oJrRVrbN3mTD9NL24hPeaZeUj", "SyrupUSDC"))
+        ));
+    }
+
+    private HardcodedCurrencyIdentityService(List<CatalogueEntry> entries) {
+        Map<UUID, CurrencyType> currencies = new HashMap<>();
+        Map<ExternalIdentity, UUID> externalIdentities = new HashMap<>();
+        Map<ExternalIdentity, ExternalCurrencyReference> referencesByIdentity = new HashMap<>();
+        Map<UUID, Set<ExternalCurrencyReference>> references = new HashMap<>();
+
+        for (CatalogueEntry entry : entries) {
+            CurrencyType previousCurrency = currencies.putIfAbsent(
+                    entry.currencyType().id(),
+                    entry.currencyType()
+            );
+            if (previousCurrency != null && !sameMetadata(previousCurrency, entry.currencyType())) {
+                throw new IllegalStateException(
+                        "Conflicting currency definitions for UUID " + entry.currencyType().id()
+                );
+            }
+
+            Set<ExternalCurrencyReference> currencyReferences = references.computeIfAbsent(
+                    entry.currencyType().id(),
+                    ignored -> new HashSet<>()
+            );
+            for (ExternalCurrencyReference reference : entry.externalReferences()) {
+                ExternalIdentity identity = ExternalIdentity.from(reference);
+                UUID previousId = externalIdentities.putIfAbsent(identity, entry.currencyType().id());
+                if (previousId != null && !previousId.equals(entry.currencyType().id())) {
+                    throw new IllegalStateException(
+                            "External currency identity " + identity + " maps to both "
+                                    + previousId + " and " + entry.currencyType().id()
+                    );
+                }
+                ExternalCurrencyReference previousReference = referencesByIdentity.putIfAbsent(
+                        identity,
+                        reference
+                );
+                if (previousReference != null
+                        && !Objects.equals(previousReference.symbol(), reference.symbol())) {
+                    throw new IllegalStateException(
+                            "Conflicting symbol metadata for external currency identity " + identity
+                    );
+                }
+                currencyReferences.add(reference);
+            }
+        }
+
+        Map<UUID, Set<ExternalCurrencyReference>> immutableReferences = new HashMap<>();
+        currencies.keySet().forEach(id -> immutableReferences.put(
+                id,
+                Set.copyOf(references.getOrDefault(id, Set.of()))
+        ));
+
+        this.currencies = Map.copyOf(currencies);
+        this.externalIdentities = Map.copyOf(externalIdentities);
+        this.references = Map.copyOf(immutableReferences);
+    }
+
+    @Override
+    public @NotNull CurrencyType resolve(@NotNull UUID currencyTypeId) {
+        Objects.requireNonNull(currencyTypeId, "currencyTypeId");
+        CurrencyType currencyType = currencies.get(currencyTypeId);
+        if (currencyType == null) {
+            throw new IllegalArgumentException("Unknown AssetAZ currency UUID: " + currencyTypeId);
+        }
+        return currencyType;
+    }
+
+    @Override
+    public @NotNull CurrencyType resolve(
+            @NotNull ExternalCurrencyReference externalReference
+    ) {
+        Objects.requireNonNull(externalReference, "externalReference");
+        ExternalIdentity identity = ExternalIdentity.from(externalReference);
+        UUID currencyTypeId = externalIdentities.get(identity);
+        if (currencyTypeId == null) {
+            throw new IllegalArgumentException("Unknown external currency identity: " + identity);
+        }
+        return resolve(currencyTypeId);
+    }
+
+    @Override
+    public @NotNull Set<ExternalCurrencyReference> findExternalReferences(
+            @NotNull UUID currencyTypeId
+    ) {
+        resolve(currencyTypeId);
+        return references.get(currencyTypeId);
+    }
+
+    private static boolean sameMetadata(CurrencyType left, CurrencyType right) {
+        return left.name().equals(right.name()) && left.symbol().equals(right.symbol());
+    }
+
+    private static CatalogueEntry entry(
+            UUID id,
+            String name,
+            String symbol,
+            ExternalCurrencyReference... externalReferences     // TODO: Isn't at-least one externalReference always required?!
+    ) {
+        return new CatalogueEntry(
+                new CurrencyType(id, name, symbol),
+                Set.of(externalReferences)
+        );
+    }
+
+    private static ExternalCurrencyReference solanaMint(String mintAddress, String symbol) {
+        return new ExternalCurrencyReference(SOLANA_MINT_NAMESPACE, mintAddress, symbol);
+    }
+
+    private record CatalogueEntry(
+            CurrencyType currencyType,
+            Set<ExternalCurrencyReference> externalReferences
+    ) {
+    }
+
+    private record ExternalIdentity(String namespace, String externalId) {
+        private static ExternalIdentity from(ExternalCurrencyReference reference) {
+            return new ExternalIdentity(reference.namespace(), reference.externalId());
+        }
+    }
+
+    public static final UUID EVE_ID = UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff301");
+    public static final UUID USDC_ID = UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff302");
+    public static final UUID SOLANA_ID = UUID.fromString("019e0116-fce5-792f-a647-fa6da4dffec5");
+    public static final UUID SYRUPUSDC_ID = UUID.fromString("019e1d51-0600-7956-8231-f3b7058a91c2");
+
+    private final Map<UUID, CurrencyType> currencies;
+    private final Map<ExternalIdentity, UUID> externalIdentities;
+    private final Map<UUID, Set<ExternalCurrencyReference>> references;
+}

@@ -1,6 +1,7 @@
 package com.r35157.libs.jupiter.perps.impl.anchoridl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.r35157.assetaz.services.cis.CurrencyIdentityService;
 import com.r35157.cryptowallet.solana.SolanaWallet;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPosition;
 import com.r35157.libs.jupiter.perps.JupiterPerpsPositionDirection;
@@ -18,7 +19,6 @@ import com.r35157.libs.solana.SolanaProgramAccountMemcmpFilter;
 import com.r35157.libs.solana.SolanaSignedTransaction;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
-import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,19 +34,25 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SOLANA_ID;
 import static java.math.BigDecimal.ZERO;
 
 public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
 
     public AnchorIdlJupiterPerpsServiceImpl(
             SolanaBlockChain solanaBlockChain,
-            SolanaWallet wallet
+            SolanaWallet wallet,
+            CurrencyIdentityService currencyIdentityService
     ) {
         this.solanaBlockChain = Objects.requireNonNull(
                 solanaBlockChain,
                 "solanaBlockChain"
         );
         this.wallet = Objects.requireNonNull(wallet, "wallet");
+        this.currencyIdentityService = Objects.requireNonNull(
+                currencyIdentityService,
+                "currencyIdentityService"
+        );
         this.positionDecoder = new AnchorIdlJupiterPerpsPositionDecoder();
         this.custodyDecoder = new AnchorIdlJupiterPerpsCustodyDecoder();
     }
@@ -416,7 +422,7 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
         ΩUSDCAmountΩ totalFees = ZERO;                   // TODO - Dummy
         ΩSolanaAmountΩ accountRent = new MoneyAmount(    // TODO - Dummy
                 ZERO,
-                WellKnownCurrencyTypes.SOLANA.getCurrencyType()
+                currencyIdentityService.resolve(SOLANA_ID)
         );
 
         JupiterPerpsPosition pos = new JupiterPerpsPosition(
@@ -808,9 +814,9 @@ public class AnchorIdlJupiterPerpsServiceImpl implements JupiterPerpsService {
     private static final int POSITION_OWNER_OFFSET = 8;
     private static final int MAX_LEVERAGE = 500;
     private static final int USDC_DECIMALS = 6;
-
     private final SolanaBlockChain solanaBlockChain;
     private final SolanaWallet wallet;
+    private final CurrencyIdentityService currencyIdentityService;
     private final AnchorIdlJupiterPerpsPositionDecoder positionDecoder;
     private final AnchorIdlJupiterPerpsCustodyDecoder custodyDecoder;
 }
