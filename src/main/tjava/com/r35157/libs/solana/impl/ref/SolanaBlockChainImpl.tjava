@@ -4,12 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.r35157.assetaz.services.cis.CurrencyIdentityService;
-import com.r35157.assetaz.valuetypes.CurrencyType;
 import com.r35157.libs.solana.*;
 import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
 import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
+import com.r35157.libs.valuetypes.basic.CurrencyType;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,16 +29,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SOLANA_ID;
 import static com.r35157.libs.solana.SolanaConstants.RPC_URL;
 
 public class SolanaBlockChainImpl implements SolanaBlockChain {
 
-    public SolanaBlockChainImpl(CurrencyIdentityService currencyIdentityService) {
-        this.currencyIdentityService = Objects.requireNonNull(
-                currencyIdentityService,
-                "currencyIdentityService"
-        );
+    public SolanaBlockChainImpl() {
         this.httpClient = HttpClient.newHttpClient();
         this.objectMapper = new ObjectMapper();
     }
@@ -47,7 +42,7 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
     public ΩSolanaAmountΩ getBalanceInSolana(ΩSolanaAddressΩ address) throws IOException, InterruptedException {
         ΩlamportsΩ lamport = getBalanceInLamport(address);
         ΩAmountΩ bd = ΩAmountΩ.valueOf(lamport).divide(LAMPORTS_PER_SOL);
-        CurrencyType type = currencyIdentityService.resolve(SOLANA_ID);
+        CurrencyType type = WellKnownCurrencyTypes.SOLANA.getCurrencyType();
         ΩSolanaAmountΩ sa = new ΩSolanaAmountΩ(bd, type);
 
         return sa;
@@ -943,7 +938,9 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
             );
         }
 
-        if (!currencyIdentityService.resolve(SOLANA_ID).equals(amount.currencyType())) {
+        if (!WellKnownCurrencyTypes.SOLANA
+                .getCurrencyType()
+                .equals(amount.currencyType())) {
             throw new IllegalArgumentException(
                     "SOL transfer amount must use the SOL currency type"
             );
@@ -1408,7 +1405,7 @@ public class SolanaBlockChainImpl implements SolanaBlockChain {
             BigInteger.valueOf(-121665)
                     .multiply(BigInteger.valueOf(121666).modInverse(ED25519_P))
                     .mod(ED25519_P);
-    private final CurrencyIdentityService currencyIdentityService;
+
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private ΩmilliSecondsΩ previousRemoteCallTime = 0L;

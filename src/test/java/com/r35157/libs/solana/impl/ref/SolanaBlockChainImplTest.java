@@ -1,12 +1,8 @@
 package com.r35157.libs.solana.impl.ref;
 
-import com.r35157.assetaz.services.cis.CurrencyIdentityService;
-import com.r35157.assetaz.services.cis.ExternalCurrencyReference;
-import com.r35157.assetaz.valuetypes.CurrencyType;
 import com.r35157.libs.solana.SolanaLatestBlockhash;
 import com.r35157.libs.solana.SolanaUnsignedTransaction;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -14,11 +10,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SOLANA_ID;
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SOLANA;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,7 +32,7 @@ class SolanaBlockChainImplTest {
                         RECIPIENT,
                         new MoneyAmount(
                                 new BigDecimal("0.123456789"),
-                                SOLANA
+                                SOLANA.getCurrencyType()
                         )
                 );
 
@@ -143,7 +137,7 @@ class SolanaBlockChainImplTest {
                         RECIPIENT,
                         new MoneyAmount(
                                 new BigDecimal("0.0000000001"),
-                                SOLANA
+                                SOLANA.getCurrencyType()
                         )
                 )
         );
@@ -154,7 +148,7 @@ class SolanaBlockChainImplTest {
             long fee,
             AtomicReference<String> feeMessage
     ) {
-        return new SolanaBlockChainImpl(CURRENCY_IDENTITIES) {
+        return new SolanaBlockChainImpl() {
             @Override
             public long getBalanceInLamport(String address) {
                 return balance;
@@ -187,34 +181,6 @@ class SolanaBlockChainImplTest {
                 .getLong();
     }
 
-    private static final CurrencyType SOLANA = new CurrencyType(
-            SOLANA_ID,
-            "Solana",
-            "SOL"
-    );
-    private static final CurrencyIdentityService CURRENCY_IDENTITIES =
-            new CurrencyIdentityService() {
-                @Override
-                public @NotNull CurrencyType resolve(@NotNull UUID currencyTypeId) {
-                    if (!SOLANA_ID.equals(currencyTypeId)) {
-                        throw new IllegalArgumentException("Unknown test currency: " + currencyTypeId);
-                    }
-                    return SOLANA;
-                }
-
-                @Override
-                public @NotNull CurrencyType resolve(@NotNull ExternalCurrencyReference externalReference) {
-                    throw new IllegalArgumentException(
-                            "No external currencies configured for this test"
-                    );
-                }
-
-                @Override
-                public @NotNull Set<ExternalCurrencyReference> findExternalReferences(@NotNull UUID currencyTypeId) {
-                    resolve(currencyTypeId);
-                    return Set.of();
-                }
-            };
     private static final String SENDER =
             "So11111111111111111111111111111111111111112";
     private static final String RECIPIENT =

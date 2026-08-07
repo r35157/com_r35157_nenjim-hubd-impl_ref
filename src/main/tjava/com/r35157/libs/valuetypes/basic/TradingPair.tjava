@@ -1,6 +1,5 @@
 package com.r35157.libs.valuetypes.basic;
 
-import com.r35157.assetaz.valuetypes.CurrencyType;
 import org.jetbrains.annotations.NotNull;
 
 public record TradingPair(

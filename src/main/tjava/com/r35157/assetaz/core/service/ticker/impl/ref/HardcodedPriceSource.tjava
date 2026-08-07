@@ -2,7 +2,6 @@ package com.r35157.assetaz.core.service.ticker.impl.ref;
 
 import com.r35157.assetaz.core.service.ticker.PriceSink;
 import com.r35157.assetaz.core.service.ticker.PriceSource;
-import com.r35157.assetaz.services.cis.CurrencyIdentityService;
 import com.r35157.libs.valuetypes.basic.TradingPair;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -16,34 +15,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.EVE_ID;
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.USDC_ID;
+import static com.r35157.libs.valuetypes.basic.WellKnownTradingPairs.EVE_USDC;
 
 /**
  * Temporary reference source that produces a constant EVE/USDC price.
  */
 public final class HardcodedPriceSource implements PriceSource {
-    public HardcodedPriceSource(
-            @NotNull CurrencyIdentityService currencyIdentityService
-    ) {
-        this(
-                currencyIdentityService,
-                Clock.systemUTC(),
-                OBSERVATION_DELAY_MINUTES,
-                TimeUnit.MINUTES
-        );
+    public HardcodedPriceSource() {
+        this(Clock.systemUTC(), OBSERVATION_DELAY_MINUTES, TimeUnit.MINUTES);
     }
 
     HardcodedPriceSource(
-            @NotNull CurrencyIdentityService currencyIdentityService,
             @NotNull Clock clock,
             long observationDelay,
             @NotNull TimeUnit observationDelayUnit
     ) {
-        this.currencyIdentityService = Objects.requireNonNull(
-                currencyIdentityService,
-                "currencyIdentityService"
-        );
         this.clock = Objects.requireNonNull(clock, "clock");
         if (observationDelay <= 0) {
             throw new IllegalArgumentException("observationDelay must be positive");
@@ -57,10 +43,7 @@ public final class HardcodedPriceSource implements PriceSource {
 
     @Override
     public @NotNull TradingPair getTradingPair() {
-        return new TradingPair(
-                currencyIdentityService.resolve(EVE_ID),
-                currencyIdentityService.resolve(USDC_ID)
-        );
+        return EVE_USDC.getTradingPair();
     }
 
     @Override
@@ -123,7 +106,6 @@ public final class HardcodedPriceSource implements PriceSource {
     private static final long OBSERVATION_DELAY_MINUTES = 1;
 
     private PriceSink priceSink;
-    private final CurrencyIdentityService currencyIdentityService;
     private final Clock clock;
     private final long observationDelay;
     private final TimeUnit observationDelayUnit;

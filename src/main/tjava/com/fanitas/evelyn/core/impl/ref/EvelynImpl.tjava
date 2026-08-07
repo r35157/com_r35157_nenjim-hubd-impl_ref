@@ -22,6 +22,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SOLANA;
+import static com.r35157.libs.valuetypes.basic.WellKnownCurrencyTypes.SYRUPUSDC;
 import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.SPL_TOKEN_PROGRAM;
 import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.TOKEN_2022_PROGRAM;
 
@@ -94,7 +96,7 @@ public class EvelynImpl implements Evelyn {
     }
 
     private MoneyAmount add(MoneyAmount a, MoneyAmount b) {
-        if(!a.currencyType().equals(b.currencyType())) {
+        if(a.currencyType() != b.currencyType()) {
             String errTxt = "Cannot add " + b.currencyType()
                     + " to " + a.currencyType();
             throw new IllegalArgumentException(errTxt);
@@ -105,7 +107,7 @@ public class EvelynImpl implements Evelyn {
     }
 
     private MoneyAmount subtract(MoneyAmount a, MoneyAmount b) {
-        if(!a.currencyType().equals(b.currencyType())) {
+        if(a.currencyType() != b.currencyType()) {
             String errTxt = "Cannot subtract " + b.currencyType()
                     + " from " + a.currencyType();
             throw new IllegalArgumentException(errTxt);

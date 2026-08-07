@@ -4,8 +4,6 @@ import com.r35157.libs.basic.Pair;
 import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionConcentrated;
 import com.fanitas.evelyn.core.DesiredPositionCalculator;
 
-import com.r35157.assetaz.services.cis.CurrencyIdentityService;
-import com.r35157.assetaz.valuetypes.CurrencyType;
 import com.r35157.libs.valuetypes.basic.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -16,21 +14,15 @@ import java.math.RoundingMode;
 import java.util.*;
 
 import static com.fanitas.evelyn.math.BigDecimalUtils.*;
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SYRUPUSDC_ID;
 import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.ZERO;
 
 public class DesiredPositionCalculatorImpl implements DesiredPositionCalculator {
 
     public DesiredPositionCalculatorImpl(
-            @NotNull CurrencyIdentityService currencyIdentityService,
             ΩCurveWidthΩ curveWidth,
             Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> liquidityProviderPositions
     ) {
-        this.currencyIdentityService = Objects.requireNonNull(
-                currencyIdentityService,
-                "currencyIdentityService"
-        );
         this.curveWidth = curveWidth;
         this.liquidityProviderPositions = liquidityProviderPositions;
     }
@@ -231,7 +223,7 @@ public class DesiredPositionCalculatorImpl implements DesiredPositionCalculator 
                 intervalPriceFrom.price().compareTo(lookupPrice.price()) >= 0;
 
         if (intervalIsCompletelyBeforeCurve || intervalIsCompletelyAfterLookupLimit) {
-            return new ΩSyrupAmountΩ(ZERO, currencyIdentityService.resolve(SYRUPUSDC_ID));
+            return new ΩSyrupAmountΩ(ZERO, WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType());
         }
 
         ΩPriceΩ effectiveIntervalFrom = max(intervalPriceFrom.price(), curveStartPrice);
@@ -262,7 +254,7 @@ public class DesiredPositionCalculatorImpl implements DesiredPositionCalculator 
                 totalSyrupToDistribution.amount()
                         .multiply(intervalWeight, MC)
                         .divide(totalWeightInActiveCurve, MC),
-                currencyIdentityService.resolve(SYRUPUSDC_ID)
+                WellKnownCurrencyTypes.SYRUPUSDC.getCurrencyType()
         );
 
         return dps;
@@ -375,7 +367,7 @@ public class DesiredPositionCalculatorImpl implements DesiredPositionCalculator 
     }
 
     private static final MathContext MC = new MathContext(20, RoundingMode.HALF_UP);
-    private final CurrencyIdentityService currencyIdentityService;
+
     private final ΩCurveWidthΩ curveWidth;
     private final Map<ΩRaydiumLiquidityPoolPositionNftIdΩ, RaydiumLiquidityPoolPositionConcentrated> liquidityProviderPositions;
 }

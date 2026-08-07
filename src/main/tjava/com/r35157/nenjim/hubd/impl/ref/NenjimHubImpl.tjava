@@ -4,8 +4,6 @@ import com.fanitas.evelyn.core.Evelyn;
 import com.fanitas.evelyn.core.impl.ref.EvelynImpl;
 import com.r35157.assetaz.core.service.ticker.impl.ref.HardcodedPriceSource;
 import com.r35157.assetaz.core.service.ticker.impl.ref.TickerServiceImpl;
-import com.r35157.assetaz.services.cis.CurrencyIdentityService;
-import com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService;
 import com.r35157.evelyn.emc.EvelynMissionControl;
 import com.r35157.evelyn.emc.impl.ref.EvelynMissionControlImpl;
 import com.r35157.jupiterperpsalarm.impl.ref.JupiterPerpsAlarmImpl;
@@ -61,11 +59,9 @@ public class NenjimHubImpl implements NenjimHub {
         System.out.println("Nenjim is now shutdown (stopped all processes)!");
     }
 
-    private void startAutoRunProcesses() {
-        CurrencyIdentityService currencyIdentityService =
-                new HardcodedCurrencyIdentityService();
-        startAssetAZTickerService(currencyIdentityService);
-        startJupiterPerpsAlarm(currencyIdentityService);   // TODO: Hardcoded/hacky way to auto-start but good enough for now.
+    private void startAutoRunProcesses() throws Exception {
+        startAssetAZTickerService();
+        startJupiterPerpsAlarm();   // TODO: Hardcoded/hacky way to auto-start but good enough for now.
         Evelyn evelynProd = new EvelynImpl();
         Evelyn evelynTest = new EvelynImpl();
         startEvelynMissionControl(evelynProd, evelynTest);
@@ -93,13 +89,9 @@ public class NenjimHubImpl implements NenjimHub {
         */
     }
 
-    private void startAssetAZTickerService(
-            CurrencyIdentityService currencyIdentityService
-    ) {
+    private void startAssetAZTickerService() {
         // Nenjim creates this unstarted PriceSource first...
-        HardcodedPriceSource priceSource = new HardcodedPriceSource(
-                currencyIdentityService
-        );
+        HardcodedPriceSource priceSource = new HardcodedPriceSource();
 
         // The TickerServiceImpl will ask Nenjim for implementers of the PriceSource interface in this context
         // This do not work yet - so we will just inject it in the constructor now. In the future it will
@@ -149,15 +141,12 @@ public class NenjimHubImpl implements NenjimHub {
         shutdownLatch.await();
     }
 
-    private void startJupiterPerpsAlarm(
-            CurrencyIdentityService currencyIdentityService
-    ) {
+    private void startJupiterPerpsAlarm() {
         Thread thread = new Thread(() -> {
             try {
-                JupiterPerpsAlarmImpl.start(
-                        new String[] {"--config=conf/alarms.conf"},
-                        currencyIdentityService
-                );
+                JupiterPerpsAlarmImpl.main(new String[] {
+                        "--config=conf/alarms.conf"
+                });
             } catch (Throwable throwable) {
                 throwable.printStackTrace();
             }

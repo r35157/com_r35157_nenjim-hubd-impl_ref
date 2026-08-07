@@ -1,7 +1,5 @@
 package com.r35157.libs.valuetypes.basic;
 
-import com.r35157.assetaz.valuetypes.CurrencyType;
-
 import java.math.BigDecimal;
 
 public record MoneyPrice(

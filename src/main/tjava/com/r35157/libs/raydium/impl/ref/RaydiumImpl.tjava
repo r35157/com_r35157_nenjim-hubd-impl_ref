@@ -1,10 +1,8 @@
 package com.r35157.libs.raydium.impl.ref;
 
+import com.r35157.libs.valuetypes.basic.WellKnownTradingPairs;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.r35157.assetaz.services.cis.CurrencyIdentityService;
-import com.r35157.assetaz.services.cis.ExternalCurrencyReference;
-import com.r35157.assetaz.valuetypes.CurrencyType;
 import com.r35157.libs.raydium.Raydium;
 import com.r35157.libs.raydium.RaydiumConcentratedPositionState;
 import com.r35157.libs.raydium.RaydiumConcentratedPoolInfo;
@@ -30,24 +28,15 @@ import java.net.http.HttpResponse;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
-import static com.r35157.assetaz.services.cis.ExternalCurrencyReference.SOLANA_MINT_NAMESPACE;
 import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.SPL_TOKEN_PROGRAM;
 import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.TOKEN_2022_PROGRAM;
 
 public class RaydiumImpl implements Raydium {
 
-    public RaydiumImpl(
-            SolanaBlockChain solanaBlockChain,
-            CurrencyIdentityService currencyIdentityService
-    ) {
-        this.solanaBlockChain = Objects.requireNonNull(solanaBlockChain, "solanaBlockChain");
-        this.currencyIdentityService = Objects.requireNonNull(
-                currencyIdentityService,
-                "currencyIdentityService"
-        );
+    public RaydiumImpl(SolanaBlockChain solanaBlockChain) {
+        this.solanaBlockChain = solanaBlockChain;
         this.httpClient = HttpClient.newHttpClient();
         this.objectMapper = new ObjectMapper();
     }
@@ -65,11 +54,8 @@ public class RaydiumImpl implements Raydium {
             throw new IOException("Could NOT find field 'price' in JSON!");
         }
 
-        ΩSPLMintAddressΩ mintA = extractMintAddress(firstPool, "mintA");
-        String symbolA = extractMintSymbol(firstPool, "mintA");
-        ΩSPLMintAddressΩ mintB = extractMintAddress(firstPool, "mintB");
-        String symbolB = extractMintSymbol(firstPool, "mintB");
-        TradingPair tp = resolveTradingPair(mintA, symbolA, mintB, symbolB);
+        // TODO: Find out how not to hardcode the trading pair here
+        TradingPair tp = WellKnownTradingPairs.SOL_SYRUPUSDC.getTradingPair();
         ΩPriceΩ p = new ΩPriceΩ(priceNode.toString());
         AssetPrice ap = new AssetPrice(p, tp);
 
@@ -277,12 +263,7 @@ public class RaydiumImpl implements Raydium {
             RaydiumConcentratedPoolInfo poolInfo,
             int decimalPlaces
     ) {
-        TradingPair tp = resolveTradingPair(
-                poolInfo.mintA(),
-                null,
-                poolInfo.mintB(),
-                null
-        );
+        TradingPair tp = WellKnownTradingPairs.SOL_SYRUPUSDC.getTradingPair();
 
         ΩPriceΩ priceFrom = calculatePriceFromTick(
                 positionState.tickLowerIndex(),
@@ -526,31 +507,6 @@ public class RaydiumImpl implements Raydium {
         }
 
         return addressNode.asText();
-    }
-
-    private String extractMintSymbol(JsonNode poolNode, String mintFieldName) throws IOException {
-        JsonNode symbolNode = poolNode.path(mintFieldName).path("symbol");
-
-        if (symbolNode.isMissingNode() || !symbolNode.isTextual()) {
-            throw new IOException("Could NOT find textual field '" + mintFieldName + ".symbol' in pool JSON!");
-        }
-
-        return symbolNode.asText();
-    }
-
-    private TradingPair resolveTradingPair(
-            ΩSPLMintAddressΩ mintA,
-            String symbolA,
-            ΩSPLMintAddressΩ mintB,
-            String symbolB
-    ) {
-        CurrencyType base = currencyIdentityService.resolve(
-                new ExternalCurrencyReference(SOLANA_MINT_NAMESPACE, mintA, symbolA)
-        );
-        CurrencyType quote = currencyIdentityService.resolve(
-                new ExternalCurrencyReference(SOLANA_MINT_NAMESPACE, mintB, symbolB)
-        );
-        return new TradingPair(base, quote);
     }
 
     private ΩAmountΩ extractAmount(JsonNode poolNode, String amountFieldName) throws IOException {
@@ -1001,7 +957,6 @@ public class RaydiumImpl implements Raydium {
     private static final Base64.Decoder base64 = Base64.getDecoder();
 
     private final SolanaBlockChain solanaBlockChain;
-    private final CurrencyIdentityService currencyIdentityService;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
 
