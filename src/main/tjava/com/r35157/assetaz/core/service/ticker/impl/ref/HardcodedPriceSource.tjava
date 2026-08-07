@@ -16,8 +16,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.EVE_ID;
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.USDC_ID;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.EVE_ID;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.USDC_ID;
 
 /**
  * Temporary reference source that produces a constant EVE/USDC price.

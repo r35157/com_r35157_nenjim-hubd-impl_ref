@@ -26,3 +26,10 @@
 
 - [x] 5.1 Document the public Currency Identity Service, external-reference, and currency value APIs, including identity semantics, nullability, and failure behavior.
 - [x] 5.2 Compile main and test source sets and rerun strict OpenSpec validation and `git diff --check`.
+
+## 6. Review Corrections
+
+- [x] 6.1 Require complete canonical currency metadata, add API-owned UUID identifiers, and preserve the Evelyn IOU name and Solana mint mapping.
+- [x] 6.2 Make external-reference equality use namespace plus external ID while retaining optional symbols and catalogue conflict detection.
+- [x] 6.3 Resolve State pool currencies from actual mint A/B identities and make Raydium symbol extraction optional.
+- [x] 6.4 Remove consumer dependencies on `impl.hc`, compile without tests, strict-validate OpenSpec, run `git diff --check`, and review the complete migration.

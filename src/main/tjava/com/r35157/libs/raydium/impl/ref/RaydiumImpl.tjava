@@ -17,6 +17,7 @@ import com.r35157.libs.solana.SolanaBlockChain;
 import com.r35157.libs.solana.SolanaProgramAddressSeed;
 import com.r35157.libs.solana.valuetypes.SolanaProgramDerivedAddress;
 import com.r35157.libs.valuetypes.basic.*;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -528,10 +529,17 @@ public class RaydiumImpl implements Raydium {
         return addressNode.asText();
     }
 
-    private String extractMintSymbol(JsonNode poolNode, String mintFieldName) throws IOException {
+    private @Nullable String extractMintSymbol(
+            JsonNode poolNode,
+            String mintFieldName
+    ) throws IOException {
         JsonNode symbolNode = poolNode.path(mintFieldName).path("symbol");
 
-        if (symbolNode.isMissingNode() || !symbolNode.isTextual()) {
+        if (symbolNode.isMissingNode() || symbolNode.isNull()) {
+            return null;
+        }
+
+        if (!symbolNode.isTextual()) {
             throw new IOException("Could NOT find textual field '" + mintFieldName + ".symbol' in pool JSON!");
         }
 
@@ -540,9 +548,9 @@ public class RaydiumImpl implements Raydium {
 
     private TradingPair resolveTradingPair(
             ΩSPLMintAddressΩ mintA,
-            String symbolA,
+            @Nullable String symbolA,
             ΩSPLMintAddressΩ mintB,
-            String symbolB
+            @Nullable String symbolB
     ) {
         CurrencyType base = currencyIdentityService.resolve(
                 new ExternalCurrencyReference(SOLANA_MINT_NAMESPACE, mintA, symbolA)

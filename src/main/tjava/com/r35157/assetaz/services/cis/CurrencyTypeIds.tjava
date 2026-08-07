@@ -1,0 +1,31 @@
+package com.r35157.assetaz.services.cis;
+
+import java.util.UUID;
+
+/**
+ * Stable UUID identifiers for well-known AssetAZ currencies.
+ *
+ * <p>This class contains identifiers only. Current names, symbols, external
+ * references, and {@code CurrencyType} instances are owned by the active
+ * {@link CurrencyIdentityService} implementation.</p>
+ */
+public final class CurrencyTypeIds {
+    private CurrencyTypeIds() {
+    }
+
+    /** Stable UUID for Evelyn IOU. */
+    public static final UUID EVE_ID =
+            UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff301");
+
+    /** Stable UUID for USD Coin. */
+    public static final UUID USDC_ID =
+            UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff302");
+
+    /** Stable UUID for Solana. */
+    public static final UUID SOLANA_ID =
+            UUID.fromString("019e0116-fce5-792f-a647-fa6da4dffec5");
+
+    /** Stable UUID for SyrupUSDC. */
+    public static final UUID SYRUPUSDC_ID =
+            UUID.fromString("019e1d51-0600-7956-8231-f3b7058a91c2");
+}

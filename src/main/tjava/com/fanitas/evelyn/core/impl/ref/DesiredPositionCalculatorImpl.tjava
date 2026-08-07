@@ -16,7 +16,7 @@ import java.math.RoundingMode;
 import java.util.*;
 
 import static com.fanitas.evelyn.math.BigDecimalUtils.*;
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SYRUPUSDC_ID;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.SYRUPUSDC_ID;
 import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.ZERO;
 

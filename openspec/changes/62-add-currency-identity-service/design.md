@@ -21,7 +21,11 @@ See `proposal.md` for motivation. Currency metadata currently lives in `WellKnow
 
 ### External identity is a private composite key
 
-`ExternalCurrencyReference` is the public immutable carrier, while the implementation indexes it using a private `namespace + externalId` key. This makes symbol changes irrelevant to lookup and prevents the public record's generated equality—which includes metadata—from defining identity accidentally. Using the full record as the map key was rejected for that reason.
+`ExternalCurrencyReference` is the public immutable carrier and explicitly implements equality and hashing from `namespace + externalId`; optional symbol metadata is excluded. The implementation may retain a private composite key for indexing and conflict diagnostics, but public value equality has the same semantic identity. The hardcoded catalogue separately compares supplied symbol metadata so conflicting catalogue entries are still rejected.
+
+### Canonical and external metadata have different completeness rules
+
+Every `CurrencyType` has a non-null UUID, name, and canonical symbol, even though only its UUID participates in equality. An external reference may omit its observed symbol because integrations can provide a valid namespace and external identifier without display metadata. A currency may also have zero external references; reverse lookup then returns an immutable empty set. Evelyn IOU is not such an example because its Solana mint is configured explicitly.
 
 ### Catalogue construction validates before freezing
 
@@ -33,11 +37,11 @@ The hardcoded implementation builds local maps, detects duplicate UUIDs with con
 
 ### Existing UUIDs move with their metadata
 
-The four existing UUID/name/symbol definitions move intact from `WellKnownCurrencyTypes` to the hardcoded implementation. Production consumers resolve those UUIDs from their current service rather than holding enum-owned objects. Static UUID constants may identify requested currencies, but no static `CurrencyType` or `TradingPair` objects remain.
+The four existing UUIDs move into an API-only `CurrencyTypeIds` constants class. It contains no metadata, mappings, or value instances and is therefore not a currency registry. The hardcoded implementation owns current names, symbols, and external mappings—including the Evelyn IOU name and mint—while production consumers resolve API UUIDs or available external identities through their injected service. No consumer imports `impl.hc`, and no static `CurrencyType` or `TradingPair` objects remain.
 
 ### Raydium uses response mint order
 
-`RaydiumImpl` receives `CurrencyIdentityService` beside `SolanaBlockChain`. `fetchPoolPrice` extracts both response mint addresses and their symbol metadata, creates references in a Solana-mint namespace, resolves each through the service, and constructs `TradingPair(mintA, mintB)`. Other Raydium calculations that require a pair likewise derive it from their pool info rather than a hardcoded pair. Constructor injection is the temporary integration seam until Nenjim provides dynamic dependencies.
+`RaydiumImpl` receives `CurrencyIdentityService` beside `SolanaBlockChain`. `fetchPoolPrice` extracts both response mint addresses and optional symbol metadata, creates references in a Solana-mint namespace, resolves each through the service, and constructs `TradingPair(mintA, mintB)`. Missing external symbol fields do not prevent lookup. Other Raydium calculations and State pool accounting likewise resolve actual pool mints and preserve A/B order rather than assuming SOL/SyrupUSDC. Constructor injection is the temporary integration seam until Nenjim provides dynamic dependencies.
 
 ## Risks / Trade-offs
 

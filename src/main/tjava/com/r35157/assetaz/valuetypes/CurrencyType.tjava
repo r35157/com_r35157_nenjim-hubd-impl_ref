@@ -1,7 +1,6 @@
 package com.r35157.assetaz.valuetypes;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -17,16 +16,17 @@ import java.util.UUID;
  *
  * @param id the stable AssetAZ currency UUID; never {@code null}
  * @param name the current human-readable currency name; never {@code null}
- * @param symbol the current display symbol; never {@code null}     // TODO: Does this conflict with its @Nullable status?
+ * @param symbol the current display symbol; never {@code null}
  */
 public record CurrencyType(
         @NotNull UUID id,
         @NotNull String name,
-        @Nullable String symbol         // TODO: Find out if we can make this NotNull as well
+        @NotNull String symbol
 ) {
     public CurrencyType {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(symbol, "symbol");
     }
 
     @Override

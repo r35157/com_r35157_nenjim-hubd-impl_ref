@@ -14,11 +14,16 @@ import java.util.Set;
 import java.util.UUID;
 
 import static com.r35157.assetaz.services.cis.ExternalCurrencyReference.SOLANA_MINT_NAMESPACE;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.EVE_ID;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.SOLANA_ID;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.SYRUPUSDC_ID;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.USDC_ID;
 
 public final class HardcodedCurrencyIdentityService implements CurrencyIdentityService {
     public HardcodedCurrencyIdentityService() {
         this(List.of(
-                entry(EVE_ID, "Evelyn IOU", "EVE"),
+                entry(EVE_ID, "Evelyn IOU", "EVE",
+                        solanaMint("meveYG2iXYSkgSUn1T1uxcthH1EGMZdRHGgCntXZA3Y", "EVE")),
                 entry(USDC_ID, "USD Coin", "USDC",
                         solanaMint("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "USDC")),
                 entry(SOLANA_ID, "Solana", "SOL",
@@ -122,11 +127,11 @@ public final class HardcodedCurrencyIdentityService implements CurrencyIdentityS
             UUID id,
             String name,
             String symbol,
-            ExternalCurrencyReference... externalReferences     // TODO: Isn't at-least one externalReference always required?!
+            ExternalCurrencyReference... externalReferences
     ) {
         return new CatalogueEntry(
                 new CurrencyType(id, name, symbol),
-                Set.of(externalReferences)
+                List.of(externalReferences)
         );
     }
 
@@ -136,7 +141,7 @@ public final class HardcodedCurrencyIdentityService implements CurrencyIdentityS
 
     private record CatalogueEntry(
             CurrencyType currencyType,
-            Set<ExternalCurrencyReference> externalReferences
+            List<ExternalCurrencyReference> externalReferences
     ) {
     }
 
@@ -145,11 +150,6 @@ public final class HardcodedCurrencyIdentityService implements CurrencyIdentityS
             return new ExternalIdentity(reference.namespace(), reference.externalId());
         }
     }
-
-    public static final UUID EVE_ID = UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff301");
-    public static final UUID USDC_ID = UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff302");
-    public static final UUID SOLANA_ID = UUID.fromString("019e0116-fce5-792f-a647-fa6da4dffec5");
-    public static final UUID SYRUPUSDC_ID = UUID.fromString("019e1d51-0600-7956-8231-f3b7058a91c2");
 
     private final Map<UUID, CurrencyType> currencies;
     private final Map<ExternalIdentity, UUID> externalIdentities;

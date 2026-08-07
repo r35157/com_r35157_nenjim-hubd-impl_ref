@@ -10,9 +10,8 @@ import java.util.Objects;
  *
  * <p>The semantic identity is the combination of {@link #namespace()} and
  * {@link #externalId()}. {@link #symbol()} is optional display metadata and
- * must not be used as a lookup key. Consequently, the record's structural
- * equality, which includes the symbol, must not be used as the identity key by
- * a {@link CurrencyIdentityService} implementation.</p>
+ * must not be used as a lookup key. Equality and hash codes therefore depend
+ * only on the namespace and external ID.</p>
  *
  * @param namespace the external identification system, such as
  *                  {@value #SOLANA_MINT_NAMESPACE}; never {@code null}
@@ -28,6 +27,19 @@ public record ExternalCurrencyReference(
     public ExternalCurrencyReference {
         Objects.requireNonNull(namespace, "namespace");
         Objects.requireNonNull(externalId, "externalId");
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        return this == object
+                || object instanceof ExternalCurrencyReference other
+                && namespace.equals(other.namespace)
+                && externalId.equals(other.externalId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(namespace, externalId);
     }
 
     /**

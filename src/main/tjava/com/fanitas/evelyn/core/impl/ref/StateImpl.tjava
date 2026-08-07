@@ -4,6 +4,7 @@ import com.fanitas.evelyn.core.State;
 import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionAccounting;
 import com.fanitas.evelyn.raydium.RaydiumLiquidityPoolPositionConcentrated;
 import com.r35157.assetaz.services.cis.CurrencyIdentityService;
+import com.r35157.assetaz.services.cis.ExternalCurrencyReference;
 import com.r35157.assetaz.valuetypes.CurrencyType;
 import com.r35157.libs.configuration.ConfigurationFormatVersionValidator;
 import com.r35157.libs.raydium.*;
@@ -21,8 +22,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SOLANA_ID;
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SYRUPUSDC_ID;
+import static com.r35157.assetaz.services.cis.ExternalCurrencyReference.SOLANA_MINT_NAMESPACE;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.SYRUPUSDC_ID;
 
 public class StateImpl implements State {
 
@@ -126,8 +127,8 @@ public class StateImpl implements State {
             RaydiumConcentratedPoolState poolState =
                     raydium.fetchConcentratedPoolState(positionState.poolId());
 
-            CurrencyType ctSol = currencyIdentityService.resolve(SOLANA_ID);
-            CurrencyType ctSyrup = currencyIdentityService.resolve(SYRUPUSDC_ID);
+            CurrencyType currencyTypeA = resolveSolanaMint(poolInfo.mintA());
+            CurrencyType currencyTypeB = resolveSolanaMint(poolInfo.mintB());
 
             int mintBDecimals = poolInfo.mintBDecimals();
             Range<AssetPrice> priceRange = raydium.calculateConcentratedPositionPriceRange(
@@ -143,26 +144,34 @@ public class StateImpl implements State {
                             poolState
                     );
 
-            MoneyAmount solAmount = new MoneyAmount(tokenAmounts.amountA(), ctSol);
-            MoneyAmount syrupAmount = new MoneyAmount(tokenAmounts.amountB(), ctSyrup);
+            MoneyAmount amountA = new MoneyAmount(tokenAmounts.amountA(), currencyTypeA);
+            MoneyAmount amountB = new MoneyAmount(tokenAmounts.amountB(), currencyTypeB);
             RaydiumLiquidityPoolPositionConcentrated position =
                     new RaydiumLiquidityPoolPositionConcentrated(
                             positionState.poolId(),
                             positionNftId,
                             priceRange,
-                            solAmount,
-                            syrupAmount,
+                            amountA,
+                            amountB,
                             null // The accounting info will be added from 'conf/positions.conf' later.
                     );
 
             positions.put(positionNftId, position);
             System.out.println("   Added '" + position.nftId() + "': "
                     + "Range:" + position.priceRange()
-                    + ", Liquidity:" + solAmount + "," + syrupAmount
+                    + ", Liquidity:" + amountA + "," + amountB
             );
         }
 
         liquidityPositions = Map.copyOf(positions);
+    }
+
+    private CurrencyType resolveSolanaMint(ΩSPLMintAddressΩ mintAddress) {
+        return currencyIdentityService.resolve(new ExternalCurrencyReference(
+                SOLANA_MINT_NAMESPACE,
+                mintAddress,
+                null
+        ));
     }
 
     private void updateStateFromPositionsFile() throws IOException {
