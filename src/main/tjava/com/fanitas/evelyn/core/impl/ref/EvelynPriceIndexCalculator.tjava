@@ -1,0 +1,63 @@
+package com.fanitas.evelyn.core.impl.ref;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Objects;
+
+final class EvelynPriceIndexCalculator {
+    static @NotNull BigDecimal calculateExpectedPrice(@NotNull Instant samplingInstant) {
+        Objects.requireNonNull(samplingInstant, "samplingInstant");
+        if (samplingInstant.isBefore(EXPECTED_PRICE_START)) {
+            throw new IllegalArgumentException(
+                    "samplingInstant is before the expected-price start: " + samplingInstant
+            );
+        }
+
+        Duration elapsed = Duration.between(EXPECTED_PRICE_START, samplingInstant);
+        BigDecimal elapsedSeconds = BigDecimal.valueOf(elapsed.getSeconds()).add(
+                BigDecimal.valueOf(elapsed.getNano(), 9),
+                MATH_CONTEXT
+        );
+        BigDecimal elapsedYears = elapsedSeconds.divide(SECONDS_PER_YEAR, MATH_CONTEXT);
+        double growthFactor = Math.pow(
+                ANNUAL_GROWTH_FACTOR.doubleValue(),
+                elapsedYears.doubleValue()
+        );
+
+        BigDecimal result = START_PRICE.multiply(BigDecimal.valueOf(growthFactor), MATH_CONTEXT);
+
+        return result;
+    }
+
+    static @NotNull BigDecimal calculateIndex(
+            @NotNull BigDecimal actualPrice,
+            @NotNull Instant samplingInstant
+    ) {
+        Objects.requireNonNull(actualPrice, "actualPrice");
+        if (actualPrice.signum() < 0) {
+            throw new IllegalArgumentException("actualPrice must not be negative");
+        }
+
+        BigDecimal expectedPrice = calculateExpectedPrice(samplingInstant);
+        BigDecimal result = actualPrice.divide(expectedPrice, MATH_CONTEXT)
+                .subtract(BigDecimal.ONE, MATH_CONTEXT)
+                .multiply(INDEX_SCALE, MATH_CONTEXT);
+
+        return result;
+    }
+
+    static final Instant EXPECTED_PRICE_START = Instant.parse("2026-07-31T22:00:00Z");
+    static final MathContext MATH_CONTEXT = MathContext.DECIMAL128;
+
+    private static final BigDecimal START_PRICE = new BigDecimal("15.00");
+    private static final BigDecimal ANNUAL_GROWTH_FACTOR = new BigDecimal("1.20");
+    private static final BigDecimal SECONDS_PER_YEAR = new BigDecimal("31536000");
+    private static final BigDecimal INDEX_SCALE = BigDecimal.TEN;
+
+    private EvelynPriceIndexCalculator() {
+    }
+}

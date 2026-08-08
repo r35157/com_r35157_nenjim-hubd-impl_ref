@@ -7,5 +7,9 @@ import java.util.List;
 public interface Evelyn {
     void executeService() throws Exception;
 
+    void startStatusIndexSampling();
+
+    void stopStatusIndexSampling();
+
     @NotNull List<EvelynStatusIndexPoint> getStatusIndexHistory();
 }

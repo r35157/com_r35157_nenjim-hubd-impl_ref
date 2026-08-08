@@ -4,6 +4,9 @@ import com.fanitas.evelyn.core.Evelyn;
 import com.fanitas.evelyn.core.EvelynStatusIndexPoint;
 import com.r35157.evelyn.emc.EvelynMissionControl;
 import com.r35157.libs.javafx.JavaFxRuntime;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
@@ -13,6 +16,7 @@ import javafx.scene.control.TabPane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
+import javafx.util.Duration;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -38,12 +42,27 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
         Stage window = new Stage();
         window.setTitle("Evelyn Mission Control");
         window.setScene(new Scene(createRootTabs(), 600, 400));
+        Timeline refreshTimeline = new Timeline(new KeyFrame(
+                Duration.seconds(CHART_REFRESH_SECONDS),
+                event -> refreshCharts()
+        ));
+        refreshTimeline.setCycleCount(Timeline.INDEFINITE);
+        window.setOnHidden(event -> {
+            refreshTimeline.stop();
+            evelynProd.stopStatusIndexSampling();
+            evelynTest.stopStatusIndexSampling();
+        });
         window.show();
+
+        evelynProd.startStatusIndexSampling();
+        evelynTest.startStatusIndexSampling();
+        refreshCharts();
+        refreshTimeline.play();
     }
 
-    private TabPane createMissionControlTabs(String color, List<EvelynStatusIndexPoint> statusIndexHistory) {
+    private TabPane createMissionControlTabs(String color, StatusIndexChart statusIndexChart) {
         TabPane tabs = new TabPane(
-                createOverviewTab(color, statusIndexHistory),
+                createOverviewTab(color, statusIndexChart),
                 createMissionControlTab("Portfolio", color),
                 createMissionControlTab("Perps", color),
                 createMissionControlTab("Spot", color),
@@ -57,8 +76,8 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
         return tabs;
     }
 
-    private Tab createOverviewTab(String color, List<EvelynStatusIndexPoint> statusIndexHistory) {
-        StackPane content = new StackPane(createStatusIndexChart(statusIndexHistory));
+    private Tab createOverviewTab(String color, StatusIndexChart statusIndexChart) {
+        StackPane content = new StackPane(statusIndexChart.chart());
         content.setStyle("-fx-background-color: " + color + ";");
 
         Tab tab = new Tab("Overview", content);
@@ -66,24 +85,13 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
         return tab;
     }
 
-    private LineChart<Number, Number> createStatusIndexChart(List<EvelynStatusIndexPoint> history) {
-        long min = history.stream()
-                .mapToLong(point -> point.timestamp().toEpochMilli())
-                .min()
-                .orElse(0L);
-
-        long max = history.stream()
-                .mapToLong(point -> point.timestamp().toEpochMilli())
-                .max()
-                .orElse(0L);
-
-        double padding = 0;
-        NumberAxis xAxis = new NumberAxis(min - padding, max + padding, (max - min) / 4.0);
+    static StatusIndexChart createStatusIndexChart() {
+        NumberAxis xAxis = new NumberAxis(0, 1, 1);
         xAxis.setLabel("Time");
         xAxis.setTickLabelFormatter(TIMESTAMP_FORMATTER);
         xAxis.setForceZeroInRange(false);
 
-        double yBound = calculateYBound(history);
+        double yBound = EMPTY_Y_BOUND;
         NumberAxis yAxis = new NumberAxis(-yBound, yBound, yBound / 5.0);
         yAxis.setLabel("Index value");
         yAxis.setForceZeroInRange(true);
@@ -92,16 +100,21 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
         chart.setTitle("Evelyn Status Index History");
         chart.setCreateSymbols(false);
         chart.setAnimated(false);
-        chart.getData().add(createSeries("Evelyn Price Index", history, EvelynStatusIndexPoint::evelynPriceIndex));
-        chart.getData().add(createSeries("EVE_SYRUP Pool Depth Index", history, EvelynStatusIndexPoint::eveSyrupPoolDepthIndex));
-        chart.getData().add(createSeries("EVE_SYRUP Pool Balance Index", history, EvelynStatusIndexPoint::eveSyrupPoolBalanceIndex));
-        chart.getData().add(createSeries("AAZDKK_USDT Pool Balance Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolBalanceIndex));
-        chart.getData().add(createSeries("AAZDKK_USDT Pool Price Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolPriceIndex));
-        chart.getData().add(createSeries("AAZDKK_USDT Pool Depth Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolDepthIndex));
-        return chart;
+        XYChart.Series<Number, Number> priceIndexSeries = createSeries(
+                "Evelyn Price Index",
+                List.of(),
+                EvelynStatusIndexPoint::evelynPriceIndex
+        );
+        chart.getData().add(priceIndexSeries);
+        //chart.getData().add(createSeries("EVE_SYRUP Pool Depth Index", history, EvelynStatusIndexPoint::eveSyrupPoolDepthIndex));
+        //chart.getData().add(createSeries("EVE_SYRUP Pool Balance Index", history, EvelynStatusIndexPoint::eveSyrupPoolBalanceIndex));
+        //chart.getData().add(createSeries("AAZDKK_USDT Pool Balance Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolBalanceIndex));
+        //chart.getData().add(createSeries("AAZDKK_USDT Pool Price Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolPriceIndex));
+        //chart.getData().add(createSeries("AAZDKK_USDT Pool Depth Index", history, EvelynStatusIndexPoint::aazdkkUsdtPoolDepthIndex));
+        return new StatusIndexChart(chart, xAxis, yAxis, priceIndexSeries);
     }
 
-    private XYChart.Series<Number, Number> createSeries(
+    private static XYChart.Series<Number, Number> createSeries(
             String name,
             List<EvelynStatusIndexPoint> history,
             Function<EvelynStatusIndexPoint, BigDecimal> valueExtractor
@@ -117,23 +130,74 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
         return series;
     }
 
-    private double calculateYBound(List<EvelynStatusIndexPoint> history) {
+    static double calculateYBound(List<EvelynStatusIndexPoint> history) {
         BigDecimal maxAbsoluteValue = BigDecimal.ZERO;
         for (EvelynStatusIndexPoint point : history) {
             maxAbsoluteValue = max(maxAbsoluteValue, point.evelynPriceIndex());
-            maxAbsoluteValue = max(maxAbsoluteValue, point.eveSyrupPoolDepthIndex());
-            maxAbsoluteValue = max(maxAbsoluteValue, point.eveSyrupPoolBalanceIndex());
-            maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolBalanceIndex());
-            maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolPriceIndex());
-            maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolDepthIndex());
+            //maxAbsoluteValue = max(maxAbsoluteValue, point.eveSyrupPoolDepthIndex());
+            //maxAbsoluteValue = max(maxAbsoluteValue, point.eveSyrupPoolBalanceIndex());
+            //maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolBalanceIndex());
+            //maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolPriceIndex());
+            //maxAbsoluteValue = max(maxAbsoluteValue, point.aazdkkUsdtPoolDepthIndex());
         }
 
         double bound = maxAbsoluteValue.doubleValue();
         return bound == 0.0 ? EMPTY_Y_BOUND : bound;
     }
 
-    private BigDecimal max(BigDecimal currentMaximum, BigDecimal candidate) {
+    private static BigDecimal max(BigDecimal currentMaximum, BigDecimal candidate) {
         return currentMaximum.max(candidate.abs());
+    }
+
+    static void refreshChart(
+            StatusIndexChart statusIndexChart,
+            List<EvelynStatusIndexPoint> history
+    ) {
+        if (!Platform.isFxApplicationThread()) {
+            throw new IllegalStateException("Status-index charts must be updated on the JavaFX Application Thread");
+        }
+
+        if (history.size() < statusIndexChart.renderedPointCount) {
+            statusIndexChart.priceIndexSeries().getData().clear();
+            statusIndexChart.renderedPointCount = 0;
+        }
+        for (int index = statusIndexChart.renderedPointCount; index < history.size(); index++) {
+            EvelynStatusIndexPoint point = history.get(index);
+            statusIndexChart.priceIndexSeries().getData().add(new XYChart.Data<>(
+                    point.timestamp().toEpochMilli(),
+                    point.evelynPriceIndex()
+            ));
+        }
+        statusIndexChart.renderedPointCount = history.size();
+        updateAxisBounds(statusIndexChart, history);
+    }
+
+    private static void updateAxisBounds(
+            StatusIndexChart statusIndexChart,
+            List<EvelynStatusIndexPoint> history
+    ) {
+        long minimumTimestamp;
+        long maximumTimestamp;
+        if (history.isEmpty()) {
+            minimumTimestamp = 0;
+            maximumTimestamp = 1;
+        } else {
+            minimumTimestamp = history.getFirst().timestamp().toEpochMilli();
+            maximumTimestamp = history.getLast().timestamp().toEpochMilli();
+            if (minimumTimestamp == maximumTimestamp) {
+                minimumTimestamp -= SINGLE_POINT_X_PADDING_MILLIS;
+                maximumTimestamp += SINGLE_POINT_X_PADDING_MILLIS;
+            }
+        }
+        double xTickUnit = Math.max(1, (maximumTimestamp - minimumTimestamp) / 4.0);
+        statusIndexChart.xAxis().setLowerBound(minimumTimestamp);
+        statusIndexChart.xAxis().setUpperBound(maximumTimestamp);
+        statusIndexChart.xAxis().setTickUnit(xTickUnit);
+
+        double yBound = calculateYBound(history);
+        statusIndexChart.yAxis().setLowerBound(-yBound);
+        statusIndexChart.yAxis().setUpperBound(yBound);
+        statusIndexChart.yAxis().setTickUnit(yBound / 5.0);
     }
 
     private Tab createMissionControlTab(String title, String color) {
@@ -147,18 +211,18 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
     }
 
     private TabPane createRootTabs() {
-        List<EvelynStatusIndexPoint> statusIndexHistoryProd = List.copyOf(evelynProd.getStatusIndexHistory());
-        List<EvelynStatusIndexPoint> statusIndexHistoryTest = List.copyOf(evelynTest.getStatusIndexHistory());
+        productionChart = createStatusIndexChart();
+        testChart = createStatusIndexChart();
 
         Tab productionTab = new Tab(
                 "Production",
-                createMissionControlTabs(PRODUCTION_COLOR, statusIndexHistoryProd)
+                createMissionControlTabs(PRODUCTION_COLOR, productionChart)
         );
         productionTab.setStyle("-fx-background-color: " + PRODUCTION_COLOR + ";");
 
         Tab testTab = new Tab(
                 "Test",
-                createMissionControlTabs(TEST_COLOR, statusIndexHistoryTest)
+                createMissionControlTabs(TEST_COLOR, testChart)
         );
         testTab.setStyle("-fx-background-color: " + TEST_COLOR + ";");
 
@@ -168,9 +232,52 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
         return rootTabs;
     }
 
+    private void refreshCharts() {
+        refreshChart(productionChart, evelynProd.getStatusIndexHistory());
+        refreshChart(testChart, evelynTest.getStatusIndexHistory());
+    }
+
+    static final class StatusIndexChart {
+        private StatusIndexChart(
+                LineChart<Number, Number> chart,
+                NumberAxis xAxis,
+                NumberAxis yAxis,
+                XYChart.Series<Number, Number> priceIndexSeries
+        ) {
+            this.chart = chart;
+            this.xAxis = xAxis;
+            this.yAxis = yAxis;
+            this.priceIndexSeries = priceIndexSeries;
+        }
+
+        LineChart<Number, Number> chart() {
+            return chart;
+        }
+
+        NumberAxis xAxis() {
+            return xAxis;
+        }
+
+        NumberAxis yAxis() {
+            return yAxis;
+        }
+
+        XYChart.Series<Number, Number> priceIndexSeries() {
+            return priceIndexSeries;
+        }
+
+        private final LineChart<Number, Number> chart;
+        private final NumberAxis xAxis;
+        private final NumberAxis yAxis;
+        private final XYChart.Series<Number, Number> priceIndexSeries;
+        private int renderedPointCount;
+    }
+
     private static final String PRODUCTION_COLOR = "#ffd6d6";
     private static final String TEST_COLOR = "#d8f3dc";
     private static final double EMPTY_Y_BOUND = 1.0;
+    private static final double CHART_REFRESH_SECONDS = 1.0;
+    private static final long SINGLE_POINT_X_PADDING_MILLIS = 30_000;
     private static final DateTimeFormatter TIMESTAMP_TICK_FORMATTER =
             DateTimeFormatter.ofPattern("HH:mm dd/MM/yy")
                     .withZone(ZoneId.of("Europe/Copenhagen"));
@@ -188,4 +295,6 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
 
     private final Evelyn evelynProd;
     private final Evelyn evelynTest;
+    private StatusIndexChart productionChart;
+    private StatusIndexChart testChart;
 }

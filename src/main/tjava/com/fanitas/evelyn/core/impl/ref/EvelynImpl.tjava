@@ -13,14 +13,21 @@ import com.r35157.libs.solana.SolanaConstants;
 import com.r35157.libs.valuetypes.basic.AssetPrice;
 import com.r35157.libs.valuetypes.basic.MoneyAmount;
 import com.r35157.libs.valuetypes.basic.TradingPair;
+import com.r35157.assetaz.services.ticker.PriceObservation;
+import com.r35157.assetaz.services.ticker.TickerService;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.SPL_TOKEN_PROGRAM;
 import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.TOKEN_2022_PROGRAM;
@@ -38,7 +45,37 @@ public class EvelynImpl implements Evelyn {
         this.raydium = raydium;
         this.solanaChain = solanaChain;
     }*/
-    public EvelynImpl() {
+    public EvelynImpl(
+            @NotNull TickerService tickerService,
+            @NotNull TradingPair eveUsdtTradingPair
+    ) {
+        this(
+                tickerService,
+                eveUsdtTradingPair,
+                Clock.systemUTC(),
+                SAMPLE_DELAY_MINUTES,
+                TimeUnit.MINUTES
+        );
+    }
+
+    EvelynImpl(
+            @NotNull TickerService tickerService,
+            @NotNull TradingPair eveUsdtTradingPair,
+            @NotNull Clock clock,
+            long sampleDelay,
+            @NotNull TimeUnit sampleDelayUnit
+    ) {
+        this.tickerService = Objects.requireNonNull(tickerService, "tickerService");
+        this.eveUsdtTradingPair = Objects.requireNonNull(
+                eveUsdtTradingPair,
+                "eveUsdtTradingPair"
+        );
+        this.clock = Objects.requireNonNull(clock, "clock");
+        if (sampleDelay <= 0) {
+            throw new IllegalArgumentException("sampleDelay must be positive");
+        }
+        this.sampleDelay = sampleDelay;
+        this.sampleDelayUnit = Objects.requireNonNull(sampleDelayUnit, "sampleDelayUnit");
     }
 
     @Override
@@ -47,35 +84,116 @@ public class EvelynImpl implements Evelyn {
     }
 
     @Override
-    public @NotNull List<EvelynStatusIndexPoint> getStatusIndexHistory() {
-        return List.of(
-                statusIndexPoint("2026-08-02T12:00:00Z", "-0.20", "-0.35", "0.15", "0.30", "-0.10", "0.25"),
-                statusIndexPoint("2026-08-03T12:00:00Z", "-0.10", "-0.20", "0.10", "0.20", "-0.05", "0.15"),
-                statusIndexPoint("2026-08-04T12:00:00Z", "0.00", "-0.10", "0.05", "0.10", "0.00", "0.05"),
-                statusIndexPoint("2026-08-05T12:00:00Z", "0.10", "0.05", "-0.05", "0.00", "0.05", "-0.10"),
-                statusIndexPoint("2026-08-06T12:00:00Z", "0.20", "0.15", "-0.10", "-0.10", "0.10", "-0.20")
+    public synchronized void startStatusIndexSampling() {
+        if (statusIndexScheduler != null || stoppingStatusIndexSampling) {
+            throw new IllegalStateException("Evelyn status-index sampling is already started");
+        }
+
+        ScheduledExecutorService newScheduler = Executors.newSingleThreadScheduledExecutor(
+                runnable -> {
+                    Thread thread = new Thread(runnable, "evelyn-price-index-sampler");
+                    thread.setDaemon(true);
+                    return thread;
+                }
+        );
+        statusIndexScheduler = newScheduler;
+        newScheduler.scheduleWithFixedDelay(
+                this::sampleStatusIndexSafely,
+                0,
+                sampleDelay,
+                sampleDelayUnit
         );
     }
 
-    private static EvelynStatusIndexPoint statusIndexPoint(
-            String timestamp,
-            String evelynPriceIndex,
-            String eveSyrupPoolDepthIndex,
-            String eveSyrupPoolBalanceIndex,
-            String aazdkkUsdtPoolBalanceIndex,
-            String aazdkkUsdtPoolPriceIndex,
-            String aazdkkUsdtPoolDepthIndex
-    ) {
-        return new EvelynStatusIndexPoint(
-                Instant.parse(timestamp),
-                new BigDecimal(evelynPriceIndex),
-                new BigDecimal(eveSyrupPoolDepthIndex),
-                new BigDecimal(eveSyrupPoolBalanceIndex),
-                new BigDecimal(aazdkkUsdtPoolBalanceIndex),
-                new BigDecimal(aazdkkUsdtPoolPriceIndex),
-                new BigDecimal(aazdkkUsdtPoolDepthIndex)
-        );
+    @Override
+    public void stopStatusIndexSampling() {
+        ScheduledExecutorService schedulerToStop;
+        synchronized (this) {
+            if (statusIndexScheduler == null) {
+                return;
+            }
+            stoppingStatusIndexSampling = true;
+            schedulerToStop = statusIndexScheduler;
+        }
+
+        schedulerToStop.shutdownNow();
+        try {
+            if (!schedulerToStop.awaitTermination(
+                    TERMINATION_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS
+            )) {
+                log.error("Evelyn status-index scheduler did not terminate");
+            }
+        } catch (InterruptedException exception) {
+            schedulerToStop.shutdownNow();
+            Thread.currentThread().interrupt();
+        } finally {
+            synchronized (this) {
+                if (schedulerToStop.isTerminated()) {
+                    statusIndexScheduler = null;
+                }
+                stoppingStatusIndexSampling = false;
+            }
+        }
     }
+
+    @Override
+    public @NotNull List<EvelynStatusIndexPoint> getStatusIndexHistory() {
+        synchronized (statusIndexHistory) {
+            return List.copyOf(statusIndexHistory);
+        }
+    }
+
+    private void sampleStatusIndexSafely() {
+        try {
+            Instant samplingInstant = clock.instant();
+            PriceObservation observation = tickerService.getLatestPrice(eveUsdtTradingPair);
+            BigDecimal actualPrice = observation.price().price();
+            BigDecimal evelynPriceIndex = EvelynPriceIndexCalculator.calculateIndex(
+                    actualPrice,
+                    samplingInstant
+            );
+            EvelynStatusIndexPoint point = new EvelynStatusIndexPoint(
+                    samplingInstant,
+                    evelynPriceIndex,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO
+            );
+            if (!isStatusIndexSamplingActive()) {
+                return;
+            }
+            synchronized (statusIndexHistory) {
+                statusIndexHistory.add(point);
+            }
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Could not sample Evelyn Price Index: tradingPair={}",
+                    eveUsdtTradingPair,
+                    exception
+            );
+        }
+    }
+
+    private synchronized boolean isStatusIndexSamplingActive() {
+        return statusIndexScheduler != null && !stoppingStatusIndexSampling;
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(EvelynImpl.class);
+    private static final long SAMPLE_DELAY_MINUTES = 1;
+    private static final long TERMINATION_TIMEOUT_SECONDS = 10;
+
+    private final TickerService tickerService;
+    private final TradingPair eveUsdtTradingPair;
+    private final Clock clock;
+    private final long sampleDelay;
+    private final TimeUnit sampleDelayUnit;
+    private final List<EvelynStatusIndexPoint> statusIndexHistory = new ArrayList<>();
+
+    private ScheduledExecutorService statusIndexScheduler;
+    private boolean stoppingStatusIndexSampling;
 
     /*
     private SPLTokenHolding getSPLHolding(ΩSolanaAddressΩ ownerAddress, ΩSPLMintAddressΩ splMintAddress) throws Exception {

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide typed historical Evelyn status measurements and make all six indexes visible over time in Mission Control.
+Provide typed process-local Evelyn status measurements and visualize the currently implemented live indexes over time in Mission Control while preserving the six-index model for future work.
 
 ## Requirements
 

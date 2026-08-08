@@ -3,6 +3,7 @@ package com.r35157.nenjim.hubd.impl.ref;
 import com.fanitas.evelyn.core.Evelyn;
 import com.fanitas.evelyn.core.impl.ref.EvelynImpl;
 import com.r35157.assetaz.services.ticker.plugins.pricesource.PriceSource;
+import com.r35157.assetaz.services.ticker.TickerService;
 import com.r35157.assetaz.services.ticker.plugins.pricesource.impl.hardcoded.HardcodedPriceSource;
 import com.r35157.assetaz.services.ticker.plugins.pricesource.impl.raydiumpool.RaydiumPoolPriceSource;
 import com.r35157.assetaz.services.ticker.impl.ref.TickerServiceImpl;
@@ -71,19 +72,20 @@ public class NenjimHubImpl implements NenjimHub {
     }
 
     private void startAutoRunProcesses() {
-        //CurrencyIdentityService cis = new HardcodedCurrencyIdentityService();
-        //SolanaBlockChain solanaBlockChain = new SolanaBlockChainImpl(cis);
-        //Raydium raydium = new RaydiumImpl(solanaBlockChain, cis);
+        CurrencyIdentityService cis = new HardcodedCurrencyIdentityService();
+        SolanaBlockChain solanaBlockChain = new SolanaBlockChainImpl(cis);
+        Raydium raydium = new RaydiumImpl(solanaBlockChain, cis);
 
         //PriceSource hardcodedPriceSource = new HardcodedPriceSource(cis);
-        //PriceSource raydiumPoolPriceSource = createEVEUSDTPriceSource(cis, raydium);
+        PriceSource raydiumPoolPriceSource = createEVEUSDTPriceSource(cis, raydium);
 
-        //startAssetAZTickerService(hardcodedPriceSource, raydiumPoolPriceSource);
+        TickerService tickerService = startAssetAZTickerService(raydiumPoolPriceSource);
 
         //startJupiterPerpsAlarm(cis);
 
-        Evelyn evelynProd = new EvelynImpl();
-        Evelyn evelynTest = new EvelynImpl();
+        TradingPair eveUsdt = createEVEUSDTTradingPair(cis);
+        Evelyn evelynProd = new EvelynImpl(tickerService, eveUsdt);
+        Evelyn evelynTest = new EvelynImpl(tickerService, eveUsdt);
         startEvelynMissionControl(evelynProd, evelynTest);
         //startNenjimComposer();
         //startNenjimProcessManager();
@@ -110,16 +112,20 @@ public class NenjimHubImpl implements NenjimHub {
     }
 
     private PriceSource createEVEUSDTPriceSource(CurrencyIdentityService cis, Raydium raydium) {
-        TradingPair eveUsdt = new TradingPair(cis.resolve(EVE_ID), cis.resolve(USDT_ID));
+        TradingPair eveUsdt = createEVEUSDTTradingPair(cis);
         PriceSource priceSource = new RaydiumPoolPriceSource(raydium, EVE_USDT_RAYDIUM_POOL_ID, eveUsdt);
 
         return priceSource;
     }
 
-    private void startAssetAZTickerService(PriceSource... priceSources) {
-        TickerServiceImpl tickerService = new TickerServiceImpl(priceSources);
+    private TradingPair createEVEUSDTTradingPair(CurrencyIdentityService cis) {
+        return new TradingPair(cis.resolve(EVE_ID), cis.resolve(USDT_ID));
+    }
 
+    private TickerService startAssetAZTickerService(PriceSource... priceSources) {
+        TickerService tickerService = new TickerServiceImpl(priceSources);
         tickerService.start();
+        return tickerService;
     }
 
     @Override
