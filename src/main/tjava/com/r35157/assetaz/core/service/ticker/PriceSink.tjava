@@ -1,6 +1,5 @@
-package com.r35157.assetaz.services.ticker;
+package com.r35157.assetaz.core.service.ticker;
 
-import com.r35157.assetaz.services.ticker.plugins.ps.PriceSource;
 import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;
@@ -11,6 +10,7 @@ import java.time.Instant;
  */
 @FunctionalInterface
 public interface PriceSink {
+
     void announce(
             @NotNull PriceSource source,
             @NotNull ΩPriceΩ price,
