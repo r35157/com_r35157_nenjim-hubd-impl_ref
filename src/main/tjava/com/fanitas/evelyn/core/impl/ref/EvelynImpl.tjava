@@ -19,15 +19,28 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.SPL_TOKEN_PROGRAM;
 import static com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram.TOKEN_2022_PROGRAM;
@@ -46,36 +59,78 @@ public class EvelynImpl implements Evelyn {
         this.solanaChain = solanaChain;
     }*/
     public EvelynImpl(
+            @NotNull String instanceName,
             @NotNull TickerService tickerService,
             @NotNull TradingPair eveUsdtTradingPair
     ) {
         this(
+                instanceName,
                 tickerService,
                 eveUsdtTradingPair,
                 Clock.systemUTC(),
                 SAMPLE_DELAY_MINUTES,
-                TimeUnit.MINUTES
+                TimeUnit.MINUTES,
+                DATA_ROOT
         );
     }
 
     EvelynImpl(
+            @NotNull String instanceName,
             @NotNull TickerService tickerService,
             @NotNull TradingPair eveUsdtTradingPair,
             @NotNull Clock clock,
             long sampleDelay,
-            @NotNull TimeUnit sampleDelayUnit
+            @NotNull TimeUnit sampleDelayUnit,
+            @NotNull Path dataRoot
     ) {
-        this.tickerService = Objects.requireNonNull(tickerService, "tickerService");
-        this.eveUsdtTradingPair = Objects.requireNonNull(
+        TickerService validatedTickerService = Objects.requireNonNull(
+                tickerService,
+                "tickerService"
+        );
+        TradingPair validatedTradingPair = Objects.requireNonNull(
                 eveUsdtTradingPair,
                 "eveUsdtTradingPair"
         );
-        this.clock = Objects.requireNonNull(clock, "clock");
+        Clock validatedClock = Objects.requireNonNull(clock, "clock");
         if (sampleDelay <= 0) {
             throw new IllegalArgumentException("sampleDelay must be positive");
         }
+        TimeUnit validatedDelayUnit = Objects.requireNonNull(
+                sampleDelayUnit,
+                "sampleDelayUnit"
+        );
+        Path validatedDataRoot = Objects.requireNonNull(dataRoot, "dataRoot").normalize();
+        String normalizedInstanceName = validateInstanceName(instanceName);
+        Path validatedInstancePath = validatedDataRoot
+                .resolve(normalizedInstanceName)
+                .normalize();
+        if (!validatedDataRoot.equals(validatedInstancePath.getParent())) {
+            throw new IllegalArgumentException(
+                    "Evelyn instance name must resolve to a direct child of "
+                            + validatedDataRoot + ": " + normalizedInstanceName
+            );
+        }
+        Path validatedStatusHistoryPath = validatedInstancePath.resolve(
+                STATUS_HISTORY_FILENAME
+        );
+        String reservationKey = normalizedInstanceName.toLowerCase(Locale.ROOT);
+
+        if (!RESERVED_INSTANCE_NAMES.add(reservationKey)) {
+            throw new IllegalArgumentException(
+                    "Evelyn instance name is already reserved in this JVM: "
+                            + normalizedInstanceName
+            );
+        }
+
+        this.instanceName = normalizedInstanceName;
+        this.reservationKey = reservationKey;
+        this.instancePath = validatedInstancePath;
+        this.statusHistoryPath = validatedStatusHistoryPath;
+        this.tickerService = validatedTickerService;
+        this.eveUsdtTradingPair = validatedTradingPair;
+        this.clock = validatedClock;
         this.sampleDelay = sampleDelay;
-        this.sampleDelayUnit = Objects.requireNonNull(sampleDelayUnit, "sampleDelayUnit");
+        this.sampleDelayUnit = validatedDelayUnit;
     }
 
     @Override
@@ -85,59 +140,161 @@ public class EvelynImpl implements Evelyn {
 
     @Override
     public synchronized void start() {
-        if (statusIndexScheduler != null || stoppingStatusIndexSampling) {
-            throw new IllegalStateException("Evelyn is already started");
+        if (closeRequested || lifecycleState == LifecycleState.CLOSED) {
+            throw new IllegalStateException(
+                    "Closing or closed Evelyn instance cannot be started: "
+                            + instanceName
+            );
+        }
+        if (lifecycleState != LifecycleState.STOPPED) {
+            throw new IllegalStateException(
+                    "Evelyn instance cannot start while in state "
+                            + lifecycleState + ": " + instanceName
+            );
         }
 
-        ScheduledExecutorService newScheduler = Executors.newSingleThreadScheduledExecutor(
-                runnable -> {
-                    Thread thread = new Thread(runnable, "evelyn-price-index-sampler");
-                    thread.setDaemon(true);
-                    return thread;
-                }
-        );
-        statusIndexScheduler = newScheduler;
-        newScheduler.scheduleWithFixedDelay(
-                this::sampleStatusIndexSafely,
-                0,
-                sampleDelay,
-                sampleDelayUnit
-        );
+        lifecycleState = LifecycleState.STARTING;
+        LoadedHistory loadedHistory;
+        try {
+            loadedHistory = loadStatusHistory();
+        } catch (IOException | RuntimeException exception) {
+            clearStatusIndexHistory();
+            lifecycleState = LifecycleState.STOPPED;
+            throw new IllegalStateException(
+                    "Could not start Evelyn instance '" + instanceName
+                            + "' from " + statusHistoryPath + ": "
+                            + exception.getMessage(),
+                    exception
+            );
+        }
+
+        ScheduledExecutorService newScheduler;
+        try {
+            newScheduler = Executors.newSingleThreadScheduledExecutor(
+                    runnable -> {
+                        Thread thread = new Thread(
+                                runnable,
+                                "evelyn-price-index-sampler-" + instanceName
+                        );
+                        thread.setDaemon(true);
+                        return thread;
+                    }
+            );
+        } catch (RuntimeException exception) {
+            clearStatusIndexHistory();
+            lifecycleState = LifecycleState.STOPPED;
+            throw new IllegalStateException(
+                    "Could not create Evelyn sampling executor for instance '"
+                            + instanceName + "'",
+                    exception
+            );
+        }
+        try {
+            synchronized (statusIndexHistory) {
+                statusIndexHistory.clear();
+                statusIndexHistory.addAll(loadedHistory.points());
+                lastPersistedTimestamp = loadedHistory.lastTimestamp();
+            }
+            statusIndexScheduler = newScheduler;
+            lifecycleState = LifecycleState.STARTED;
+            newScheduler.scheduleWithFixedDelay(
+                    this::sampleStatusIndexSafely,
+                    0,
+                    sampleDelay,
+                    sampleDelayUnit
+            );
+        } catch (RuntimeException exception) {
+            lifecycleState = LifecycleState.STOPPING;
+            newScheduler.shutdownNow();
+            statusIndexScheduler = null;
+            clearStatusIndexHistory();
+            lifecycleState = LifecycleState.STOPPED;
+            throw new IllegalStateException(
+                    "Could not start Evelyn sampling for instance '"
+                            + instanceName + "'",
+                    exception
+            );
+        }
     }
 
     @Override
     public void stop() {
         ScheduledExecutorService schedulerToStop;
         synchronized (this) {
-            if (statusIndexScheduler == null) {
+            if (lifecycleState == LifecycleState.CLOSED
+                    || lifecycleState == LifecycleState.STOPPED) {
                 clearStatusIndexHistory();
                 return;
             }
-            stoppingStatusIndexSampling = true;
+            if (lifecycleState != LifecycleState.STARTED
+                    && lifecycleState != LifecycleState.TERMINATION_FAILED) {
+                throw new IllegalStateException(
+                        "Evelyn instance cannot stop while in state "
+                                + lifecycleState + ": " + instanceName
+                );
+            }
+            lifecycleState = LifecycleState.STOPPING;
             schedulerToStop = statusIndexScheduler;
         }
 
         schedulerToStop.shutdownNow();
-        boolean terminated = false;
+        boolean terminated;
         try {
             terminated = schedulerToStop.awaitTermination(
                     TERMINATION_TIMEOUT_SECONDS,
                     TimeUnit.SECONDS
             );
-            if (!terminated) {
-                log.error("Evelyn status-index scheduler did not terminate");
-            }
         } catch (InterruptedException exception) {
             schedulerToStop.shutdownNow();
             Thread.currentThread().interrupt();
-        } finally {
-            clearStatusIndexHistory();
             synchronized (this) {
-                if (terminated || schedulerToStop.isTerminated()) {
-                    statusIndexScheduler = null;
-                    stoppingStatusIndexSampling = false;
-                }
+                lifecycleState = LifecycleState.TERMINATION_FAILED;
             }
+            throw new IllegalStateException(
+                    "Interrupted while stopping Evelyn instance '"
+                            + instanceName + "'; name reservation retained",
+                    exception
+            );
+        }
+
+        if (!terminated) {
+            synchronized (this) {
+                lifecycleState = LifecycleState.TERMINATION_FAILED;
+            }
+            throw new IllegalStateException(
+                    "Evelyn sampling thread did not terminate for instance '"
+                            + instanceName + "'; name reservation retained"
+            );
+        }
+
+        clearStatusIndexHistory();
+        synchronized (this) {
+            statusIndexScheduler = null;
+            lifecycleState = LifecycleState.STOPPED;
+        }
+    }
+
+    @Override
+    public void close() {
+        synchronized (this) {
+            if (lifecycleState == LifecycleState.CLOSED) {
+                return;
+            }
+            closeRequested = true;
+        }
+
+        stop();
+
+        synchronized (this) {
+            if (lifecycleState != LifecycleState.STOPPED
+                    || statusIndexScheduler != null) {
+                throw new IllegalStateException(
+                        "Cannot close Evelyn instance while sampling termination "
+                                + "is unconfirmed: " + instanceName
+                );
+            }
+            lifecycleState = LifecycleState.CLOSED;
+            RESERVED_INSTANCE_NAMES.remove(reservationKey);
         }
     }
 
@@ -151,12 +308,275 @@ public class EvelynImpl implements Evelyn {
     private void clearStatusIndexHistory() {
         synchronized (statusIndexHistory) {
             statusIndexHistory.clear();
+            lastPersistedTimestamp = null;
         }
     }
 
-    private void sampleStatusIndexSafely() {
+    private LoadedHistory loadStatusHistory() throws IOException {
+        validateStorage();
+        List<String> lines = Files.readAllLines(
+                statusHistoryPath,
+                StandardCharsets.UTF_8
+        );
+        int formatVersionLineIndex = validateStatusFormatVersion(lines);
+        List<EvelynStatusIndexPoint> loadedPoints = new ArrayList<>();
+        Instant previousTimestamp = null;
+
+        for (int lineIndex = formatVersionLineIndex + 1;
+                lineIndex < lines.size();
+                lineIndex++) {
+            String rawLine = lines.get(lineIndex);
+            String data = removeComment(rawLine).trim();
+            if (data.isEmpty()) {
+                continue;
+            }
+
+            EvelynStatusIndexPoint point = parseStatusRecord(
+                    data,
+                    rawLine,
+                    lineIndex
+            );
+            if (previousTimestamp != null
+                    && point.timestamp().isBefore(previousTimestamp)) {
+                throw malformedStatusHistory(
+                        lineIndex,
+                        rawLine,
+                        "timestamp is earlier than the preceding record",
+                        null
+                );
+            }
+            loadedPoints.add(point);
+            previousTimestamp = point.timestamp();
+        }
+
+        return new LoadedHistory(List.copyOf(loadedPoints), previousTimestamp);
+    }
+
+    private void validateStorage() throws IOException {
+        requireStorageCondition(
+                Files.exists(instancePath),
+                instancePath,
+                "instance directory does not exist"
+        );
+        requireStorageCondition(
+                Files.isDirectory(instancePath),
+                instancePath,
+                "instance path is not a directory"
+        );
+        requireStorageCondition(
+                Files.isReadable(instancePath),
+                instancePath,
+                "instance directory is not readable"
+        );
+        requireStorageCondition(
+                Files.isWritable(instancePath),
+                instancePath,
+                "instance directory is not writable"
+        );
+        requireStorageCondition(
+                Files.exists(statusHistoryPath),
+                statusHistoryPath,
+                "status history file does not exist"
+        );
+        requireStorageCondition(
+                Files.isRegularFile(statusHistoryPath),
+                statusHistoryPath,
+                "status history path is not a regular file"
+        );
+        requireStorageCondition(
+                Files.isReadable(statusHistoryPath),
+                statusHistoryPath,
+                "status history file is not readable"
+        );
+        requireStorageCondition(
+                Files.isWritable(statusHistoryPath),
+                statusHistoryPath,
+                "status history file is not writable"
+        );
+    }
+
+    private static void requireStorageCondition(
+            boolean condition,
+            Path path,
+            String reason
+    ) throws IOException {
+        if (!condition) {
+            throw new IOException(path + ": " + reason);
+        }
+    }
+
+    private int validateStatusFormatVersion(List<String> lines) throws IOException {
+        int firstActualEntryIndex = -1;
+        int declarationIndex = -1;
+        int declarationCount = 0;
+        int declaredVersion = -1;
+
+        for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
+            String rawLine = lines.get(lineIndex);
+            String trimmedLine = rawLine.trim();
+            if (trimmedLine.isEmpty() || trimmedLine.startsWith("#")) {
+                continue;
+            }
+            if (firstActualEntryIndex < 0) {
+                firstActualEntryIndex = lineIndex;
+            }
+            if (!trimmedLine.startsWith(FORMAT_VERSION_KEY)) {
+                continue;
+            }
+
+            declarationCount++;
+            if (declarationCount > 1) {
+                throw malformedStatusHistory(
+                        lineIndex,
+                        rawLine,
+                        "duplicate " + FORMAT_VERSION_KEY + " declaration",
+                        null
+                );
+            }
+            declarationIndex = lineIndex;
+            String expectedPrefix = FORMAT_VERSION_KEY + "=";
+            if (!trimmedLine.startsWith(expectedPrefix)
+                    || trimmedLine.length() == expectedPrefix.length()) {
+                throw malformedStatusHistory(
+                        lineIndex,
+                        rawLine,
+                        "malformed " + FORMAT_VERSION_KEY
+                                + " declaration; expected "
+                                + FORMAT_VERSION_KEY + "=<positive integer>",
+                        null
+                );
+            }
+            try {
+                declaredVersion = Integer.parseInt(
+                        trimmedLine.substring(expectedPrefix.length())
+                );
+            } catch (NumberFormatException exception) {
+                throw malformedStatusHistory(
+                        lineIndex,
+                        rawLine,
+                        "malformed " + FORMAT_VERSION_KEY
+                                + " declaration; expected "
+                                + FORMAT_VERSION_KEY + "=<positive integer>",
+                        exception
+                );
+            }
+            if (declaredVersion <= 0) {
+                throw malformedStatusHistory(
+                        lineIndex,
+                        rawLine,
+                        FORMAT_VERSION_KEY + " must be a positive integer",
+                        null
+                );
+            }
+        }
+
+        if (declarationCount == 0) {
+            if (firstActualEntryIndex >= 0) {
+                throw malformedStatusHistory(
+                        firstActualEntryIndex,
+                        lines.get(firstActualEntryIndex),
+                        "missing " + FORMAT_VERSION_KEY
+                                + " declaration; it must be the first actual entry",
+                        null
+                );
+            }
+            throw new IOException(
+                    statusHistoryPath + ": missing " + FORMAT_VERSION_KEY
+                            + " declaration; it must be the first actual entry"
+            );
+        }
+        if (declarationIndex != firstActualEntryIndex) {
+            throw malformedStatusHistory(
+                    declarationIndex,
+                    lines.get(declarationIndex),
+                    FORMAT_VERSION_KEY + " must be the first actual entry",
+                    null
+            );
+        }
+        if (declaredVersion != SUPPORTED_STATUS_HISTORY_FORMAT_VERSION) {
+            throw malformedStatusHistory(
+                    declarationIndex,
+                    lines.get(declarationIndex),
+                    "unsupported status history format version "
+                            + declaredVersion + "; supported version is "
+                            + SUPPORTED_STATUS_HISTORY_FORMAT_VERSION,
+                    null
+            );
+        }
+        return declarationIndex;
+    }
+
+    private EvelynStatusIndexPoint parseStatusRecord(
+            String data,
+            String rawLine,
+            int lineIndex
+    ) throws IOException {
+        String[] fields = data.split(":", -1);
+        if (fields.length != STATUS_RECORD_FIELD_COUNT) {
+            throw malformedStatusHistory(
+                    lineIndex,
+                    rawLine,
+                    "expected exactly " + STATUS_RECORD_FIELD_COUNT
+                            + " colon-separated fields",
+                    null
+            );
+        }
+
         try {
-            Instant samplingInstant = clock.instant();
+            LocalDateTime localDateTime = LocalDateTime.parse(
+                    fields[0],
+                    STATUS_TIMESTAMP_FORMATTER
+            );
+            Instant timestamp = localDateTime.toInstant(ZoneOffset.UTC);
+            int recordType = Integer.parseInt(fields[1]);
+            if (recordType != EVELYN_IOU_TOKEN_PRICE_INDEX_RECORD_TYPE) {
+                throw new UnknownStatusRecordTypeException(recordType);
+            }
+            BigDecimal evelynPriceIndex = new BigDecimal(fields[2]);
+            return new EvelynStatusIndexPoint(
+                    timestamp,
+                    evelynPriceIndex,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO
+            );
+        } catch (UnknownStatusRecordTypeException exception) {
+            throw malformedStatusHistory(
+                    lineIndex,
+                    rawLine,
+                    "unknown status record type " + exception.recordType,
+                    exception
+            );
+        } catch (RuntimeException exception) {
+            throw malformedStatusHistory(
+                    lineIndex,
+                    rawLine,
+                    "invalid status record",
+                    exception
+            );
+        }
+    }
+
+    private IOException malformedStatusHistory(
+            int lineIndex,
+            String rawLine,
+            String reason,
+            Exception cause
+    ) {
+        return new IOException(
+                "Malformed Evelyn status history in " + statusHistoryPath
+                        + " at line " + (lineIndex + 1) + ": " + rawLine
+                        + " (" + reason + ")",
+                cause
+        );
+    }
+
+    private void sampleStatusIndexSafely() {
+        Instant samplingInstant = null;
+        try {
+            samplingInstant = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
             PriceObservation observation = tickerService.getLatestPrice(eveUsdtTradingPair);
             BigDecimal actualPrice = observation.price().price();
             BigDecimal evelynPriceIndex = EvelynPriceIndexCalculator.calculateIndex(
@@ -172,29 +592,175 @@ public class EvelynImpl implements Evelyn {
                     BigDecimal.ZERO,
                     BigDecimal.ZERO
             );
-            if (!isStatusIndexSamplingActive()) {
-                return;
-            }
-            synchronized (statusIndexHistory) {
-                statusIndexHistory.add(point);
-            }
+            persistAndPublish(point);
+        } catch (IOException exception) {
+            log.error(
+                    "Could not persist Evelyn Price Index: instance={}, path={}, samplingInstant={}",
+                    instanceName,
+                    statusHistoryPath,
+                    samplingInstant,
+                    exception
+            );
         } catch (RuntimeException exception) {
             log.warn(
-                    "Could not sample Evelyn Price Index: tradingPair={}",
+                    "Could not sample Evelyn Price Index: instance={}, path={}, tradingPair={}, samplingInstant={}",
+                    instanceName,
+                    statusHistoryPath,
                     eveUsdtTradingPair,
+                    samplingInstant,
                     exception
             );
         }
     }
 
+    private void persistAndPublish(EvelynStatusIndexPoint point) throws IOException {
+        synchronized (statusIndexHistory) {
+            if (!isStatusIndexSamplingActive()) {
+                return;
+            }
+            if (lastPersistedTimestamp != null
+                    && point.timestamp().isBefore(lastPersistedTimestamp)) {
+                throw new IllegalStateException(
+                        "Sample timestamp " + point.timestamp()
+                                + " is earlier than last persisted timestamp "
+                                + lastPersistedTimestamp
+                );
+            }
+
+            appendStatusRecord(point);
+            lastPersistedTimestamp = point.timestamp();
+            statusIndexHistory.add(point);
+        }
+    }
+
+    private void appendStatusRecord(EvelynStatusIndexPoint point) throws IOException {
+        String encodedRecord = STATUS_TIMESTAMP_FORMATTER.format(
+                LocalDateTime.ofInstant(point.timestamp(), ZoneOffset.UTC)
+        ) + ":" + EVELYN_IOU_TOKEN_PRICE_INDEX_RECORD_TYPE
+                + ":" + point.evelynPriceIndex().toPlainString() + "\n";
+
+        try (FileChannel channel = FileChannel.open(
+                statusHistoryPath,
+                StandardOpenOption.READ,
+                StandardOpenOption.WRITE
+        )) {
+            long size = channel.size();
+            boolean needsLineSeparator = size > 0
+                    && !endsWithLineSeparator(channel, size);
+            channel.position(size);
+            if (needsLineSeparator) {
+                writeFully(channel, ByteBuffer.wrap(new byte[] {'\n'}));
+            }
+            writeFully(
+                    channel,
+                    ByteBuffer.wrap(encodedRecord.getBytes(StandardCharsets.UTF_8))
+            );
+            channel.force(true);
+        }
+    }
+
+    private boolean endsWithLineSeparator(FileChannel channel, long size)
+            throws IOException {
+        ByteBuffer lastByte = ByteBuffer.allocate(1);
+        channel.position(size - 1);
+        if (channel.read(lastByte) != 1) {
+            throw new IOException(
+                    "Could not inspect final byte of Evelyn status history: "
+                            + statusHistoryPath
+            );
+        }
+        byte value = lastByte.array()[0];
+        return value == '\n' || value == '\r';
+    }
+
+    private static void writeFully(FileChannel channel, ByteBuffer buffer)
+            throws IOException {
+        while (buffer.hasRemaining()) {
+            channel.write(buffer);
+        }
+    }
+
+    private static String removeComment(String line) {
+        int commentStart = line.indexOf('#');
+        return commentStart < 0 ? line : line.substring(0, commentStart);
+    }
+
     private synchronized boolean isStatusIndexSamplingActive() {
-        return statusIndexScheduler != null && !stoppingStatusIndexSampling;
+        return statusIndexScheduler != null
+                && lifecycleState == LifecycleState.STARTED;
+    }
+
+    private static String validateInstanceName(String instanceName) {
+        Objects.requireNonNull(instanceName, "instanceName");
+        String normalizedName = Normalizer.normalize(instanceName, Normalizer.Form.NFC);
+        if (normalizedName.codePoints().allMatch(EvelynImpl::isWhitespace)
+                || hasWhitespaceAtBoundary(normalizedName)
+                || normalizedName.equals(".")
+                || normalizedName.equals("..")
+                || normalizedName.endsWith(".")
+                || normalizedName.codePoints().anyMatch(Character::isISOControl)
+                || normalizedName.codePoints().anyMatch(
+                        codePoint -> PORTABLE_FILENAME_INVALID_CHARACTERS
+                                .indexOf(codePoint) >= 0
+                )
+                || isWindowsReservedFilename(normalizedName)) {
+            throw new IllegalArgumentException(
+                    "Unsafe Evelyn instance name: " + normalizedName
+            );
+        }
+        return normalizedName;
+    }
+
+    private static boolean hasWhitespaceAtBoundary(String value) {
+        return isWhitespace(value.codePointAt(0))
+                || isWhitespace(value.codePointBefore(value.length()));
+    }
+
+    private static boolean isWhitespace(int codePoint) {
+        return Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint);
+    }
+
+    private static boolean isWindowsReservedFilename(String value) {
+        String upperName = value.toUpperCase(Locale.ROOT);
+        int extensionSeparator = upperName.indexOf('.');
+        String baseName = extensionSeparator < 0
+                ? upperName
+                : upperName.substring(0, extensionSeparator);
+        if (baseName.equals("CON")
+                || baseName.equals("PRN")
+                || baseName.equals("AUX")
+                || baseName.equals("NUL")) {
+            return true;
+        }
+        if (baseName.length() == 4) {
+            String prefix = baseName.substring(0, 3);
+            char suffix = baseName.charAt(3);
+            return (prefix.equals("COM") || prefix.equals("LPT"))
+                    && suffix >= '1' && suffix <= '9';
+        }
+        return false;
     }
 
     private static final Logger log = LoggerFactory.getLogger(EvelynImpl.class);
+    private static final Path DATA_ROOT = Path.of("data", "evelyn");
+    private static final String STATUS_HISTORY_FILENAME = "status.log";
+    private static final String FORMAT_VERSION_KEY = "FORMAT_VERSION";
+    private static final int SUPPORTED_STATUS_HISTORY_FORMAT_VERSION = 1;
+    private static final int EVELYN_IOU_TOKEN_PRICE_INDEX_RECORD_TYPE = 1;
+    private static final int STATUS_RECORD_FIELD_COUNT = 3;
     private static final long SAMPLE_DELAY_MINUTES = 1;
     private static final long TERMINATION_TIMEOUT_SECONDS = 10;
+    private static final String PORTABLE_FILENAME_INVALID_CHARACTERS = "<>:\"/\\|?*";
+    private static final DateTimeFormatter STATUS_TIMESTAMP_FORMATTER =
+            DateTimeFormatter.ofPattern("uuuuMMddHHmmssSSS'Z'")
+                    .withResolverStyle(ResolverStyle.STRICT);
+    private static final Set<String> RESERVED_INSTANCE_NAMES =
+            ConcurrentHashMap.newKeySet();
 
+    private final String instanceName;
+    private final String reservationKey;
+    private final Path instancePath;
+    private final Path statusHistoryPath;
     private final TickerService tickerService;
     private final TradingPair eveUsdtTradingPair;
     private final Clock clock;
@@ -203,7 +769,33 @@ public class EvelynImpl implements Evelyn {
     private final List<EvelynStatusIndexPoint> statusIndexHistory = new ArrayList<>();
 
     private ScheduledExecutorService statusIndexScheduler;
-    private boolean stoppingStatusIndexSampling;
+    private Instant lastPersistedTimestamp;
+    private LifecycleState lifecycleState = LifecycleState.STOPPED;
+    private boolean closeRequested;
+
+    private enum LifecycleState {
+        STOPPED,
+        STARTING,
+        STARTED,
+        STOPPING,
+        TERMINATION_FAILED,
+        CLOSED
+    }
+
+    private record LoadedHistory(
+            List<EvelynStatusIndexPoint> points,
+            Instant lastTimestamp
+    ) {
+    }
+
+    private static final class UnknownStatusRecordTypeException
+            extends RuntimeException {
+        private UnknownStatusRecordTypeException(int recordType) {
+            this.recordType = recordType;
+        }
+
+        private final int recordType;
+    }
 
     /*
     private SPLTokenHolding getSPLHolding(ΩSolanaAddressΩ ownerAddress, ΩSPLMintAddressΩ splMintAddress) throws Exception {

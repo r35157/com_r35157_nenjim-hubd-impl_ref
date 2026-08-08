@@ -4,12 +4,37 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-public interface Evelyn {
+/**
+ * Collects and exposes the status-index history for one named Evelyn instance.
+ */
+public interface Evelyn extends AutoCloseable {
+    /**
+     * Executes the legacy Evelyn service operation.
+     *
+     * @throws Exception when service execution fails
+     */
     void executeService() throws Exception;
 
+    /**
+     * Restores persisted history and starts status-index sampling.
+     */
     void start();
 
+    /**
+     * Stops sampling and clears memory while retaining persistent ownership.
+     */
     void stop();
 
+    /**
+     * Permanently closes this instance and releases its persistent name.
+     */
+    @Override
+    void close();
+
+    /**
+     * Returns an immutable snapshot containing only durably persisted points.
+     *
+     * @return complete current history ordered from oldest to newest
+     */
     @NotNull List<EvelynStatusIndexPoint> getStatusIndexHistory();
 }
