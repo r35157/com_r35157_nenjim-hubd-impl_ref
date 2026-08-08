@@ -72,23 +72,23 @@ public class NenjimHubImpl implements NenjimHub {
     }
 
     private void startAutoRunProcesses() {
-        CurrencyIdentityService cis = new HardcodedCurrencyIdentityService();
-        SolanaBlockChain solanaBlockChain = new SolanaBlockChainImpl(cis);
-        Raydium raydium = new RaydiumImpl(solanaBlockChain, cis);
+        //CurrencyIdentityService cis = new HardcodedCurrencyIdentityService();
+        //SolanaBlockChain solanaBlockChain = new SolanaBlockChainImpl(cis);
+        //Raydium raydium = new RaydiumImpl(solanaBlockChain, cis);
 
         //PriceSource hardcodedPriceSource = new HardcodedPriceSource(cis);
-        PriceSource raydiumPoolPriceSource = createEVEUSDTPriceSource(cis, raydium);
+        //PriceSource raydiumPoolPriceSource = createEVEUSDTPriceSource(cis, raydium);
 
-        TickerService tickerService = startAssetAZTickerService(raydiumPoolPriceSource);
+        //TickerService tickerService = startAssetAZTickerService(raydiumPoolPriceSource);
 
         //startJupiterPerpsAlarm(cis);
 
-        TradingPair eveUsdt = createEVEUSDTTradingPair(cis);
-        Evelyn evelynProd = new EvelynImpl(tickerService, eveUsdt);
-        Evelyn evelynTest = new EvelynImpl(tickerService, eveUsdt);
-        evelynProd.start();
-        evelynTest.start();
-        startEvelynMissionControl(evelynProd, evelynTest);
+        //TradingPair eveUsdt = createEVEUSDTTradingPair(cis);
+        //Evelyn evelynProd = new EvelynImpl(tickerService, eveUsdt);
+        //Evelyn evelynTest = new EvelynImpl(tickerService, eveUsdt);
+        //evelynProd.start();
+        //evelynTest.start();
+        //startEvelynMissionControl(evelynProd, evelynTest);
         //startNenjimComposer();
         //startNenjimProcessManager();
         //startNenjimTestTool();
