@@ -1,7 +1,7 @@
-package com.r35157.assetaz.core.service.ticker.impl.ref;
+package com.r35157.assetaz.services.ticker.plugins.pricesource.impl.hardcoded;
 
-import com.r35157.assetaz.core.service.ticker.PriceSink;
-import com.r35157.assetaz.core.service.ticker.PriceSource;
+import com.r35157.assetaz.services.ticker.plugins.pricesource.PriceSink;
+import com.r35157.assetaz.services.ticker.plugins.pricesource.PriceSource;
 import com.r35157.assetaz.services.cis.CurrencyIdentityService;
 import com.r35157.libs.valuetypes.basic.TradingPair;
 import org.jetbrains.annotations.NotNull;

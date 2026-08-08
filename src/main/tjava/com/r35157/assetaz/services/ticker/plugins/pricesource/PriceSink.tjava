@@ -1,4 +1,4 @@
-package com.r35157.assetaz.core.service.ticker;
+package com.r35157.assetaz.services.ticker.plugins.pricesource;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -10,7 +10,6 @@ import java.time.Instant;
  */
 @FunctionalInterface
 public interface PriceSink {
-
     void announce(
             @NotNull PriceSource source,
             @NotNull ΩPriceΩ price,

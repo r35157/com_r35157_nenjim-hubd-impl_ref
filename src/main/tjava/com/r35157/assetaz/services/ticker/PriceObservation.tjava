@@ -1,4 +1,4 @@
-package com.r35157.assetaz.core.service.ticker;
+package com.r35157.assetaz.services.ticker;
 
 import com.r35157.libs.valuetypes.basic.AssetPrice;
 import org.jetbrains.annotations.NotNull;
