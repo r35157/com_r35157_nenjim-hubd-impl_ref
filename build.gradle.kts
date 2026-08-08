@@ -41,6 +41,7 @@ val detag = configurations.create("detag") {
 dependencies {
     detag("com.r35157.tools:detag-impl_ref:0.1.0")
     compileOnly("org.jetbrains:annotations:26.1.0")
+    testCompileOnly("org.jetbrains:annotations:26.1.0")
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.26.0")
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.26.0")
 

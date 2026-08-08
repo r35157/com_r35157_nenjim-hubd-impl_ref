@@ -18,7 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService.SOLANA_ID;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.SOLANA_ID;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
