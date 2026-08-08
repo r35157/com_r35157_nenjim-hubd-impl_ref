@@ -1,5 +1,6 @@
-package com.r35157.assetaz.core.service.ticker;
+package com.r35157.assetaz.services.ticker.plugins.ps;
 
+import com.r35157.assetaz.services.ticker.PriceSink;
 import com.r35157.libs.valuetypes.basic.TradingPair;
 import org.jetbrains.annotations.NotNull;
 

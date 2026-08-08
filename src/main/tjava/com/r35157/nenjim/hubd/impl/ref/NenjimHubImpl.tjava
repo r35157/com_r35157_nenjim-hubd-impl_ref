@@ -2,8 +2,8 @@ package com.r35157.nenjim.hubd.impl.ref;
 
 import com.fanitas.evelyn.core.Evelyn;
 import com.fanitas.evelyn.core.impl.ref.EvelynImpl;
-import com.r35157.assetaz.core.service.ticker.impl.ref.HardcodedPriceSource;
-import com.r35157.assetaz.core.service.ticker.impl.ref.TickerServiceImpl;
+import com.r35157.assetaz.services.ticker.plugins.ps.impl.hardcoded.HardcodedPriceSource;
+import com.r35157.assetaz.services.ticker.impl.ref.TickerServiceImpl;
 import com.r35157.assetaz.services.cis.CurrencyIdentityService;
 import com.r35157.assetaz.services.cis.impl.hc.HardcodedCurrencyIdentityService;
 import com.r35157.evelyn.emc.EvelynMissionControl;
@@ -12,7 +12,6 @@ import com.r35157.jupiterperpsalarm.impl.ref.JupiterPerpsAlarmImpl;
 import com.r35157.nenjim.composer.NenjimComposer;
 import com.r35157.nenjim.composer.impl.ref.NenjimComposerImpl;
 import com.r35157.nenjim.hubd.NenjimHub;
-import com.r35157.nenjim.hubd.journal.Journal;
 import com.r35157.nenjim.npm.NenjimProcessManager;
 import com.r35157.nenjim.npm.impl.ref.NenjimProcessManagerImpl;
 import com.r35157.nenjim.ntt.NenjimTestTool;
