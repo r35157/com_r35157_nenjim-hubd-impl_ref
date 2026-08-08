@@ -86,6 +86,8 @@ public class NenjimHubImpl implements NenjimHub {
         TradingPair eveUsdt = createEVEUSDTTradingPair(cis);
         Evelyn evelynProd = new EvelynImpl(tickerService, eveUsdt);
         Evelyn evelynTest = new EvelynImpl(tickerService, eveUsdt);
+        evelynProd.start();
+        evelynTest.start();
         startEvelynMissionControl(evelynProd, evelynTest);
         //startNenjimComposer();
         //startNenjimProcessManager();

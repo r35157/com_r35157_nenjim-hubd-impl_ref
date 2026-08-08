@@ -84,9 +84,9 @@ public class EvelynImpl implements Evelyn {
     }
 
     @Override
-    public synchronized void startStatusIndexSampling() {
+    public synchronized void start() {
         if (statusIndexScheduler != null || stoppingStatusIndexSampling) {
-            throw new IllegalStateException("Evelyn status-index sampling is already started");
+            throw new IllegalStateException("Evelyn is already started");
         }
 
         ScheduledExecutorService newScheduler = Executors.newSingleThreadScheduledExecutor(
@@ -106,10 +106,11 @@ public class EvelynImpl implements Evelyn {
     }
 
     @Override
-    public void stopStatusIndexSampling() {
+    public void stop() {
         ScheduledExecutorService schedulerToStop;
         synchronized (this) {
             if (statusIndexScheduler == null) {
+                clearStatusIndexHistory();
                 return;
             }
             stoppingStatusIndexSampling = true;
@@ -117,22 +118,25 @@ public class EvelynImpl implements Evelyn {
         }
 
         schedulerToStop.shutdownNow();
+        boolean terminated = false;
         try {
-            if (!schedulerToStop.awaitTermination(
+            terminated = schedulerToStop.awaitTermination(
                     TERMINATION_TIMEOUT_SECONDS,
                     TimeUnit.SECONDS
-            )) {
+            );
+            if (!terminated) {
                 log.error("Evelyn status-index scheduler did not terminate");
             }
         } catch (InterruptedException exception) {
             schedulerToStop.shutdownNow();
             Thread.currentThread().interrupt();
         } finally {
+            clearStatusIndexHistory();
             synchronized (this) {
-                if (schedulerToStop.isTerminated()) {
+                if (terminated || schedulerToStop.isTerminated()) {
                     statusIndexScheduler = null;
+                    stoppingStatusIndexSampling = false;
                 }
-                stoppingStatusIndexSampling = false;
             }
         }
     }
@@ -141,6 +145,12 @@ public class EvelynImpl implements Evelyn {
     public @NotNull List<EvelynStatusIndexPoint> getStatusIndexHistory() {
         synchronized (statusIndexHistory) {
             return List.copyOf(statusIndexHistory);
+        }
+    }
+
+    private void clearStatusIndexHistory() {
+        synchronized (statusIndexHistory) {
+            statusIndexHistory.clear();
         }
     }
 

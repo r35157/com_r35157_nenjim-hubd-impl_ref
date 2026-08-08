@@ -31,6 +31,7 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
     public EvelynMissionControlImpl(Evelyn evelynProd, Evelyn evelynTest) {
         this.evelynProd = Objects.requireNonNull(evelynProd);
         this.evelynTest = Objects.requireNonNull(evelynTest);
+        refreshTimeline.setCycleCount(Timeline.INDEFINITE);
     }
 
     @Override
@@ -39,25 +40,21 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
     }
 
     private void showWindow() {
-        Stage window = new Stage();
-        window.setTitle("Evelyn Mission Control");
-        window.setScene(new Scene(createRootTabs(), 600, 400));
-        Timeline refreshTimeline = new Timeline(new KeyFrame(
-                Duration.seconds(CHART_REFRESH_SECONDS),
-                event -> refreshCharts()
-        ));
-        refreshTimeline.setCycleCount(Timeline.INDEFINITE);
-        window.setOnHidden(event -> {
-            refreshTimeline.stop();
-            evelynProd.stopStatusIndexSampling();
-            evelynTest.stopStatusIndexSampling();
-        });
-        window.show();
+        if (window != null && window.isShowing()) {
+            window.toFront();
+            return;
+        }
 
-        evelynProd.startStatusIndexSampling();
-        evelynTest.startStatusIndexSampling();
+        if (window == null) {
+            window = new Stage();
+            window.setTitle("Evelyn Mission Control");
+            window.setOnHidden(event -> refreshTimeline.stop());
+        }
+        window.setScene(new Scene(createRootTabs(), 600, 400));
+
         refreshCharts();
-        refreshTimeline.play();
+        window.show();
+        refreshTimeline.playFromStart();
     }
 
     private TabPane createMissionControlTabs(String color, StatusIndexChart statusIndexChart) {
@@ -157,18 +154,30 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
             throw new IllegalStateException("Status-index charts must be updated on the JavaFX Application Thread");
         }
 
-        if (history.size() < statusIndexChart.renderedPointCount) {
-            statusIndexChart.priceIndexSeries().getData().clear();
-            statusIndexChart.renderedPointCount = 0;
+        int commonPointCount = 0;
+        int maximumCommonPointCount = Math.min(
+                history.size(),
+                statusIndexChart.renderedHistory.size()
+        );
+        while (commonPointCount < maximumCommonPointCount
+                && history.get(commonPointCount).equals(
+                        statusIndexChart.renderedHistory.get(commonPointCount)
+                )) {
+            commonPointCount++;
         }
-        for (int index = statusIndexChart.renderedPointCount; index < history.size(); index++) {
+        if (commonPointCount < statusIndexChart.renderedHistory.size()) {
+            statusIndexChart.priceIndexSeries().getData().clear();
+            statusIndexChart.renderedHistory = List.of();
+            commonPointCount = 0;
+        }
+        for (int index = commonPointCount; index < history.size(); index++) {
             EvelynStatusIndexPoint point = history.get(index);
             statusIndexChart.priceIndexSeries().getData().add(new XYChart.Data<>(
                     point.timestamp().toEpochMilli(),
                     point.evelynPriceIndex()
             ));
         }
-        statusIndexChart.renderedPointCount = history.size();
+        statusIndexChart.renderedHistory = List.copyOf(history);
         updateAxisBounds(statusIndexChart, history);
     }
 
@@ -270,7 +279,7 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
         private final NumberAxis xAxis;
         private final NumberAxis yAxis;
         private final XYChart.Series<Number, Number> priceIndexSeries;
-        private int renderedPointCount;
+        private List<EvelynStatusIndexPoint> renderedHistory = List.of();
     }
 
     private static final String PRODUCTION_COLOR = "#ffd6d6";
@@ -295,6 +304,11 @@ public final class EvelynMissionControlImpl implements EvelynMissionControl {
 
     private final Evelyn evelynProd;
     private final Evelyn evelynTest;
+    private final Timeline refreshTimeline = new Timeline(new KeyFrame(
+            Duration.seconds(CHART_REFRESH_SECONDS),
+            event -> refreshCharts()
+    ));
+    private Stage window;
     private StatusIndexChart productionChart;
     private StatusIndexChart testChart;
 }

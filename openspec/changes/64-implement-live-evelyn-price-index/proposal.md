@@ -4,10 +4,10 @@ Evelyn Mission Control currently renders a static six-series chart from hardcode
 
 ## What Changes
 
-- Replace hardcoded Evelyn status-index points with separate, thread-safe, in-memory Production and Test histories sampled immediately and approximately once per minute.
+- Replace hardcoded Evelyn status-index points with separate, thread-safe, in-memory Production and Test histories sampled for the complete lifecycle of each started Evelyn instance.
 - Calculate the expected exponential EVE price and Evelyn Price Index deterministically from an explicit sampling instant and the latest canonical EVE/USDT Ticker observation.
 - Isolate temporary Ticker/sample failures so no fake point is created and later fixed-delay samples continue.
-- Make EMC's Production and Test charts update live on the JavaFX Application Thread, with only Evelyn Price Index enabled and controlling symmetric bounds.
+- Make EMC's Production and Test charts reconstruct the complete current Evelyn snapshots when opened or reopened and update live on the JavaFX Application Thread, with only Evelyn Price Index enabled and controlling symmetric bounds.
 - Compose only CIS, Solana, Raydium, the real EVE/USDT PriceSource, Ticker, Evelyn, and EMC in NenjimHub; leave all unrelated and safety-sensitive services disabled.
 - Keep calculation, timing, sampling-delay, and chart-update seams deterministic so focused automated verification can be added later; unit tests are deliberately deferred from this change.
 
