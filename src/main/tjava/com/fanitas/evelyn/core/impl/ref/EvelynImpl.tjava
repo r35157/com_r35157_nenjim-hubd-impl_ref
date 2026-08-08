@@ -247,14 +247,8 @@ public class EvelynImpl implements Evelyn {
         } catch (InterruptedException exception) {
             schedulerToStop.shutdownNow();
             Thread.currentThread().interrupt();
-            clearStatusIndexHistory();
             synchronized (this) {
-                if (schedulerToStop.isTerminated()) {
-                    statusIndexScheduler = null;
-                    lifecycleState = LifecycleState.STOPPED;
-                } else {
-                    lifecycleState = LifecycleState.TERMINATION_FAILED;
-                }
+                lifecycleState = LifecycleState.TERMINATION_FAILED;
             }
             throw new IllegalStateException(
                     "Interrupted while stopping Evelyn instance '"
@@ -263,19 +257,21 @@ public class EvelynImpl implements Evelyn {
             );
         }
 
+        if (!terminated) {
+            synchronized (this) {
+                lifecycleState = LifecycleState.TERMINATION_FAILED;
+            }
+            throw new IllegalStateException(
+                    "Evelyn sampling thread did not terminate for instance '"
+                            + instanceName + "'; name reservation retained"
+            );
+        }
+
         clearStatusIndexHistory();
         synchronized (this) {
-            if (terminated) {
-                statusIndexScheduler = null;
-                lifecycleState = LifecycleState.STOPPED;
-                return;
-            }
-            lifecycleState = LifecycleState.TERMINATION_FAILED;
+            statusIndexScheduler = null;
+            lifecycleState = LifecycleState.STOPPED;
         }
-        throw new IllegalStateException(
-                "Evelyn sampling thread did not terminate for instance '"
-                        + instanceName + "'; name reservation retained"
-        );
     }
 
     @Override
@@ -475,6 +471,15 @@ public class EvelynImpl implements Evelyn {
         }
 
         if (declarationCount == 0) {
+            if (firstActualEntryIndex >= 0) {
+                throw malformedStatusHistory(
+                        firstActualEntryIndex,
+                        lines.get(firstActualEntryIndex),
+                        "missing " + FORMAT_VERSION_KEY
+                                + " declaration; it must be the first actual entry",
+                        null
+                );
+            }
             throw new IOException(
                     statusHistoryPath + ": missing " + FORMAT_VERSION_KEY
                             + " declaration; it must be the first actual entry"
