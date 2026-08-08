@@ -18,6 +18,7 @@ import static com.r35157.assetaz.services.cis.CurrencyTypeIds.EVE_ID;
 import static com.r35157.assetaz.services.cis.CurrencyTypeIds.SOLANA_ID;
 import static com.r35157.assetaz.services.cis.CurrencyTypeIds.SYRUPUSDC_ID;
 import static com.r35157.assetaz.services.cis.CurrencyTypeIds.USDC_ID;
+import static com.r35157.assetaz.services.cis.CurrencyTypeIds.USDT_ID;
 
 public final class HardcodedCurrencyIdentityService implements CurrencyIdentityService {
     public HardcodedCurrencyIdentityService() {
@@ -26,6 +27,8 @@ public final class HardcodedCurrencyIdentityService implements CurrencyIdentityS
                         solanaMint("meveYG2iXYSkgSUn1T1uxcthH1EGMZdRHGgCntXZA3Y", "EVE")),
                 entry(USDC_ID, "USD Coin", "USDC",
                         solanaMint("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "USDC")),
+                entry(USDT_ID, "Tether USD", "USDT",
+                        solanaMint("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", "USDT")),
                 entry(SOLANA_ID, "Solana", "SOL",
                         solanaMint("So11111111111111111111111111111111111111112", "SOL")),
                 entry(SYRUPUSDC_ID, "SyrupUSDC", "SyrupUSDC",

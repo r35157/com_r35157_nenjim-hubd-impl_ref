@@ -2,27 +2,213 @@ package com.r35157.assetaz.services.ticker.plugins.pricesource.impl.raydiumpool;
 
 import com.r35157.assetaz.services.ticker.plugins.pricesource.PriceSink;
 import com.r35157.assetaz.services.ticker.plugins.pricesource.PriceSource;
+import com.r35157.libs.raydium.Raydium;
+import com.r35157.libs.valuetypes.basic.AssetPrice;
 import com.r35157.libs.valuetypes.basic.TradingPair;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public final class RaydiumPoolPriceSource implements PriceSource {
+    public RaydiumPoolPriceSource(
+            @NotNull Raydium raydium,
+            @NotNull ΩRaydiumLiquidityPoolIdΩ poolId,
+            @NotNull TradingPair expectedTradingPair
+    ) {
+        this(
+                raydium,
+                poolId,
+                expectedTradingPair,
+                Clock.systemUTC(),
+                POLLING_DELAY_MINUTES,
+                TimeUnit.MINUTES
+        );
+    }
+
+    RaydiumPoolPriceSource(
+            @NotNull Raydium raydium,
+            @NotNull ΩRaydiumLiquidityPoolIdΩ poolId,
+            @NotNull TradingPair expectedTradingPair,
+            @NotNull Clock clock,
+            long pollingDelay,
+            @NotNull TimeUnit pollingDelayUnit
+    ) {
+        this.raydium = Objects.requireNonNull(raydium, "raydium");
+        this.poolId = Objects.requireNonNull(poolId, "poolId");
+        if (poolId.isBlank()) {
+            throw new IllegalArgumentException("poolId must not be blank");
+        }
+        this.expectedTradingPair = Objects.requireNonNull(
+                expectedTradingPair,
+                "expectedTradingPair"
+        );
+        Objects.requireNonNull(expectedTradingPair.base(), "expectedTradingPair.base");
+        Objects.requireNonNull(expectedTradingPair.quote(), "expectedTradingPair.quote");
+        this.sourceName = "Raydium-" + poolId;
+        this.clock = Objects.requireNonNull(clock, "clock");
+        if (pollingDelay <= 0) {
+            throw new IllegalArgumentException("pollingDelay must be positive");
+        }
+        this.pollingDelay = pollingDelay;
+        this.pollingDelayUnit = Objects.requireNonNull(
+                pollingDelayUnit,
+                "pollingDelayUnit"
+        );
+    }
+
     @Override
     public @NotNull TradingPair getTradingPair() {
-        throw new UnsupportedOperationException("Not Implemented");
+        return expectedTradingPair;
     }
 
     @Override
     public @NotNull ΩPriceSourceNameΩ getSourceName() {
-        throw new UnsupportedOperationException("Not Implemented");
+        return sourceName;
     }
 
     @Override
-    public void start(@NotNull PriceSink priceSink) {
-        throw new UnsupportedOperationException("Not Implemented");
+    public synchronized void start(@NotNull PriceSink priceSink) {
+        if (scheduler != null || stopping) {
+            throw new IllegalStateException("Raydium pool price source is already started");
+        }
+
+        PriceSink newPriceSink = Objects.requireNonNull(priceSink, "priceSink");
+        ScheduledExecutorService newScheduler = Executors.newSingleThreadScheduledExecutor(
+                runnable -> {
+                    Thread thread = new Thread(
+                            runnable,
+                            "assetaz-raydium-pool-price-source-" + poolId
+                    );
+                    thread.setDaemon(true);
+                    return thread;
+                }
+        );
+
+        this.priceSink = newPriceSink;
+        this.scheduler = newScheduler;
+        newScheduler.scheduleWithFixedDelay(
+                () -> pollSafely(newScheduler, newPriceSink),
+                0,
+                pollingDelay,
+                pollingDelayUnit
+        );
     }
 
     @Override
     public void stop() {
-        throw new UnsupportedOperationException("Not Implemented");
+        ScheduledExecutorService schedulerToStop;
+        synchronized (this) {
+            if (scheduler == null) {
+                return;
+            }
+            if (stopping) {
+                return;
+            }
+
+            stopping = true;
+            schedulerToStop = scheduler;
+            priceSink = null;
+        }
+
+        schedulerToStop.shutdownNow();
+        try {
+            if (!schedulerToStop.awaitTermination(
+                    TERMINATION_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS
+            )) {
+                log.error(
+                        "Raydium pool price source scheduler did not terminate: poolId={}, tradingPair={}",
+                        poolId,
+                        expectedTradingPair
+                );
+            }
+        } catch (InterruptedException exception) {
+            schedulerToStop.shutdownNow();
+            Thread.currentThread().interrupt();
+        } finally {
+            synchronized (this) {
+                if (schedulerToStop.isTerminated()) {
+                    scheduler = null;
+                }
+                stopping = false;
+            }
+        }
     }
+
+    private void pollSafely(
+            ScheduledExecutorService pollingScheduler,
+            PriceSink pollingSink
+    ) {
+        try {
+            AssetPrice assetPrice = raydium.fetchPoolPrice(poolId);
+            TradingPair receivedTradingPair = assetPrice.tradingPair();
+            if (!expectedTradingPair.equals(receivedTradingPair)) {
+                log.error(
+                        "Raydium pool returned unexpected trading pair: poolId={}, expected={}, received={}",
+                        poolId,
+                        expectedTradingPair,
+                        receivedTradingPair
+                );
+                return;
+            }
+
+            if (!isCurrentRun(pollingScheduler, pollingSink)) {
+                return;
+            }
+            pollingSink.announce(
+                    this,
+                    assetPrice.price(),
+                    clock.instant().truncatedTo(ChronoUnit.MILLIS)
+            );
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            if (!isCurrentRun(pollingScheduler, pollingSink)) {
+                return;
+            }
+            log.error(
+                    "Raydium pool price polling was interrupted: poolId={}, tradingPair={}",
+                    poolId,
+                    expectedTradingPair,
+                    exception
+            );
+        } catch (Exception exception) {
+            log.error(
+                    "Raydium pool price polling failed: poolId={}, tradingPair={}",
+                    poolId,
+                    expectedTradingPair,
+                    exception
+            );
+        }
+    }
+
+    private synchronized boolean isCurrentRun(
+            ScheduledExecutorService pollingScheduler,
+            PriceSink pollingSink
+    ) {
+        return scheduler == pollingScheduler && priceSink == pollingSink && !stopping;
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(RaydiumPoolPriceSource.class);
+    private static final long POLLING_DELAY_MINUTES = 1;
+    private static final long TERMINATION_TIMEOUT_SECONDS = 10;
+
+    private final Raydium raydium;
+    private final ΩRaydiumLiquidityPoolIdΩ poolId;
+    private final TradingPair expectedTradingPair;
+    private final ΩPriceSourceNameΩ sourceName;
+    private final Clock clock;
+    private final long pollingDelay;
+    private final TimeUnit pollingDelayUnit;
+
+    private PriceSink priceSink;
+    private ScheduledExecutorService scheduler;
+    private boolean stopping;
 }

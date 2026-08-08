@@ -21,6 +21,10 @@ public final class CurrencyTypeIds {
     public static final UUID USDC_ID =
             UUID.fromString("019c3f9f-41d1-7a73-b1df-d4c11c7ff302");
 
+    /** Stable UUID for Tether USD. */
+    public static final UUID USDT_ID =
+            UUID.fromString("c8669973-0045-468e-8b2b-781d06d123b2");
+
     /** Stable UUID for Solana. */
     public static final UUID SOLANA_ID =
             UUID.fromString("019e0116-fce5-792f-a647-fa6da4dffec5");
