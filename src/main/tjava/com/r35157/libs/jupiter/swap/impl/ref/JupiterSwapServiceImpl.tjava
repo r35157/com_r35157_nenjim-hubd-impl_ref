@@ -25,6 +25,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -73,18 +74,22 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
                 inputTokenAmount,
                 inputMetadata.decimals()
         );
+        ΩSolanaWalletIdΩ taker = solanaWallet.getAddress();
 
         OrderResponse order = requestOrder(
                 inputTokenMint,
                 outputTokenMint,
                 rawInputAmount,
+                taker,
                 maxSlippageBps
         );
         ValidatedOrder validatedOrder = validateOrder(
                 order,
                 inputTokenMint,
                 outputTokenMint,
-                rawInputAmount
+                rawInputAmount,
+                taker,
+                maxSlippageBps
         );
 
         SolanaUnsignedTransaction unsignedTransaction =
@@ -246,6 +251,7 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
             ΩSPLMintAddressΩ inputTokenMint,
             ΩSPLMintAddressΩ outputTokenMint,
             BigInteger rawInputAmount,
+            ΩSolanaWalletIdΩ taker,
             int maxSlippageBps
     ) throws IOException, InterruptedException {
         URI uri = URI.create(
@@ -257,7 +263,7 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
                         + "&amount="
                         + rawInputAmount
                         + "&taker="
-                        + encode(solanaWallet.getAddress())
+                        + encode(taker)
                         + "&swapMode=ExactIn"
                         + "&slippageBps="
                         + maxSlippageBps
@@ -299,7 +305,9 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
             OrderResponse order,
             ΩSPLMintAddressΩ expectedInputMint,
             ΩSPLMintAddressΩ expectedOutputMint,
-            BigInteger expectedInputAmount
+            BigInteger expectedInputAmount,
+            ΩSolanaWalletIdΩ expectedTaker,
+            int maxSlippageBps
     ) throws IOException {
         if (order == null) {
             throw new IOException("Jupiter returned no order");
@@ -329,6 +337,37 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
                             + order.swapMode()
             );
         }
+        if (order.taker() == null || order.taker().isBlank()) {
+            throw new IOException(
+                    "Jupiter order did not contain a taker"
+            );
+        }
+        if (!expectedTaker.equals(order.taker())) {
+            throw new IOException(
+                    "Jupiter order taker does not match the wallet: "
+                            + order.taker()
+            );
+        }
+        if (order.slippageBps() == null) {
+            throw new IOException(
+                    "Jupiter order did not contain slippage basis points"
+            );
+        }
+        if (order.slippageBps() < 0
+                || order.slippageBps() > MAX_SLIPPAGE_BPS) {
+            throw new IOException(
+                    "Jupiter order contained invalid slippage basis points: "
+                            + order.slippageBps()
+            );
+        }
+        if (order.slippageBps() > maxSlippageBps) {
+            throw new IOException(
+                    "Jupiter order slippage exceeds the caller's maximum: "
+                            + order.slippageBps()
+                            + " > "
+                            + maxSlippageBps
+            );
+        }
 
         BigInteger actualInputAmount = parsePositiveRawAmount(
                 order.inAmount(),
@@ -346,6 +385,7 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
                             + optionalError(order)
             );
         }
+        validateUnsignedTransaction(order.transaction());
         if (order.requestId() == null || order.requestId().isBlank()) {
             throw new IOException(
                     "Jupiter order did not contain a request ID"
@@ -378,6 +418,26 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
                 order.requestId(),
                 lastValidBlockHeight
         );
+    }
+
+    private static void validateUnsignedTransaction(
+            ΩBase64StringΩ transaction
+    ) throws IOException {
+        byte[] decodedTransaction;
+        try {
+            decodedTransaction = Base64.getDecoder().decode(transaction);
+        } catch (IllegalArgumentException e) {
+            throw new IOException(
+                    "Jupiter order contained an invalid Base64 unsigned "
+                            + "transaction",
+                    e
+            );
+        }
+        if (decodedTransaction.length == 0) {
+            throw new IOException(
+                    "Jupiter order unsigned transaction decoded to zero bytes"
+            );
+        }
     }
 
     private static ExecuteResponse executeOnce(
@@ -461,6 +521,19 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
         if (!"Success".equals(execution.status())) {
             throw new IOException(
                     "Jupiter execution failed"
+                            + executionFailureDetails(execution)
+            );
+        }
+        if (execution.code() == null) {
+            throw new IOException(
+                    "Successful Jupiter execution did not contain a result "
+                            + "code"
+            );
+        }
+        if (execution.code() != 0) {
+            throw new IOException(
+                    "Jupiter execution returned Success with a non-zero "
+                            + "result code"
                             + executionFailureDetails(execution)
             );
         }
@@ -583,6 +656,8 @@ public final class JupiterSwapServiceImpl implements JupiterSwapService {
             String outputMint,
             String inAmount,
             String swapMode,
+            String taker,
+            Integer slippageBps,
             ΩBase64StringΩ transaction,
             String requestId,
             String lastValidBlockHeight,

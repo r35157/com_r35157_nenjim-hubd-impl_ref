@@ -46,14 +46,14 @@ The service SHALL use Jupiter's keyless Swap V2 order endpoint in `ExactIn` mode
 - **THEN** the service propagates interruption without sending that order request
 
 ### Requirement: Order integrity validation before signing
-Before signing, the service SHALL require a successful HTTP response containing a well-formed order whose input mint, output mint, raw input amount, and exact-input mode match the request. It SHALL also require a non-blank unsigned transaction, a non-blank request identifier, and a positive valid last block height. Any order build error, malformed body, mismatch, or missing required value SHALL fail before signing.
+Before signing, the service SHALL require a successful HTTP response containing a well-formed order whose input mint, output mint, raw input amount, exact-input mode, and taker match the request. The returned slippage SHALL be present, valid, and no greater than the caller's maximum. The service SHALL also require a non-blank, valid Base64 unsigned transaction that decodes to at least one byte, a non-blank request identifier, and a positive valid last block height. Any order build error, malformed body, mismatch, or missing required value SHALL fail before signing.
 
 #### Scenario: Valid matching order
-- **WHEN** Jupiter returns a well-formed order matching both requested mints and the exact raw input amount with all required transaction metadata
+- **WHEN** Jupiter returns a well-formed order matching both requested mints, the exact raw input amount, wallet taker, and permitted slippage with all required transaction metadata
 - **THEN** the service passes the returned unsigned transaction to the configured Solana wallet for signing
 
 #### Scenario: Mismatching or incomplete order
-- **WHEN** an order changes a mint, amount, or swap mode, or lacks a valid transaction, request identifier, or last valid block height
+- **WHEN** an order changes a mint, amount, swap mode, or taker; returns missing, invalid, or excessive slippage; or lacks a valid non-empty Base64 transaction, request identifier, or last valid block height
 - **THEN** the service rejects the order without signing or executing it
 
 #### Scenario: Jupiter order HTTP or decoding failure
@@ -76,14 +76,14 @@ After successful signing, the service SHALL reject a blank signed transaction an
 - **THEN** the service fails without submitting an execution request
 
 ### Requirement: Confirmed execution result validation
-The service SHALL return success only for a successful execution response with a non-blank transaction signature and positive valid actual total input and output raw amounts. It SHALL convert each actual amount using the independently resolved precision of its mint. Non-success HTTP responses, malformed responses, expired or rejected swaps, failed status, blank signatures, and invalid result amounts SHALL be reported as failures.
+The service SHALL return success only when the execution response has status `Success`, explicitly has result code `0`, contains a non-blank transaction signature, and contains positive valid actual total input and output raw amounts. It SHALL convert each actual amount using the independently resolved precision of its mint. Non-success HTTP responses, malformed responses, expired or rejected swaps, failed or contradictory status/code combinations, missing result codes, blank signatures, and invalid result amounts SHALL be reported as failures.
 
 #### Scenario: Successful execution response
-- **WHEN** Jupiter reports `Success` with a signature and valid actual total input and output amounts
+- **WHEN** Jupiter reports status `Success`, code `0`, a signature, and valid actual total input and output amounts
 - **THEN** the service returns those actual amounts in human-readable units and the reported transaction signature
 
 #### Scenario: Jupiter rejects or fails execution
-- **WHEN** Jupiter returns a failed status, expiration, rejection, non-success HTTP status, malformed body, blank signature, or invalid actual amount
+- **WHEN** Jupiter returns a failed status, a missing or non-zero result code, a contradictory status/code combination, expiration, rejection, non-success HTTP status, malformed body, blank signature, or invalid actual amount
 - **THEN** the service reports an I/O failure and does not represent the swap as successful
 
 ### Requirement: API and implementation separation

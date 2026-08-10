@@ -16,3 +16,10 @@
 - [x] 3.1 Compile Detag-generated main and test source sets and run the repository's existing test/check tasks without adding automated tests.
 - [x] 3.2 Run strict OpenSpec validation and `git diff --check`.
 - [x] 3.3 Review the complete diff for stale imports, generated-file edits, unrelated refactors, tests, and any implementation that violates the module or retry boundaries.
+
+## 4. Review Follow-up Validation
+
+- [x] 4.1 Validate the returned taker and nullable slippage before signing.
+- [x] 4.2 Base64-decode the returned transaction and reject invalid or empty decoded content before signing.
+- [x] 4.3 Require both execution status `Success` and an explicit result code `0`.
+- [x] 4.4 Re-run compilation, Detag, existing tests, strict OpenSpec validation, and diff checks without adding tests.

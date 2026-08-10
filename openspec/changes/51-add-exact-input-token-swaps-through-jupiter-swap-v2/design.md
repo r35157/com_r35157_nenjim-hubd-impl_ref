@@ -51,7 +51,7 @@ The implementation performs one `HttpClient.send` for `/execute` and contains no
 
 ### Validate response integrity in phases
 
-Mint and amount checks occur before `/order`; order identity and transaction metadata checks occur before signing; execution status, signature, and actual totals are checked before constructing the public result. Non-2xx responses retain status and body context, while malformed JSON is wrapped as `IOException`.
+Mint and amount checks occur before `/order`; order identity, taker, slippage, Base64 transaction content, and transaction metadata checks occur before signing; execution status and explicit result code, signature, and actual totals are checked before constructing the public result. Numeric wire fields that must distinguish an absent value from zero use nullable DTO types. Non-2xx responses retain status and body context, while malformed JSON is wrapped as `IOException`.
 
 ## Risks / Trade-offs
 
