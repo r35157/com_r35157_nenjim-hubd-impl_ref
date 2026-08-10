@@ -1,0 +1,51 @@
+package com.r35157.libs.jupiter.swap;
+
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+
+/**
+ * Exchanges an exact human-readable SPL-token amount through Jupiter.
+ *
+ * <p>The service resolves token precision from Solana, obtains and validates a
+ * Jupiter Swap V2 order, asks its configured wallet to sign the transaction,
+ * and submits the signed transaction through Jupiter's managed execution
+ * endpoint.</p>
+ */
+public interface JupiterSwapService {
+    /**
+     * Swaps an exact amount of one SPL token for another SPL token.
+     *
+     * <p>The returned amounts are the actual wallet-level amounts reported by
+     * Jupiter after successful execution, not the quoted amounts. If an error
+     * or interruption occurs after execution submission, the transaction's
+     * outcome can be unknown; callers must reload wallet balances before
+     * deciding whether to initiate another swap.</p>
+     *
+     * @param inputTokenMint input SPL-token mint address
+     * @param inputTokenAmount exact input amount in human-readable token units
+     * @param outputTokenMint output SPL-token mint address
+     * @param maxSlippageBps maximum accepted slippage from 0 through 10000
+     *                       basis points
+     * @return confirmed transaction signature and actual amounts spent and
+     *         received
+     * @throws IllegalArgumentException if a mint, amount, or slippage value is
+     *                                  invalid
+     * @throws IllegalStateException if a mint does not exist, is owned by an
+     *                               unsupported token program, or has invalid
+     *                               metadata
+     * @throws IOException if Solana or Jupiter communication, response
+     *                     decoding, signing, or execution fails
+     * @throws InterruptedException if order pacing, Solana access, signing, or
+     *                              Jupiter communication is interrupted
+     */
+    @NotNull
+    JupiterSwapResult swap(
+            @NotNull ΩSPLMintAddressΩ inputTokenMint,
+            @NotNull ΩAmountΩ inputTokenAmount,
+            @NotNull ΩSPLMintAddressΩ outputTokenMint,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException;
+}

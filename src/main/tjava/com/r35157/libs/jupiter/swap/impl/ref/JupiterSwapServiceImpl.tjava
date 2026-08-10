@@ -1,0 +1,637 @@
+package com.r35157.libs.jupiter.swap.impl.ref;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.r35157.cryptowallet.solana.SolanaWallet;
+import com.r35157.libs.jupiter.swap.JupiterSwapResult;
+import com.r35157.libs.jupiter.swap.JupiterSwapService;
+import com.r35157.libs.solana.SPLTokenSupply;
+import com.r35157.libs.solana.SolanaAccountInfo;
+import com.r35157.libs.solana.SolanaBlockChain;
+import com.r35157.libs.solana.SolanaSignedTransaction;
+import com.r35157.libs.solana.SolanaUnsignedTransaction;
+import com.r35157.libs.solana.valuetypes.economic.SolanaSPLTokenProgram;
+import com.r35157.libs.valuetypes.basic.MoneyAmount;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Reference implementation of exact-input token swaps through Jupiter Swap
+ * V2.
+ */
+public final class JupiterSwapServiceImpl implements JupiterSwapService {
+    /**
+     * Creates a Jupiter swap service using the supplied Solana services.
+     *
+     * @param solanaBlockChain blockchain access used to resolve mint metadata
+     * @param solanaWallet wallet used as taker and transaction signer
+     */
+    public JupiterSwapServiceImpl(
+            @NotNull SolanaBlockChain solanaBlockChain,
+            @NotNull SolanaWallet solanaWallet
+    ) {
+        this.solanaBlockChain = Objects.requireNonNull(
+                solanaBlockChain,
+                "solanaBlockChain"
+        );
+        this.solanaWallet = Objects.requireNonNull(
+                solanaWallet,
+                "solanaWallet"
+        );
+    }
+
+    @Override
+    public @NotNull JupiterSwapResult swap(
+            @NotNull ΩSPLMintAddressΩ inputTokenMint,
+            @NotNull ΩAmountΩ inputTokenAmount,
+            @NotNull ΩSPLMintAddressΩ outputTokenMint,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException {
+        validateArguments(
+                inputTokenMint,
+                inputTokenAmount,
+                outputTokenMint,
+                maxSlippageBps
+        );
+
+        MintMetadata inputMetadata = resolveMint(inputTokenMint);
+        MintMetadata outputMetadata = resolveMint(outputTokenMint);
+        BigInteger rawInputAmount = toRawInputAmount(
+                inputTokenAmount,
+                inputMetadata.decimals()
+        );
+
+        OrderResponse order = requestOrder(
+                inputTokenMint,
+                outputTokenMint,
+                rawInputAmount,
+                maxSlippageBps
+        );
+        ValidatedOrder validatedOrder = validateOrder(
+                order,
+                inputTokenMint,
+                outputTokenMint,
+                rawInputAmount
+        );
+
+        SolanaUnsignedTransaction unsignedTransaction =
+                new SolanaUnsignedTransaction(
+                        validatedOrder.transaction(),
+                        null,
+                        validatedOrder.lastValidBlockHeight()
+                );
+        SolanaSignedTransaction signedTransaction =
+                solanaWallet.signTransaction(unsignedTransaction);
+
+        if (signedTransaction == null
+                || signedTransaction.serializedTransaction() == null
+                || signedTransaction.serializedTransaction().isBlank()) {
+            throw new IOException(
+                    "Solana wallet returned a blank signed Jupiter "
+                            + "transaction"
+            );
+        }
+
+        ExecuteResponse execution = executeOnce(
+                signedTransaction.serializedTransaction(),
+                validatedOrder.requestId(),
+                validatedOrder.lastValidBlockHeight()
+        );
+
+        return validateExecution(
+                execution,
+                inputMetadata.decimals(),
+                outputMetadata.decimals()
+        );
+    }
+
+    private static void validateArguments(
+            ΩSPLMintAddressΩ inputTokenMint,
+            BigDecimal inputTokenAmount,
+            ΩSPLMintAddressΩ outputTokenMint,
+            int maxSlippageBps
+    ) {
+        if (inputTokenMint == null || inputTokenMint.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Input SPL-token mint address must not be blank"
+            );
+        }
+        if (outputTokenMint == null || outputTokenMint.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Output SPL-token mint address must not be blank"
+            );
+        }
+        if (inputTokenMint.equals(outputTokenMint)) {
+            throw new IllegalArgumentException(
+                    "Input and output SPL-token mints must be different"
+            );
+        }
+        if (inputTokenAmount == null || inputTokenAmount.signum() <= 0) {
+            throw new IllegalArgumentException(
+                    "Input token amount must be greater than zero"
+            );
+        }
+        if (maxSlippageBps < 0 || maxSlippageBps > MAX_SLIPPAGE_BPS) {
+            throw new IllegalArgumentException(
+                    "Maximum slippage must be between 0 and "
+                            + MAX_SLIPPAGE_BPS
+                            + " basis points"
+            );
+        }
+    }
+
+    private MintMetadata resolveMint(ΩSPLMintAddressΩ mintAddress)
+            throws IOException, InterruptedException {
+        SolanaAccountInfo mintAccount = solanaBlockChain.getAccountInfo(
+                mintAddress
+        );
+        if (mintAccount == null) {
+            throw new IllegalStateException(
+                    "SPL-token mint account does not exist: " + mintAddress
+            );
+        }
+
+        SolanaSPLTokenProgram tokenProgram = null;
+        for (SolanaSPLTokenProgram candidate
+                : SolanaSPLTokenProgram.values()) {
+            if (candidate.getAddress().equals(mintAccount.owner())) {
+                tokenProgram = candidate;
+                break;
+            }
+        }
+        if (tokenProgram == null) {
+            throw new IllegalStateException(
+                    "SPL-token mint is not owned by a supported token "
+                            + "program: "
+                            + mintAddress
+                            + " (owner "
+                            + mintAccount.owner()
+                            + ")"
+            );
+        }
+
+        SPLTokenSupply supply = solanaBlockChain.getSPLTokenSupply(
+                mintAddress,
+                tokenProgram
+        );
+        if (supply == null) {
+            throw new IllegalStateException(
+                    "Solana returned no supply metadata for mint "
+                            + mintAddress
+            );
+        }
+        if (!mintAddress.equals(supply.mintAddress())) {
+            throw new IllegalStateException(
+                    "Solana returned supply metadata for an unexpected mint: "
+                            + supply.mintAddress()
+            );
+        }
+        if (!tokenProgram.getAddress().equals(supply.programId())) {
+            throw new IllegalStateException(
+                    "Solana returned an unexpected token program for mint "
+                            + mintAddress
+            );
+        }
+        if (supply.decimals() < 0) {
+            throw new IllegalStateException(
+                    "Solana returned negative decimal precision for mint "
+                            + mintAddress
+            );
+        }
+
+        return new MintMetadata(supply.decimals());
+    }
+
+    private static BigInteger toRawInputAmount(
+            BigDecimal inputTokenAmount,
+            int decimals
+    ) {
+        BigInteger rawAmount;
+        try {
+            rawAmount = inputTokenAmount
+                    .movePointRight(decimals)
+                    .toBigIntegerExact();
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(
+                    "Input token amount cannot be represented exactly with "
+                            + decimals
+                            + " decimal places",
+                    e
+            );
+        }
+
+        if (rawAmount.signum() <= 0) {
+            throw new IllegalArgumentException(
+                    "Input token amount is smaller than the mint's smallest "
+                            + "unit"
+            );
+        }
+        return rawAmount;
+    }
+
+    private OrderResponse requestOrder(
+            ΩSPLMintAddressΩ inputTokenMint,
+            ΩSPLMintAddressΩ outputTokenMint,
+            BigInteger rawInputAmount,
+            int maxSlippageBps
+    ) throws IOException, InterruptedException {
+        URI uri = URI.create(
+                ORDER_ENDPOINT
+                        + "?inputMint="
+                        + encode(inputTokenMint)
+                        + "&outputMint="
+                        + encode(outputTokenMint)
+                        + "&amount="
+                        + rawInputAmount
+                        + "&taker="
+                        + encode(solanaWallet.getAddress())
+                        + "&swapMode=ExactIn"
+                        + "&slippageBps="
+                        + maxSlippageBps
+                        + "&excludeRouters=jupiterz"
+        );
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(uri)
+                .timeout(HTTP_TIMEOUT)
+                .header("Accept", "application/json")
+                .header("x-client-platform", "nenjim-hub")
+                .GET()
+                .build();
+
+        HttpResponse<String> response;
+        synchronized (ORDER_REQUEST_GATE) {
+            awaitOrderRequestPermit();
+            response = HTTP_CLIENT.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+        }
+        requireSuccess("Jupiter order", response);
+
+        try {
+            return OBJECT_MAPPER.readValue(
+                    response.body(),
+                    OrderResponse.class
+            );
+        } catch (JsonProcessingException e) {
+            throw new IOException(
+                    "Unable to decode Jupiter order response: "
+                            + response.body(),
+                    e
+            );
+        }
+    }
+
+    private static ValidatedOrder validateOrder(
+            OrderResponse order,
+            ΩSPLMintAddressΩ expectedInputMint,
+            ΩSPLMintAddressΩ expectedOutputMint,
+            BigInteger expectedInputAmount
+    ) throws IOException {
+        if (order == null) {
+            throw new IOException("Jupiter returned no order");
+        }
+        if (order.errorCode() != null
+                || (order.error() != null && !order.error().isBlank())) {
+            throw new IOException(
+                    "Jupiter could not build the order"
+                            + optionalError(order)
+            );
+        }
+        if (!expectedInputMint.equals(order.inputMint())) {
+            throw new IOException(
+                    "Jupiter order input mint does not match the request: "
+                            + order.inputMint()
+            );
+        }
+        if (!expectedOutputMint.equals(order.outputMint())) {
+            throw new IOException(
+                    "Jupiter order output mint does not match the request: "
+                            + order.outputMint()
+            );
+        }
+        if (!"ExactIn".equals(order.swapMode())) {
+            throw new IOException(
+                    "Jupiter order is not an ExactIn swap: "
+                            + order.swapMode()
+            );
+        }
+
+        BigInteger actualInputAmount = parsePositiveRawAmount(
+                order.inAmount(),
+                "Jupiter order input amount"
+        );
+        if (!expectedInputAmount.equals(actualInputAmount)) {
+            throw new IOException(
+                    "Jupiter order input amount does not match the request: "
+                            + order.inAmount()
+            );
+        }
+        if (order.transaction() == null || order.transaction().isBlank()) {
+            throw new IOException(
+                    "Jupiter order did not contain an unsigned transaction"
+                            + optionalError(order)
+            );
+        }
+        if (order.requestId() == null || order.requestId().isBlank()) {
+            throw new IOException(
+                    "Jupiter order did not contain a request ID"
+            );
+        }
+
+        long lastValidBlockHeight;
+        try {
+            lastValidBlockHeight = Long.parseLong(
+                    order.lastValidBlockHeight()
+            );
+        } catch (NumberFormatException | NullPointerException e) {
+            throw new IOException(
+                    "Jupiter order contained an invalid last valid block "
+                            + "height: "
+                            + order.lastValidBlockHeight(),
+                    e
+            );
+        }
+        if (lastValidBlockHeight <= 0) {
+            throw new IOException(
+                    "Jupiter order contained a non-positive last valid block "
+                            + "height: "
+                            + lastValidBlockHeight
+            );
+        }
+
+        return new ValidatedOrder(
+                order.transaction(),
+                order.requestId(),
+                lastValidBlockHeight
+        );
+    }
+
+    private static ExecuteResponse executeOnce(
+            ΩBase64StringΩ signedTransaction,
+            String requestId,
+            long lastValidBlockHeight
+    ) throws IOException, InterruptedException {
+        ExecuteRequest requestBody = new ExecuteRequest(
+                signedTransaction,
+                requestId,
+                Long.toString(lastValidBlockHeight)
+        );
+        String json = OBJECT_MAPPER.writeValueAsString(requestBody);
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(EXECUTE_ENDPOINT)
+                .timeout(HTTP_TIMEOUT)
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("x-client-platform", "nenjim-hub")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        HttpResponse<String> response;
+        try {
+            response = HTTP_CLIENT.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+        } catch (InterruptedException e) {
+            InterruptedException failure = new InterruptedException(
+                    "Jupiter execution was interrupted after submission; "
+                            + "the swap outcome is unknown and wallet "
+                            + "balances must be reloaded before another swap"
+            );
+            failure.initCause(e);
+            throw failure;
+        } catch (IOException e) {
+            throw new IOException(
+                    "Jupiter execution failed after submission; the swap "
+                            + "outcome is unknown and wallet balances must be "
+                            + "reloaded before another swap",
+                    e
+            );
+        }
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException(
+                    "Jupiter execution returned HTTP "
+                            + response.statusCode()
+                            + " after submission; the swap outcome may be "
+                            + "unknown: "
+                            + response.body()
+            );
+        }
+
+        try {
+            return OBJECT_MAPPER.readValue(
+                    response.body(),
+                    ExecuteResponse.class
+            );
+        } catch (JsonProcessingException e) {
+            throw new IOException(
+                    "Unable to decode Jupiter execution response after "
+                            + "submission; the swap outcome may be unknown: "
+                            + response.body(),
+                    e
+            );
+        }
+    }
+
+    private static JupiterSwapResult validateExecution(
+            ExecuteResponse execution,
+            int inputDecimals,
+            int outputDecimals
+    ) throws IOException {
+        if (execution == null) {
+            throw new IOException(
+                    "Jupiter returned no execution result after submission"
+            );
+        }
+        if (!"Success".equals(execution.status())) {
+            throw new IOException(
+                    "Jupiter execution failed"
+                            + executionFailureDetails(execution)
+            );
+        }
+        if (execution.signature() == null
+                || execution.signature().isBlank()) {
+            throw new IOException(
+                    "Successful Jupiter execution did not contain a "
+                            + "transaction signature"
+            );
+        }
+
+        BigInteger spentRaw = parsePositiveRawAmount(
+                execution.totalInputAmount(),
+                "Jupiter execution total input amount"
+        );
+        BigInteger receivedRaw = parsePositiveRawAmount(
+                execution.totalOutputAmount(),
+                "Jupiter execution total output amount"
+        );
+
+        return new JupiterSwapResult(
+                execution.signature(),
+                new BigDecimal(spentRaw).movePointLeft(inputDecimals),
+                new BigDecimal(receivedRaw).movePointLeft(outputDecimals)
+        );
+    }
+
+    private static BigInteger parsePositiveRawAmount(
+            String value,
+            String description
+    ) throws IOException {
+        BigInteger amount;
+        try {
+            amount = new BigInteger(value);
+        } catch (NumberFormatException | NullPointerException e) {
+            throw new IOException(
+                    description + " is invalid: " + value,
+                    e
+            );
+        }
+        if (amount.signum() <= 0) {
+            throw new IOException(
+                    description + " must be greater than zero: " + value
+            );
+        }
+        return amount;
+    }
+
+    private static void requireSuccess(
+            String operation,
+            HttpResponse<String> response
+    ) throws IOException {
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException(
+                    operation
+                            + " request failed with HTTP "
+                            + response.statusCode()
+                            + ": "
+                            + response.body()
+            );
+        }
+    }
+
+    private static String optionalError(OrderResponse order) {
+        StringBuilder detail = new StringBuilder();
+        if (order.errorCode() != null) {
+            detail.append(" (error code ").append(order.errorCode()).append(')');
+        }
+        if (order.errorMessage() != null && !order.errorMessage().isBlank()) {
+            detail.append(": ").append(order.errorMessage());
+        } else if (order.error() != null && !order.error().isBlank()) {
+            detail.append(": ").append(order.error());
+        }
+        return detail.toString();
+    }
+
+    private static String executionFailureDetails(ExecuteResponse response) {
+        StringBuilder detail = new StringBuilder();
+        if (response.code() != null) {
+            detail.append(" (code ").append(response.code()).append(')');
+        }
+        if (response.error() != null && !response.error().isBlank()) {
+            detail.append(": ").append(response.error());
+        } else if (response.status() != null && !response.status().isBlank()) {
+            detail.append(": status ").append(response.status());
+        }
+        return detail.toString();
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static void awaitOrderRequestPermit()
+            throws InterruptedException {
+        while (lastOrderRequestStartNanos != NO_REQUEST_YET) {
+            long elapsed = System.nanoTime()
+                    - lastOrderRequestStartNanos;
+            long remaining = ORDER_INTERVAL_NANOS - elapsed;
+            if (remaining <= 0) {
+                break;
+            }
+            TimeUnit.NANOSECONDS.sleep(remaining);
+        }
+        lastOrderRequestStartNanos = System.nanoTime();
+    }
+
+    private record MintMetadata(int decimals) {
+    }
+
+    private record ValidatedOrder(
+            ΩBase64StringΩ transaction,
+            String requestId,
+            long lastValidBlockHeight
+    ) {
+    }
+
+    private record OrderResponse(
+            String inputMint,
+            String outputMint,
+            String inAmount,
+            String swapMode,
+            ΩBase64StringΩ transaction,
+            String requestId,
+            String lastValidBlockHeight,
+            Integer errorCode,
+            String errorMessage,
+            String error
+    ) {
+    }
+
+    private record ExecuteRequest(
+            ΩBase64StringΩ signedTransaction,
+            String requestId,
+            String lastValidBlockHeight
+    ) {
+    }
+
+    private record ExecuteResponse(
+            String status,
+            ΩSolanaTransactionSignatureΩ signature,
+            String totalInputAmount,
+            String totalOutputAmount,
+            Integer code,
+            String error
+    ) {
+    }
+
+    private static final URI ORDER_ENDPOINT = URI.create(
+            "https://api.jup.ag/swap/v2/order"
+    );
+    private static final URI EXECUTE_ENDPOINT = URI.create(
+            "https://api.jup.ag/swap/v2/execute"
+    );
+    private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(30);
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(HTTP_TIMEOUT)
+            .build();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .configure(
+                    DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+                    false
+            );
+    private static final Object ORDER_REQUEST_GATE = new Object();
+    private static final long ORDER_INTERVAL_NANOS =
+            TimeUnit.SECONDS.toNanos(2);
+    private static final long NO_REQUEST_YET = Long.MIN_VALUE;
+    private static final int MAX_SLIPPAGE_BPS = 10_000;
+
+    private static long lastOrderRequestStartNanos = NO_REQUEST_YET;
+
+    private final SolanaBlockChain solanaBlockChain;
+    private final SolanaWallet solanaWallet;
+}
